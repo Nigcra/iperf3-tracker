@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { login, initAdmin } from '../services/api';
+import Logo from './Logo';
 import './Login.css';
 
 interface LoginProps {
@@ -63,8 +64,10 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
     <div className="login-container">
       <div className="login-card">
         <div className="login-header">
-          <h1 className="login-logo-text">iperf3 Tracker</h1>
-          <p>Network Performance Monitoring</p>
+          <Logo size={126} showText={true} />
+          <p style={{ marginTop: '20px', fontSize: '16px', color: 'rgba(255,255,255,0.8)' }}>
+            Network Performance Monitoring
+          </p>
         </div>
 
         <form onSubmit={handleSubmit} className="login-form">

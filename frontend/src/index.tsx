@@ -8,6 +8,7 @@ import ServerManager from './components/ServerManager';
 import TestRunner from './components/TestRunner';
 import Login from './components/Login';
 import AdminPanel from './components/AdminPanel';
+import Logo from './components/Logo';
 import { User } from './services/api';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
 
@@ -65,8 +66,33 @@ function AppContent() {
       <aside className={`sidebar ${sidebarOpen ? 'open' : 'closed'}`}>
         <div className="sidebar-header">
           <div className="logo">
-            {sidebarOpen && <span className="logo-text">iperf3 Tracker</span>}
-            {!sidebarOpen && <span className="logo-icon">i3</span>}
+            {sidebarOpen ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div style={{ flexShrink: 0 }}>
+                  <Logo size={40} showText={false} variant="icon" />
+                </div>
+                <div style={{ 
+                  display: 'flex', 
+                  flexDirection: 'column',
+                  gap: '0px'
+                }}>
+                  <div style={{
+                    fontSize: '20px',
+                    fontWeight: 700,
+                    color: 'white',
+                    letterSpacing: '0.3px',
+                    lineHeight: 1.2,
+                    whiteSpace: 'nowrap',
+                    fontFamily: '"Inter", "SF Pro Display", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+                    textTransform: 'uppercase'
+                  }}>
+                    iPerf3 Tracker
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <Logo size={36} showText={false} variant="icon" />
+            )}
           </div>
           <button 
             className="toggle-btn" 
