@@ -7,14 +7,14 @@ A self-hosted application to monitor and track network performance using iperf3 
 
 ## Features
 
-- 🔄 **Automated Testing**: Schedule periodic iperf3 tests against multiple servers
-- 📊 **Rich Dashboards**: Visualize bandwidth over time with interactive charts
-- ⚡ **Parallel Transfers**: Configure number of parallel streams (-P flag)
-- 🎯 **Multiple Server Profiles**: Test against different servers (LAN, WAN, remote locations)
-- 📈 **Historical Data**: Track performance trends and analyze patterns (bandwidth, jitter, packet loss)
-- 🐳 **Docker Ready**: Easy deployment with Docker and Docker Compose
-- 🌐 **Web Interface**: Modern, responsive React-based UI
-- 📡 **REST API**: Full API access for automation and integration
+- **Automated Testing**: Schedule periodic iperf3 tests against multiple servers
+- **Rich Dashboards**: Visualize bandwidth over time with interactive charts
+- **Parallel Transfers**: Configure number of parallel streams (-P flag)
+- **Multiple Server Profiles**: Test against different servers (LAN, WAN, remote locations)
+- **Historical Data**: Track performance trends and analyze patterns (bandwidth, jitter, packet loss)
+- **Docker Ready**: Easy deployment with Docker and Docker Compose
+- **Web Interface**: Modern, responsive React-based UI
+- **REST API**: Full API access for automation and integration
 
 ## Screenshots
 
@@ -36,8 +36,6 @@ A self-hosted application to monitor and track network performance using iperf3 
 - Docker and Docker Compose installed
 - OR: Python 3.11+, Node.js 18+, and iperf3 installed on your system
 - At least one iperf3 server to test against
-
-**Note:** For detailed platform-specific installation instructions, see [PLATFORM_COMPATIBILITY.md](PLATFORM_COMPATIBILITY.md)
 
 ### Using Docker (Recommended)
 
