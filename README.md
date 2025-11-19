@@ -5,20 +5,21 @@ A self-hosted application to monitor and track network performance using iperf3 
 > ⚠️ **Early Development Stage**  
 > This project is in early development. Expect bugs, missing features, and breaking changes. Extensive testing and bug fixing is still required. Use in production environments at your own risk.
 
-## Featuresrf3 Tracker
-
-A self-hosted application to monitor and track network performance using iperf3 tests. Similar to Speedtest Tracker but for iperf3.
-
 ## Features
 
 - 🔄 **Automated Testing**: Schedule periodic iperf3 tests against multiple servers
-- 📊 **Rich Dashboards**: Visualize bandwidth, jitter, and packet loss over time
+- 📊 **Rich Dashboards**: Visualize bandwidth over time with interactive charts
 - ⚡ **Parallel Transfers**: Configure number of parallel streams (-P flag)
 - 🎯 **Multiple Server Profiles**: Test against different servers (LAN, WAN, remote locations)
-- 📈 **Historical Data**: Track performance trends and analyze patterns
+- 📈 **Historical Data**: Track performance trends and analyze patterns (bandwidth, jitter, packet loss)
 - 🐳 **Docker Ready**: Easy deployment with Docker and Docker Compose
 - 🌐 **Web Interface**: Modern, responsive React-based UI
 - 📡 **REST API**: Full API access for automation and integration
+
+## Screenshots
+
+![Dashboard](_screenshots/dashboard.png)
+*Main Dashboard - Real-time network performance monitoring*
 
 ## Architecture
 
