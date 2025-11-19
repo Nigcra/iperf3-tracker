@@ -1,4 +1,4 @@
-# iperf3-Tracker
+# iperf3 Tracker
 
 A self-hosted application to monitor and track network performance using iperf3 tests. Similar to Speedtest-Tracker but for iperf3.
 
