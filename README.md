@@ -18,8 +18,11 @@ A self-hosted application to monitor and track network performance using iperf3 
 
 ## Screenshots
 
+![Dashboard Dark](_screenshots/dashboard_dark.png)
+*Dashboard - Dark Theme*
+
 ![Dashboard](_screenshots/dashboard.png)
-*Main Dashboard - Real-time network performance monitoring*
+*Main Dashboard*
 
 ## Architecture
 
