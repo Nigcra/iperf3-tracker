@@ -25,6 +25,12 @@ const Dashboard: React.FC = () => {
   });
   const [runningTests, setRunningTests] = useState<Map<number, TestLiveStatus>>(new Map());
 
+  // Get axis color based on current theme
+  const getAxisColor = () => {
+    const theme = document.documentElement.getAttribute('data-theme');
+    return theme === 'dark' ? '#6b7280' : '#9ca3af';
+  };
+
   const handleRunTest = async (serverId: number, serverInfo: Server | undefined) => {
     if (!serverInfo) return;
     
@@ -617,9 +623,11 @@ const Dashboard: React.FC = () => {
           flexWrap: 'wrap',
           marginBottom: '30px',
           padding: '15px',
-          backgroundColor: 'white',
-          borderRadius: '8px',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+          backgroundColor: 'var(--card-bg)',
+          backdropFilter: 'blur(12px)',
+          borderRadius: '12px',
+          boxShadow: 'var(--shadow-sm)',
+          border: '1px solid var(--border-color)'
         }}>
           {uniqueServers.map((serverName) => (
             <div key={serverName} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -629,7 +637,7 @@ const Dashboard: React.FC = () => {
                 borderRadius: '50%', 
                 backgroundColor: serverColorMap.get(serverName) 
               }} />
-              <span style={{ fontSize: '14px', color: '#374151' }}>{serverName}</span>
+              <span style={{ fontSize: '14px', color: 'var(--text-primary)' }}>{serverName}</span>
             </div>
           ))}
         </div>

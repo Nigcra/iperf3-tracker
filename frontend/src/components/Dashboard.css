@@ -4,7 +4,7 @@
 }
 
 .subtitle {
-  color: #6b7280;
+  color: var(--text-tertiary);
   font-size: 16px;
 }
 
@@ -64,7 +64,7 @@
 
 .stat-label {
   font-size: 14px;
-  color: #6b7280;
+  color: var(--text-tertiary);
   margin-bottom: 4px;
   font-weight: 500;
 }
@@ -72,14 +72,14 @@
 .stat-value {
   font-size: 32px;
   font-weight: 700;
-  color: #111827;
+  color: var(--text-primary);
   line-height: 1;
   margin-bottom: 4px;
 }
 
 .stat-detail {
   font-size: 13px;
-  color: #9ca3af;
+  color: var(--text-tertiary);
 }
 
 /* Charts */
@@ -114,7 +114,7 @@
 .chart-header h2 {
   margin: 0;
   font-size: 18px;
-  color: #111827;
+  color: var(--text-primary);
 }
 
 .chart-controls {
@@ -138,7 +138,7 @@
 
 .threshold-input-group label {
   font-size: 13px;
-  color: #6b7280;
+  color: var(--text-tertiary);
   font-weight: 500;
   white-space: nowrap;
 }
@@ -146,18 +146,18 @@
 .threshold-input-group input[type="number"] {
   width: 70px;
   padding: 6px 10px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--input-border);
   border-radius: 6px;
   font-size: 14px;
-  color: #111827;
-  background: white;
+  color: var(--text-primary);
+  background: var(--input-bg);
   transition: all 0.2s;
 }
 
 .threshold-input-group input[type="number"]:focus {
   outline: none;
   border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
 }
 
 .threshold-input-group input[type="number"]::-webkit-inner-spin-button,
@@ -168,16 +168,17 @@
 .time-range-selector {
   display: flex;
   gap: 8px;
-  background: #f3f4f6;
+  background: var(--bg-tertiary);
   padding: 4px;
   border-radius: 8px;
+  border: 1px solid var(--border-color);
 }
 
 .time-btn {
   padding: 8px 16px;
   border: none;
   background: transparent;
-  color: #6b7280;
+  color: var(--text-tertiary);
   font-size: 14px;
   font-weight: 600;
   border-radius: 6px;
@@ -187,14 +188,14 @@
 }
 
 .time-btn:hover {
-  background: #e5e7eb;
-  color: #374151;
+  background: rgba(59, 130, 246, 0.1);
+  color: #60a5fa;
 }
 
 .time-btn.active {
-  background: white;
-  color: #3b82f6;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  color: white;
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.4);
 }
 
 /* Servers Grid */
@@ -209,18 +210,31 @@
 }
 
 .server-card {
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  border: 1px solid var(--border-color);
   border-radius: 16px;
   padding: 28px;
-  background: white;
+  background: var(--card-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   transition: all 0.3s ease;
   position: relative;
   overflow: visible;
+  box-shadow: var(--shadow-md);
 }
 
 .server-card:hover {
-  border-color: rgba(59, 130, 246, 0.2);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  border-color: var(--border-hover);
+  box-shadow: var(--shadow-lg);
+  transform: translateY(-2px);
+}
+
+:root[data-theme="dark"] .server-card {
+  background: rgba(15, 23, 42, 0.6);
+}
+
+:root[data-theme="dark"] .server-card:hover {
+  background: rgba(15, 23, 42, 0.7);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6), 0 0 20px rgba(59, 130, 246, 0.3);
 }
 
 .progress-bar-container {
@@ -364,10 +378,11 @@
   gap: 8px;
 }
 
-.server-header h3 {
+.server-card .server-header h3 {
   margin: 0;
   font-size: 18px;
-  color: #1f2937;
+  color: var(--text-primary) !important;
+  font-weight: 700;
 }
 
 .quick-test-btn {
@@ -396,22 +411,24 @@
 }
 
 .server-badge {
-  background: #f3f4f6;
-  color: #6b7280;
+  background: var(--bg-tertiary);
+  color: var(--text-tertiary);
   padding: 4px 12px;
   border-radius: 12px;
   font-size: 12px;
   font-weight: 600;
   transition: all 0.3s ease;
+  border: 1px solid var(--border-color);
 }
 
 .server-badge.live {
-  background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
   color: white;
   display: flex;
   align-items: center;
   gap: 6px;
   animation: pulse-bg 2s ease-in-out infinite;
+  border: none;
 }
 
 .server-tags {
@@ -487,13 +504,13 @@
 }
 
 .stat-row .label {
-  color: #6b7280;
+  color: var(--text-tertiary);
   font-weight: 500;
   font-size: 14px;
 }
 
 .stat-row .value {
-  color: #111827;
+  color: var(--text-primary);
   font-weight: 600;
   font-size: 15px;
 }
@@ -544,4 +561,46 @@
   .servers-grid {
     grid-template-columns: 1fr;
   }
+}
+
+/* Recharts tooltip dark theme override */
+.recharts-tooltip-wrapper .recharts-default-tooltip {
+  background-color: rgba(15, 23, 42, 0.95) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 8px !important;
+  box-shadow: 0 8px 16px rgba(0,0,0,0.5) !important;
+  backdrop-filter: blur(8px);
+  color: #e2e8f0 !important;
+}
+
+.recharts-tooltip-label {
+  color: #e2e8f0 !important;
+}
+
+.recharts-tooltip-item {
+  color: #e2e8f0 !important;
+}
+
+/* Light mode overrides for Recharts */
+:root[data-theme="light"] .recharts-tooltip-wrapper .recharts-default-tooltip {
+  background-color: rgba(255, 255, 255, 0.95) !important;
+  border: 1px solid #e5e7eb !important;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.1) !important;
+  color: #111827 !important;
+}
+
+:root[data-theme="light"] .recharts-tooltip-label {
+  color: #111827 !important;
+}
+
+:root[data-theme="light"] .recharts-tooltip-item {
+  color: #374151 !important;
+}
+
+:root[data-theme="light"] .recharts-cartesian-axis-tick-value {
+  fill: #6b7280 !important;
+}
+
+:root[data-theme="dark"] .recharts-cartesian-axis-tick-value {
+  fill: #9ca3af !important;
 }

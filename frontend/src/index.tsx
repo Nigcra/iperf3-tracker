@@ -9,12 +9,14 @@ import TestRunner from './components/TestRunner';
 import Login from './components/Login';
 import AdminPanel from './components/AdminPanel';
 import { User } from './services/api';
+import { ThemeProvider, useTheme } from './context/ThemeContext';
 
 function AppContent() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const location = useLocation();
+  const { theme, toggleTheme } = useTheme();
 
   useEffect(() => {
     // Check if user is logged in
@@ -102,6 +104,13 @@ function AppContent() {
               <div className="user-name">{currentUser?.username}</div>
               {currentUser?.is_admin && <div className="user-badge">Admin</div>}
             </div>
+            <button 
+              className="btn btn-theme-toggle" 
+              onClick={toggleTheme}
+              title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+            >
+              <span style={{ fontSize: '16px' }}>{theme === 'dark' ? '☀️' : '🌙'}</span>
+            </button>
             <button className="btn btn-logout" onClick={handleLogout}>
               Logout
             </button>
@@ -133,8 +142,10 @@ const root = ReactDOM.createRoot(
 
 root.render(
   <React.StrictMode>
-    <Router>
-      <AppContent />
-    </Router>
+    <ThemeProvider>
+      <Router>
+        <AppContent />
+      </Router>
+    </ThemeProvider>
   </React.StrictMode>
 );
