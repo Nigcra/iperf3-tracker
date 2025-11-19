@@ -78,9 +78,9 @@ function AppContent() {
                 }}>
                   <div style={{
                     fontSize: '20px',
-                    fontWeight: 700,
+                    fontWeight: 600,
                     color: 'white',
-                    letterSpacing: '0.3px',
+                    letterSpacing: '1px',
                     lineHeight: 1.2,
                     whiteSpace: 'nowrap',
                     fontFamily: '"Inter", "SF Pro Display", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
