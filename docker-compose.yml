@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  backend:
+    build: ./backend
+    container_name: iperf3-tracker-backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+      - iperf-data:/app/data
+    environment:
+      - DATABASE_URL=sqlite+aiosqlite:///./data/iperf_tracker.db
+      - SCHEDULER_ENABLED=true
+      - LOG_LEVEL=INFO
+    restart: unless-stopped
+    networks:
+      - iperf-network
+
+  frontend:
+    build: ./frontend
+    container_name: iperf3-tracker-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - iperf-network
+
+volumes:
+  iperf-data:
+
+networks:
+  iperf-network:
+    driver: bridge

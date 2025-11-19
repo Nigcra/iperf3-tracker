@@ -1,0 +1,139 @@
+/* TestRunner specific styles */
+.form-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 20px;
+}
+
+.form-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.tests-table {
+  overflow-x: auto;
+  margin-top: 20px;
+}
+
+tbody tr {
+  cursor: pointer;
+}
+
+/* Status Badges with animations */
+.status-badge {
+  text-transform: uppercase;
+}
+
+.status-pending {
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  color: #92400e;
+}
+
+.status-running {
+  background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+  color: #1e40af;
+  animation: pulse 1.5s infinite;
+}
+
+.status-completed {
+  background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+  color: #065f46;
+}
+
+.status-failed {
+  background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+  color: #991b1b;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+/* Modal Body */
+.modal-body {
+  padding: 0;
+}
+
+.detail-section {
+  margin-bottom: 30px;
+}
+
+.detail-section:last-child {
+  margin-bottom: 0;
+}
+
+.detail-section h3 {
+  color: #374151;
+  margin: 0 0 15px 0;
+  font-size: 16px;
+  text-transform: uppercase;
+  font-weight: 600;
+  border-bottom: 2px solid #3b82f6;
+  padding-bottom: 8px;
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 15px;
+}
+
+.detail-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 12px;
+  background: #f9fafb;
+  border-radius: 8px;
+}
+
+.detail-label {
+  font-weight: 600;
+  color: #6b7280;
+  font-size: 14px;
+}
+
+.detail-item span:last-child {
+  color: #111827;
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.highlight {
+  color: #3b82f6 !important;
+  font-weight: 600 !important;
+  font-size: 16px !important;
+}
+
+.error-section {
+  margin-top: 24px;
+  padding: 16px;
+  background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+  border-left: 4px solid #dc2626;
+  border-radius: 8px;
+}
+
+.error-section h3 {
+  margin: 0 0 12px 0;
+  color: #991b1b;
+  font-size: 16px;
+  font-weight: 600;
+  border-bottom-color: #dc2626;
+}
+
+.error-message {
+  background: white;
+  padding: 15px;
+  border-radius: 8px;
+  color: #991b1b;
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.5;
+}

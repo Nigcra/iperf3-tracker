@@ -1,0 +1,187 @@
+.live-test-container {
+  background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+  border-radius: 12px;
+  padding: 24px;
+  color: white;
+  box-shadow: 0 8px 16px rgba(0,0,0,0.2);
+  margin-bottom: 20px;
+}
+
+.live-test-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.live-test-header h3 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+  color: white;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.live-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.2);
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.pulse-dot {
+  width: 8px;
+  height: 8px;
+  background: #ef4444;
+  border-radius: 50%;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(1.2);
+  }
+}
+
+.progress-section {
+  margin-bottom: 24px;
+}
+
+.progress-bar-container {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 10px;
+  height: 30px;
+  overflow: hidden;
+  position: relative;
+  margin-bottom: 12px;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #10b981 0%, #34d399 100%);
+  border-radius: 10px;
+  transition: width 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 40px;
+}
+
+.progress-text {
+  font-size: 14px;
+  font-weight: 700;
+  color: white;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+}
+
+.time-info {
+  display: flex;
+  justify-content: space-between;
+  font-size: 14px;
+  font-weight: 600;
+  color: white;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.live-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.live-metric {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  backdrop-filter: blur(10px);
+}
+
+.live-metric.download {
+  border-left: 4px solid #3b82f6;
+}
+
+.live-metric.upload {
+  border-left: 4px solid #10b981;
+}
+
+.metric-icon {
+  font-size: 32px;
+}
+
+.metric-content {
+  flex: 1;
+}
+
+.metric-label {
+  font-size: 12px;
+  opacity: 0.9;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.metric-value {
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.metric-unit {
+  font-size: 14px;
+  font-weight: 500;
+  opacity: 0.8;
+}
+
+.live-status {
+  text-align: center;
+  font-size: 14px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  opacity: 0.9;
+}
+
+.live-test-loading,
+.live-test-error {
+  padding: 20px;
+  text-align: center;
+  border-radius: 8px;
+  margin-bottom: 20px;
+}
+
+.live-test-loading {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+.live-test-error {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+@media (max-width: 600px) {
+  .live-metrics {
+    grid-template-columns: 1fr;
+  }
+  
+  .metric-value {
+    font-size: 24px;
+  }
+}
