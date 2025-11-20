@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
-import { FiHome, FiActivity, FiServer, FiMenu, FiX, FiUsers } from 'react-icons/fi';
+// @ts-ignore - FiShare2 exists at runtime but not in type definitions
+import { FiHome, FiActivity, FiServer, FiMenu, FiX, FiUsers, FiShare2 } from 'react-icons/fi';
 import './index.css';
 import Dashboard from './components/Dashboard';
 import ServerManager from './components/ServerManager';
@@ -114,7 +115,7 @@ function AppContent() {
             {sidebarOpen && <span>Run Test</span>}
           </Link>
           <Link to="/peering" className={`nav-item ${isActive('/peering')}`}>
-            <FiActivity className="nav-icon" size={20} />
+            <FiShare2 className="nav-icon" size={20} />
             {sidebarOpen && <span>Peering Map</span>}
           </Link>
           <Link to="/servers" className={`nav-item ${isActive('/servers')}`}>
