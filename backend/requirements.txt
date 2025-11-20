@@ -12,3 +12,5 @@ httpx==0.25.1
 python-dateutil==2.8.2
 passlib[bcrypt]==1.7.4
 python-jose[cryptography]==3.3.0
+geoip2==5.1.0
+icmplib==3.0.3

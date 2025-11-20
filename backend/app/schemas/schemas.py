@@ -167,3 +167,53 @@ class DashboardStats(BaseModel):
     avg_download_mbps: Optional[float]
     avg_upload_mbps: Optional[float]
     last_test_at: Optional[datetime]
+
+
+# Trace Schemas
+class TraceCreate(BaseModel):
+    """Schema for creating a trace"""
+    destination: str = Field(..., min_length=1, max_length=255)
+    max_hops: int = Field(default=30, ge=1, le=64)
+    timeout: int = Field(default=2, ge=1, le=10)
+    count: int = Field(default=3, ge=1, le=10)
+
+
+class TraceHopResponse(BaseModel):
+    """Schema for a trace hop"""
+    id: int
+    hop_number: int
+    ip_address: Optional[str]
+    hostname: Optional[str]
+    latitude: Optional[float]
+    longitude: Optional[float]
+    city: Optional[str]
+    country: Optional[str]
+    country_code: Optional[str]
+    asn: Optional[int]
+    asn_organization: Optional[str]
+    rtt_ms: Optional[float]
+    packet_loss: Optional[float]
+    responded: bool
+    
+    class Config:
+        from_attributes = True
+
+
+class TraceResponse(BaseModel):
+    """Schema for a trace"""
+    id: int
+    test_id: Optional[int]  # Nullable for standalone traces
+    source_ip: Optional[str]
+    destination_ip: Optional[str]
+    destination_host: str
+    total_hops: int
+    total_rtt_ms: Optional[float]
+    completed: bool
+    error_message: Optional[str]
+    started_at: Optional[datetime]
+    completed_at: Optional[datetime]
+    created_at: datetime
+    hops: list[TraceHopResponse]
+    
+    class Config:
+        from_attributes = True

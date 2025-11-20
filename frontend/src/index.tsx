@@ -8,6 +8,7 @@ import ServerManager from './components/ServerManager';
 import TestRunner from './components/TestRunner';
 import Login from './components/Login';
 import AdminPanel from './components/AdminPanel';
+import PeeringMap from './components/PeeringMap';
 import Logo from './components/Logo';
 import { User } from './services/api';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
@@ -112,6 +113,10 @@ function AppContent() {
             <FiActivity className="nav-icon" size={20} />
             {sidebarOpen && <span>Run Test</span>}
           </Link>
+          <Link to="/peering" className={`nav-item ${isActive('/peering')}`}>
+            <FiActivity className="nav-icon" size={20} />
+            {sidebarOpen && <span>Peering Map</span>}
+          </Link>
           <Link to="/servers" className={`nav-item ${isActive('/servers')}`}>
             <FiServer className="nav-icon" size={20} />
             {sidebarOpen && <span>Servers</span>}
@@ -150,6 +155,7 @@ function AppContent() {
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/tests" element={<TestRunner />} />
+          <Route path="/peering" element={<PeeringMap />} />
           <Route path="/servers" element={<ServerManager />} />
           <Route 
             path="/admin" 

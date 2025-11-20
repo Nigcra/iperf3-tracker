@@ -1,0 +1,7 @@
+# GeoIP databases are too large for git
+*.mmdb
+*.tar.gz
+*.zip
+
+# Keep this directory
+!.gitignore

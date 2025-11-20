@@ -13,6 +13,10 @@ ENV/
 *.sqlite
 *.sqlite3
 
+# GeoIP databases
+geoip/*.mmdb
+geoip/*.tar.gz
+
 # IDE
 .vscode/
 .idea/

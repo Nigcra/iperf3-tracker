@@ -6,7 +6,7 @@ from app.core.config import settings
 from app.core.database import init_db
 from app.core.logging_config import setup_logging_filters
 from app.services.scheduler_service import scheduler_service
-from app.api import servers, tests, stats, auth, admin, public_servers
+from app.api import servers, tests, stats, auth, admin, public_servers, traces
 
 # Configure logging
 logging.basicConfig(
@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     """Lifecycle handler for startup and shutdown"""
     # Startup
-    logger.info("Starting iperf3-Tracker API")
+    logger.info("Starting iperf3-Tracker API")  # Reload trigger
     
     # Initialize database
     await init_db()
@@ -71,6 +71,7 @@ app.include_router(tests.router, prefix=settings.API_V1_STR)
 app.include_router(stats.router, prefix=settings.API_V1_STR)
 app.include_router(admin.router, prefix=settings.API_V1_STR)
 app.include_router(public_servers.router, prefix=settings.API_V1_STR)
+app.include_router(traces.router, prefix=settings.API_V1_STR)
 
 
 @app.get("/")

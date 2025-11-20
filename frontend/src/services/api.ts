@@ -186,6 +186,39 @@ export interface TestLiveStatus {
   current_upload_mbps: number;
 }
 
+export interface TraceHop {
+  id: number;
+  hop_number: number;
+  ip_address: string | null;
+  hostname: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  city: string | null;
+  country: string | null;
+  country_code: string | null;
+  asn: number | null;
+  asn_organization: string | null;
+  rtt_ms: number | null;
+  packet_loss: number | null;
+  responded: boolean;
+}
+
+export interface Trace {
+  id: number;
+  test_id: number;
+  source_ip: string | null;
+  destination_ip: string | null;
+  destination_host: string;
+  total_hops: number;
+  total_rtt_ms: number | null;
+  completed: boolean;
+  error_message: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+  hops: TraceHop[];
+}
+
 // API Functions
 
 // Servers
@@ -325,6 +358,39 @@ export const getPublicServers = async (): Promise<PublicServer[]> => {
 
 export const searchPublicServers = async (query: string): Promise<PublicServer[]> => {
   const response = await api.get('/public-servers/search', { params: { query } });
+  return response.data;
+};
+
+// Traces
+export interface TraceCreate {
+  destination: string;
+  max_hops?: number;
+  timeout?: number;
+  count?: number;
+}
+
+export const createTrace = async (data: TraceCreate): Promise<Trace> => {
+  const response = await api.post('/traces', data);
+  return response.data;
+};
+
+export const getTrace = async (traceId: number): Promise<Trace> => {
+  const response = await api.get(`/traces/${traceId}`);
+  return response.data;
+};
+
+export const getRecentTraces = async (limit: number = 10): Promise<Trace[]> => {
+  const response = await api.get('/traces', { params: { limit } });
+  return response.data;
+};
+
+export const getTracesByTest = async (testId: number): Promise<Trace[]> => {
+  const response = await api.get(`/traces/test/${testId}`);
+  return response.data;
+};
+
+export const deleteTrace = async (traceId: number): Promise<{ message: string }> => {
+  const response = await api.delete(`/traces/${traceId}`);
   return response.data;
 };
 

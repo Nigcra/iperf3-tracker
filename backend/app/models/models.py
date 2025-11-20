@@ -116,3 +116,64 @@ class Test(Base):
     
     # Relationships
     server = relationship("Server", back_populates="tests")
+    trace = relationship("Trace", back_populates="test", uselist=False, cascade="all, delete-orphan")
+
+
+class Trace(Base):
+    """Network trace for a test"""
+    __tablename__ = "traces"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    test_id = Column(Integer, ForeignKey("tests.id", ondelete="CASCADE"), nullable=True, index=True)
+    
+    # Source and destination
+    source_ip = Column(String(45), nullable=True)  # IPv4 or IPv6
+    destination_ip = Column(String(45), nullable=True)
+    destination_host = Column(String(255), nullable=False)
+    
+    # Trace metadata
+    total_hops = Column(Integer, nullable=False, default=0)
+    total_rtt_ms = Column(Float, nullable=True)
+    completed = Column(Boolean, default=False)
+    error_message = Column(Text, nullable=True)
+    
+    # Timestamps
+    started_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=func.now())
+    
+    # Relationships
+    test = relationship("Test", back_populates="trace")
+    hops = relationship("TraceHop", back_populates="trace", cascade="all, delete-orphan", order_by="TraceHop.hop_number")
+
+
+class TraceHop(Base):
+    """Individual hop in a network trace"""
+    __tablename__ = "trace_hops"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    trace_id = Column(Integer, ForeignKey("traces.id", ondelete="CASCADE"), nullable=False)
+    
+    # Hop details
+    hop_number = Column(Integer, nullable=False)
+    ip_address = Column(String(45), nullable=True)  # May be None if hop doesn't respond
+    hostname = Column(String(255), nullable=True)
+    
+    # Geolocation
+    latitude = Column(Float, nullable=True)
+    longitude = Column(Float, nullable=True)
+    city = Column(String(100), nullable=True)
+    country = Column(String(100), nullable=True)
+    country_code = Column(String(2), nullable=True)
+    asn = Column(Integer, nullable=True)
+    asn_organization = Column(String(255), nullable=True)
+    
+    # Performance metrics
+    rtt_ms = Column(Float, nullable=True)  # Round trip time
+    packet_loss = Column(Float, nullable=True)
+    
+    # Metadata
+    responded = Column(Boolean, default=True)
+    
+    # Relationships
+    trace = relationship("Trace", back_populates="hops")
