@@ -3,6 +3,18 @@
   margin-bottom: 30px;
 }
 
+.admin-header h1 {
+  font-size: 28px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: var(--text-primary);
+}
+
+.admin-header p {
+  color: var(--text-tertiary);
+  font-size: 16px;
+}
+
 .admin-tabs {
   display: flex;
   gap: 10px;

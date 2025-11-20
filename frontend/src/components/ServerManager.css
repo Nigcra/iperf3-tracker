@@ -6,6 +6,13 @@
   margin-bottom: 30px;
 }
 
+.header h1 {
+  font-size: 28px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: var(--text-primary);
+}
+
 .form-group.full-width {
   grid-column: 1 / -1;
 }
