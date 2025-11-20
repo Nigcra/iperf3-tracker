@@ -20,6 +20,7 @@ const ServerManager: React.FC = () => {
     default_direction: TestDirection.DOWNLOAD,
     schedule_enabled: false,
     schedule_interval_minutes: 30,
+    auto_trace_enabled: false,
   };
 
   const [formData, setFormData] = useState<ServerCreate>(defaultFormData);
@@ -72,6 +73,7 @@ const ServerManager: React.FC = () => {
       default_direction: server.default_direction,
       schedule_enabled: server.schedule_enabled,
       schedule_interval_minutes: server.schedule_interval_minutes,
+      auto_trace_enabled: server.auto_trace_enabled,
     });
     setShowForm(true);
   };
@@ -226,6 +228,18 @@ const ServerManager: React.FC = () => {
                   Scheduled Tests
                 </label>
               </div>
+
+              <div className="form-group checkbox">
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={formData.auto_trace_enabled}
+                    onChange={(e) => setFormData({ ...formData, auto_trace_enabled: e.target.checked })}
+                    disabled={!formData.schedule_enabled}
+                  />
+                  Auto Traceroute (when scheduled)
+                </label>
+              </div>
             </div>
 
             <div className="form-actions">
@@ -256,6 +270,7 @@ const ServerManager: React.FC = () => {
                     <h3>{server.name}</h3>
                     <div className="server-badges">
                       {server.schedule_enabled && <span className="badge">Scheduled</span>}
+                      {server.auto_trace_enabled && <span className="badge">Auto Trace</span>}
                       {!server.enabled && <span className="badge disabled-badge">Disabled</span>}
                     </div>
                   </div>
@@ -267,7 +282,10 @@ const ServerManager: React.FC = () => {
                     <p><strong>Duration:</strong> {server.default_duration}s</p>
                     <p><strong>Parallel Streams:</strong> {server.default_parallel}</p>
                     {server.schedule_enabled && (
-                      <p><strong>Schedule:</strong> Every {server.schedule_interval_minutes} minutes</p>
+                      <>
+                        <p><strong>Schedule:</strong> Every {server.schedule_interval_minutes} minutes</p>
+                        {server.auto_trace_enabled && <p><strong>Auto Trace:</strong> Enabled (max 30s)</p>}
+                      </>
                     )}
                   </div>
                   <div className="server-actions">

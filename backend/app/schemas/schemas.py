@@ -61,6 +61,9 @@ class ServerBase(BaseModel):
     # Scheduling
     schedule_enabled: bool = False
     schedule_interval_minutes: int = Field(default=30, ge=1)
+    
+    # Auto-tracing
+    auto_trace_enabled: bool = False
 
 
 class ServerCreate(ServerBase):
@@ -82,6 +85,7 @@ class ServerUpdate(BaseModel):
     default_direction: Optional[TestDirection] = None
     schedule_enabled: Optional[bool] = None
     schedule_interval_minutes: Optional[int] = Field(None, ge=1)
+    auto_trace_enabled: Optional[bool] = None
 
 
 class ServerResponse(ServerBase):

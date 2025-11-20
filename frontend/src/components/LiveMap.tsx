@@ -1,0 +1,186 @@
+import React, { useEffect, useRef, useState } from 'react';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
+import { TraceHop } from '../services/api';
+
+interface LiveMapProps {
+  hops: TraceHop[];
+  isLive?: boolean;
+}
+
+const LiveMap: React.FC<LiveMapProps> = ({ hops, isLive = false }) => {
+  const mapRef = useRef<L.Map | null>(null);
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const markersRef = useRef<L.Marker[]>([]);
+  const [mapReady, setMapReady] = useState(false);
+
+  // Initialize map once
+  useEffect(() => {
+    if (!mapContainerRef.current || mapRef.current) return;
+
+    console.log('Initializing Leaflet map');
+    
+    // Create map
+    const map = L.map(mapContainerRef.current, {
+      center: [50.0, 10.0],
+      zoom: 4,
+      zoomControl: true,
+    });
+
+    // Add tile layer
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+      maxZoom: 18,
+    }).addTo(map);
+
+    mapRef.current = map;
+    setMapReady(true);
+
+    // Force map to recalculate size
+    setTimeout(() => {
+      map.invalidateSize();
+    }, 100);
+
+    return () => {
+      if (mapRef.current) {
+        mapRef.current.remove();
+        mapRef.current = null;
+      }
+    };
+  }, []);
+
+  // Update markers when hops change
+  useEffect(() => {
+    if (!mapRef.current || !mapReady) return;
+
+    console.log('Updating map with', hops.length, 'hops');
+
+    // Clear existing markers
+    markersRef.current.forEach(marker => marker.remove());
+    markersRef.current = [];
+
+    // Filter valid hops
+    const validHops = hops.filter(
+      hop => hop.latitude !== null && 
+             hop.longitude !== null && 
+             !isNaN(hop.latitude) && 
+             !isNaN(hop.longitude)
+    );
+
+    console.log('Valid hops with coordinates:', validHops.length);
+
+    if (validHops.length === 0) return;
+
+    // Create custom icons
+    const createIcon = (color: string, label: string) => {
+      return L.divIcon({
+        html: `<div style="
+          background: ${color};
+          width: 24px;
+          height: 24px;
+          border-radius: 50%;
+          border: 2px solid white;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 12px;
+          color: white;
+          font-weight: bold;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        ">${label}</div>`,
+        className: 'custom-map-marker',
+        iconSize: [24, 24],
+        iconAnchor: [12, 12],
+      });
+    };
+
+    // Add markers for each hop
+    validHops.forEach((hop, index) => {
+      const isFirst = index === 0;
+      const isLast = index === validHops.length - 1;
+      
+      let icon: L.DivIcon;
+      if (isFirst) {
+        icon = createIcon('#10b981', '🚀');
+      } else if (isLast) {
+        icon = createIcon('#ef4444', '🎯');
+      } else {
+        icon = createIcon('#3b82f6', String(hop.hop_number));
+      }
+
+      const marker = L.marker([hop.latitude, hop.longitude], { icon })
+        .bindPopup(`
+          <div style="font-family: system-ui; min-width: 200px;">
+            <strong style="font-size: 14px;">Hop #${hop.hop_number}</strong><br/>
+            ${hop.city ? `📍 ${hop.city}, ${hop.country}<br/>` : ''}
+            ${hop.ip_address ? `IP: ${hop.ip_address}<br/>` : ''}
+            ${hop.hostname ? `Host: ${hop.hostname}<br/>` : ''}
+            ${hop.rtt_ms ? `RTT: ${hop.rtt_ms.toFixed(1)}ms<br/>` : ''}
+            ${hop.asn_organization ? `ISP: ${hop.asn_organization}` : ''}
+          </div>
+        `)
+        .addTo(mapRef.current);
+
+      markersRef.current.push(marker);
+    });
+
+    // Draw path
+    if (validHops.length > 1) {
+      const pathCoords: L.LatLngExpression[] = validHops.map(hop => [hop.latitude, hop.longitude]);
+      L.polyline(pathCoords, {
+        color: '#2196F3',
+        weight: 3,
+        opacity: 0.7,
+        dashArray: '10, 5',
+      }).addTo(mapRef.current);
+    }
+
+    // Fit bounds to show all markers
+    const bounds = L.latLngBounds(validHops.map(hop => [hop.latitude, hop.longitude]));
+    mapRef.current.fitBounds(bounds, { padding: [50, 50], maxZoom: 10 });
+
+  }, [hops, mapReady]);
+
+  return (
+    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+      <div 
+        ref={mapContainerRef} 
+        style={{ 
+          width: '100%', 
+          height: '100%', 
+          minHeight: '600px',
+          borderRadius: '12px',
+          overflow: 'hidden',
+        }} 
+      />
+      {isLive && hops.length > 0 && (
+        <div style={{
+          position: 'absolute',
+          top: '10px',
+          left: '10px',
+          background: 'rgba(30, 58, 138, 0.9)',
+          color: 'white',
+          padding: '8px 16px',
+          borderRadius: '8px',
+          fontSize: '14px',
+          fontWeight: 600,
+          zIndex: 1000,
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+        }}>
+          <div style={{
+            width: '8px',
+            height: '8px',
+            borderRadius: '50%',
+            background: '#10b981',
+            animation: 'pulse 1.5s ease-in-out infinite',
+          }} />
+          LIVE TRACING - {hops.length} hops
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default LiveMap;

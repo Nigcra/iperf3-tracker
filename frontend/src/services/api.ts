@@ -101,6 +101,7 @@ export interface Server {
   default_direction: TestDirection;
   schedule_enabled: boolean;
   schedule_interval_minutes: number;
+  auto_trace_enabled: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -117,6 +118,7 @@ export interface ServerCreate {
   default_direction: TestDirection;
   schedule_enabled: boolean;
   schedule_interval_minutes: number;
+  auto_trace_enabled: boolean;
 }
 
 export interface Test {
@@ -339,10 +341,20 @@ export const cleanupTests = async (params: {
   return response.data;
 };
 
+export const cleanupTraces = async (params: {
+  days?: number;
+  all?: boolean;
+}): Promise<{ deleted_traces: number; deleted_hops: number; message: string }> => {
+  const response = await api.delete('/admin/cleanup/traces', { params });
+  return response.data;
+};
+
 export const getDatabaseStats = async (): Promise<{
   total_tests: number;
   total_servers: number;
   total_users: number;
+  total_traces: number;
+  total_hops: number;
   oldest_test?: string;
   newest_test?: string;
 }> => {

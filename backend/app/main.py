@@ -6,7 +6,7 @@ from app.core.config import settings
 from app.core.database import init_db
 from app.core.logging_config import setup_logging_filters
 from app.services.scheduler_service import scheduler_service
-from app.api import servers, tests, stats, auth, admin, public_servers, traces
+from app.api import servers, tests, stats, auth, admin, public_servers, traces, live_trace
 
 # Configure logging
 logging.basicConfig(
@@ -72,6 +72,7 @@ app.include_router(stats.router, prefix=settings.API_V1_STR)
 app.include_router(admin.router, prefix=settings.API_V1_STR)
 app.include_router(public_servers.router, prefix=settings.API_V1_STR)
 app.include_router(traces.router, prefix=settings.API_V1_STR)
+app.include_router(live_trace.router, prefix=settings.API_V1_STR)
 
 
 @app.get("/")

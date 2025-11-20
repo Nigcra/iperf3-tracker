@@ -6,6 +6,7 @@ import {
   register,
   getDatabaseStats,
   cleanupTests,
+  cleanupTraces,
   getPublicServers,
   User,
   UserCreate,
@@ -31,6 +32,7 @@ const AdminPanel: React.FC = () => {
 
   // Cleanup state
   const [cleanupDays, setCleanupDays] = useState<number>(30);
+  const [cleanupTraceDays, setCleanupTraceDays] = useState<number>(30);
   const [cleanupServerId, setCleanupServerId] = useState<string>('');
 
   useEffect(() => {
@@ -100,6 +102,25 @@ const AdminPanel: React.FC = () => {
     }
   };
 
+  const handleCleanupTraces = async (all: boolean = false) => {
+    const message = all 
+      ? 'Delete ALL trace data? This cannot be undone!'
+      : `Delete traces older than ${cleanupTraceDays} days?`;
+    
+    if (!window.confirm(message)) return;
+
+    try {
+      const params: any = { all };
+      if (!all && cleanupTraceDays) params.days = cleanupTraceDays;
+      
+      const result = await cleanupTraces(params);
+      alert(`Successfully deleted ${result.deleted_traces} trace(s) and ${result.deleted_hops} hop(s)`);
+      loadData();
+    } catch (error: any) {
+      alert(error.response?.data?.detail || 'Failed to cleanup traces');
+    }
+  };
+
   const copyServerInfo = (server: PublicServer) => {
     const text = `${server.host}:${server.port}`;
     navigator.clipboard.writeText(text);
@@ -156,6 +177,11 @@ const AdminPanel: React.FC = () => {
             <FiDatabase size={24} />
             <div className="stat-value">{dbStats.total_tests}</div>
             <div className="stat-label">Total Tests</div>
+          </div>
+          <div className="stat-card orange">
+            <FiDatabase size={24} />
+            <div className="stat-value">{dbStats.total_traces}</div>
+            <div className="stat-label">Total Traces</div>
           </div>
         </div>
       )}
@@ -278,7 +304,7 @@ const AdminPanel: React.FC = () => {
             <div className="warning-box">
               <FiAlertCircle size={24} />
               <div>
-                <strong>Warning:</strong> Deleted test data cannot be recovered.
+                <strong>Warning:</strong> Deleted data cannot be recovered.
                 Please make sure you have backups if needed.
               </div>
             </div>
@@ -313,10 +339,43 @@ const AdminPanel: React.FC = () => {
             <hr />
 
             <div className="cleanup-options">
+              <h3>Delete Old Traces</h3>
+              <p className="info-text">
+                Traces: {dbStats?.total_traces || 0} | Hops: {dbStats?.total_hops || 0}
+              </p>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Delete traces older than (days)</label>
+                  <input
+                    type="number"
+                    value={cleanupTraceDays}
+                    onChange={(e) => setCleanupTraceDays(parseInt(e.target.value))}
+                    min="1"
+                  />
+                </div>
+              </div>
+              <button className="btn btn-warning" onClick={() => handleCleanupTraces(false)}>
+                Delete Old Traces
+              </button>
+            </div>
+
+            <hr />
+
+            <div className="cleanup-options">
               <h3>Delete All Tests</h3>
               <p>This will permanently delete ALL test data from the database.</p>
               <button className="btn btn-danger" onClick={() => handleCleanup(true)}>
                 <FiTrash2 /> Delete All Tests
+              </button>
+            </div>
+
+            <hr />
+
+            <div className="cleanup-options">
+              <h3>Delete All Traces</h3>
+              <p>This will permanently delete ALL trace data from the database.</p>
+              <button className="btn btn-danger" onClick={() => handleCleanupTraces(true)}>
+                <FiTrash2 /> Delete All Traces
               </button>
             </div>
           </div>

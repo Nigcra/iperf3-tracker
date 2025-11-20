@@ -1,18 +1,8 @@
-import React, { useEffect, useState } from 'react';
-import { MapContainer, TileLayer, Marker, Polyline, Popup, CircleMarker } from 'react-leaflet';
-import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
+import React, { useEffect, useState, useRef } from 'react';
 import './PeeringMap.css';
 import * as api from '../services/api';
 import { Trace, TraceHop } from '../services/api';
-
-// Fix for default marker icons in react-leaflet
-delete (L.Icon.Default.prototype as any)._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: require('leaflet/dist/images/marker-icon-2x.png'),
-  iconUrl: require('leaflet/dist/images/marker-icon.png'),
-  shadowUrl: require('leaflet/dist/images/marker-shadow.png'),
-});
+import LiveMap from './LiveMap';
 
 interface PeeringMapProps {
   testId?: number;
@@ -25,10 +15,15 @@ const PeeringMap: React.FC<PeeringMapProps> = ({ testId }) => {
   const [selectedServer, setSelectedServer] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [runningTrace, setRunningTrace] = useState(false);
+  const [liveHops, setLiveHops] = useState<TraceHop[]>([]);
+  const [isLiveMode, setIsLiveMode] = useState(false);
+  const [liveDestination, setLiveDestination] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
+  const eventSourceRef = useRef<EventSource | null>(null);
 
   useEffect(() => {
     loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [testId]);
 
   const loadData = async () => {
@@ -36,21 +31,23 @@ const PeeringMap: React.FC<PeeringMapProps> = ({ testId }) => {
       setLoading(true);
       setError(null);
 
-      // Load servers
       const serverList = await api.getServers();
       setServers(serverList);
 
       if (testId) {
-        // Load specific trace
         const trace = await api.getTrace(testId);
-        setTraces([trace]);
         setSelectedTrace(trace);
+        setTraces([trace]);
       } else {
-        // Load recent traces
         const recentTraces = await api.getRecentTraces(10);
         setTraces(recentTraces);
+        console.log('Loaded traces:', recentTraces.length);
+        
         if (recentTraces.length > 0) {
-          setSelectedTrace(recentTraces[0]);
+          // Select the most recent trace (first in list should be newest)
+          const newest = recentTraces[0];
+          console.log('Auto-selecting trace:', newest.id, 'hops:', newest.total_hops);
+          setSelectedTrace(newest);
         }
       }
     } catch (err: any) {
@@ -72,250 +69,117 @@ const PeeringMap: React.FC<PeeringMapProps> = ({ testId }) => {
 
     try {
       setRunningTrace(true);
+      setIsLiveMode(true);
+      setLiveHops([]);
+      setLiveDestination(server.host);
       setError(null);
 
-      // Create new trace
-      const trace = await api.createTrace({
-        destination: server.host,
-        max_hops: 30,
-        timeout: 2,
-        count: 3
-      });
-
-      // Reload traces
-      await loadData();
+      const token = localStorage.getItem('token');
+      if (!token) {
+        setError('Not authenticated');
+        setRunningTrace(false);
+        setIsLiveMode(false);
+        return;
+      }
       
-      // Select the new trace
-      setSelectedTrace(trace);
+      const eventSource = new EventSource(
+        `http://localhost:8000/api/live-trace/stream/${encodeURIComponent(server.host)}?token=${encodeURIComponent(token)}`
+      );
+      
+      eventSourceRef.current = eventSource;
 
-      // Poll for updates (trace runs async on backend)
-      const pollInterval = setInterval(async () => {
+      eventSource.onmessage = (event) => {
         try {
-          const updatedTrace = await api.getTrace(trace.id);
-          setSelectedTrace(updatedTrace);
+          const data = JSON.parse(event.data);
           
-          if (updatedTrace.completed) {
-            clearInterval(pollInterval);
+          if (data.type === 'start') {
+            console.log('Traceroute started:', data.destination);
+          } else if (data.type === 'hop') {
+            setLiveHops(prev => [...prev, data.data]);
+          } else if (data.type === 'complete') {
+            console.log('Traceroute complete');
+            eventSource.close();
             setRunningTrace(false);
-            await loadData(); // Reload all traces
+            
+            // Wait longer before loading data (give backend time to save)
+            setTimeout(async () => {
+              console.log('Loading historical traces...');
+              await loadData();
+              
+              // Keep live mode active for a moment to show smooth transition
+              setTimeout(() => {
+                console.log('Switching to historical view');
+                setIsLiveMode(false);
+                setLiveHops([]);
+              }, 1000);
+            }, 2000); // Increased from 1000ms to 2000ms
+          } else if (data.type === 'error') {
+            setError(data.message);
+            eventSource.close();
+            setRunningTrace(false);
+            setIsLiveMode(false);
           }
         } catch (err) {
-          console.error('Error polling trace:', err);
-          clearInterval(pollInterval);
-          setRunningTrace(false);
+          console.error('Error parsing SSE event:', err);
         }
-      }, 3000); // Poll every 3 seconds
+      };
 
-      // Stop polling after 3 minutes (increased for longer traceroutes)
-      setTimeout(() => {
-        clearInterval(pollInterval);
+      eventSource.onerror = (err) => {
+        console.error('SSE error:', err);
+        setError('Connection lost');
+        eventSource.close();
         setRunningTrace(false);
+        setIsLiveMode(false);
+      };
+
+      setTimeout(() => {
+        if (runningTrace) {
+          eventSource.close();
+          setRunningTrace(false);
+          setIsLiveMode(false);
+          setError('Traceroute timeout');
+        }
       }, 180000);
 
     } catch (err: any) {
       console.error('Error starting traceroute:', err);
       setError(err.message || 'Failed to start traceroute');
       setRunningTrace(false);
+      setIsLiveMode(false);
     }
   };
 
-  const getHopColor = (rtt: number | null): string => {
-    if (!rtt) return '#999';
-    if (rtt < 20) return '#4CAF50'; // Green - fast
-    if (rtt < 50) return '#FFC107'; // Yellow - medium
-    if (rtt < 100) return '#FF9800'; // Orange - slow
-    return '#F44336'; // Red - very slow
-  };
-
-  const getHopRadius = (hop: TraceHop, maxRtt: number): number => {
-    if (!hop.rtt_ms) return 6;
-    // Scale radius based on RTT (6-16px)
-    const normalized = hop.rtt_ms / maxRtt;
-    return 6 + normalized * 10;
-  };
-
-  const createStartIcon = () => {
-    return L.divIcon({
-      html: `<div style="
-        background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
-        border: 3px solid white;
-        border-radius: 50%;
-        width: 24px;
-        height: 24px;
-        box-shadow: 0 4px 12px rgba(76, 175, 80, 0.4);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 14px;
-      ">🏠</div>`,
-      className: 'custom-marker',
-      iconSize: [24, 24],
-      iconAnchor: [12, 12]
-    });
-  };
-
-  const createEndIcon = () => {
-    return L.divIcon({
-      html: `<div style="
-        background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%);
-        border: 3px solid white;
-        border-radius: 50%;
-        width: 24px;
-        height: 24px;
-        box-shadow: 0 4px 12px rgba(33, 150, 243, 0.4);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 14px;
-      ">🎯</div>`,
-      className: 'custom-marker',
-      iconSize: [24, 24],
-      iconAnchor: [12, 12]
-    });
+  const stopTraceroute = () => {
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+      eventSourceRef.current = null;
+    }
+    setRunningTrace(false);
+    setIsLiveMode(false);
+    setLiveHops([]);
+    console.log('Traceroute stopped by user');
   };
 
   const renderMap = () => {
-    if (!selectedTrace || !selectedTrace.hops || selectedTrace.hops.length === 0) {
+    const hopsToDisplay = isLiveMode ? liveHops : (selectedTrace?.hops || []);
+    
+    console.log('renderMap:', { 
+      isLiveMode, 
+      liveHopsLength: liveHops.length, 
+      selectedTraceHops: selectedTrace?.hops?.length,
+      hopsToDisplay: hopsToDisplay.length 
+    });
+    
+    if (hopsToDisplay.length === 0) {
       return (
         <div className="no-data">
-          <p>No trace data available</p>
-          {!selectedTrace?.completed && selectedTrace && (
-            <p>Trace is still running...</p>
-          )}
+          <p>{isLiveMode ? '🔄 Waiting for trace data...' : 'No trace data available'}</p>
+          {isLiveMode && <div className="spinner"></div>}
         </div>
       );
     }
 
-    // Filter hops with valid coordinates
-    const validHops = selectedTrace.hops.filter(
-      hop => hop.latitude !== null && hop.longitude !== null && hop.responded
-    );
-
-    if (validHops.length === 0) {
-      return (
-        <div className="no-data">
-          <p>No geolocation data available for this trace</p>
-        </div>
-      );
-    }
-
-    // Calculate map center and bounds
-    const lats = validHops.map(h => h.latitude!);
-    const lons = validHops.map(h => h.longitude!);
-    const center: [number, number] = [
-      (Math.min(...lats) + Math.max(...lats)) / 2,
-      (Math.min(...lons) + Math.max(...lons)) / 2
-    ];
-
-    // Create path for polyline (including start and end if we have their coordinates)
-    const pathPositions: [number, number][] = validHops.map(hop => [hop.latitude!, hop.longitude!]);
-
-    // Find max RTT for scaling
-    const maxRtt = Math.max(...validHops.map(h => h.rtt_ms || 0));
-
-    return (
-      <MapContainer
-        center={center}
-        zoom={4}
-        style={{ height: '100%', width: '100%' }}
-        className="peering-map-container"
-      >
-        <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        />
-
-        {/* Draw path line */}
-        <Polyline
-          positions={pathPositions}
-          color="#2196F3"
-          weight={3}
-          opacity={0.7}
-          dashArray="10, 5"
-          className="trace-path"
-        />
-
-        {/* Start marker (first hop with location) */}
-        {validHops.length > 0 && (
-          <Marker
-            position={[validHops[0].latitude!, validHops[0].longitude!]}
-            icon={createStartIcon()}
-          >
-            <Popup>
-              <div className="hop-popup">
-                <strong>Start Location</strong>
-                <br />
-                {validHops[0].city && <div>{validHops[0].city}, {validHops[0].country}</div>}
-                {validHops[0].ip_address && <div className="mono">{validHops[0].ip_address}</div>}
-                {validHops[0].hostname && <div className="mono small">{validHops[0].hostname}</div>}
-              </div>
-            </Popup>
-          </Marker>
-        )}
-
-        {/* End marker (last hop with location) */}
-        {validHops.length > 1 && (
-          <Marker
-            position={[validHops[validHops.length - 1].latitude!, validHops[validHops.length - 1].longitude!]}
-            icon={createEndIcon()}
-          >
-            <Popup>
-              <div className="hop-popup">
-                <strong>🎯 Destination</strong>
-                <br />
-                <div className="mono">{selectedTrace.destination_host}</div>
-                {selectedTrace.destination_ip && (
-                  <div className="mono small">{selectedTrace.destination_ip}</div>
-                )}
-                {validHops[validHops.length - 1].city && (
-                  <div>{validHops[validHops.length - 1].city}, {validHops[validHops.length - 1].country}</div>
-                )}
-              </div>
-            </Popup>
-          </Marker>
-        )}
-
-        {/* Hop markers */}
-        {validHops.map((hop, index) => {
-          // Skip first and last (already shown as start/end markers)
-          if (index === 0 || index === validHops.length - 1) return null;
-
-          return (
-            <CircleMarker
-              key={hop.id}
-              center={[hop.latitude!, hop.longitude!]}
-              radius={getHopRadius(hop, maxRtt)}
-              fillColor={getHopColor(hop.rtt_ms)}
-              color="white"
-              weight={2}
-              opacity={1}
-              fillOpacity={0.8}
-            >
-              <Popup>
-                <div className="hop-popup">
-                  <strong>Hop #{hop.hop_number}</strong>
-                  <br />
-                  {hop.city && <div>📍 {hop.city}, {hop.country}</div>}
-                  {hop.ip_address && <div className="mono">{hop.ip_address}</div>}
-                  {hop.hostname && <div className="mono small">{hop.hostname}</div>}
-                  {hop.asn_organization && <div className="small">🏢 {hop.asn_organization}</div>}
-                  {hop.rtt_ms !== null && (
-                    <div className="metric">
-                      ⏱️ <strong>{hop.rtt_ms.toFixed(1)} ms</strong>
-                    </div>
-                  )}
-                  {hop.packet_loss !== null && hop.packet_loss > 0 && (
-                    <div className="metric warning">
-                      📉 Packet Loss: {hop.packet_loss.toFixed(1)}%
-                    </div>
-                  )}
-                </div>
-              </Popup>
-            </CircleMarker>
-          );
-        })}
-      </MapContainer>
-    );
+    return <LiveMap hops={hopsToDisplay} isLive={isLiveMode} />;
   };
 
   if (loading) {
@@ -345,7 +209,7 @@ const PeeringMap: React.FC<PeeringMapProps> = ({ testId }) => {
         <p>Visualize network paths and hop performance</p>
       </div>
 
-      {/* Server Selection and Traceroute */}
+      {/* Server Selection */}
       <div className="trace-controls">
         <div className="control-group">
           <label>Select Server:</label>
@@ -371,7 +235,25 @@ const PeeringMap: React.FC<PeeringMapProps> = ({ testId }) => {
         </button>
       </div>
 
-      {!testId && traces.length > 0 && (
+      {/* Live Status */}
+      {isLiveMode && (
+        <div className="live-status-compact">
+          <div className="live-indicator">
+            <span className="live-dot"></span>
+            <strong>LIVE TRACING</strong> - {liveDestination}
+          </div>
+          <div className="live-stats">
+            Hops: <strong>{liveHops.length}</strong> | 
+            Located: <strong>{liveHops.filter(h => h.latitude && h.longitude).length}</strong>
+          </div>
+          <button onClick={stopTraceroute} className="btn btn-danger btn-sm">
+            Stop
+          </button>
+        </div>
+      )}
+
+      {/* Previous Traces */}
+      {!testId && (
         <div className="trace-selector">
           <label>View Previous Trace:</label>
           <select
@@ -379,114 +261,31 @@ const PeeringMap: React.FC<PeeringMapProps> = ({ testId }) => {
             onChange={(e) => {
               const trace = traces.find(t => t.id === Number(e.target.value));
               setSelectedTrace(trace || null);
+              // Exit live mode when selecting historical trace
+              if (isLiveMode) {
+                stopTraceroute();
+              }
             }}
+            disabled={isLiveMode || traces.length === 0}
           >
-            <option value="">-- Select a trace --</option>
+            <option value="">
+              {traces.length === 0 ? '-- No traces available --' : '-- Select a trace --'}
+            </option>
             {traces.map(trace => (
               <option key={trace.id} value={trace.id}>
                 {trace.destination_host} - {new Date(trace.created_at).toLocaleString()} ({trace.total_hops} hops)
               </option>
             ))}
           </select>
-          <button onClick={loadData} className="btn btn-secondary">
+          <button onClick={loadData} className="btn btn-secondary" disabled={isLiveMode}>
             Refresh
           </button>
         </div>
       )}
 
-      {selectedTrace && (
-        <div className="trace-info">
-          <div className="info-grid">
-            <div className="info-item">
-              <label>Destination:</label>
-              <span className="mono">{selectedTrace.destination_host}</span>
-            </div>
-            <div className="info-item">
-              <label>Total Hops:</label>
-              <span>{selectedTrace.total_hops}</span>
-            </div>
-            <div className="info-item">
-              <label>Total RTT:</label>
-              <span>{selectedTrace.total_rtt_ms?.toFixed(1)} ms</span>
-            </div>
-            <div className="info-item">
-              <label>Status:</label>
-              <span className={selectedTrace.completed ? 'status-completed' : 'status-running'}>
-                {selectedTrace.completed ? 'Completed' : 'Running'}
-              </span>
-            </div>
-          </div>
-        </div>
-      )}
-
+      {/* Map */}
       <div className="map-container">
         {renderMap()}
-      </div>
-
-      {selectedTrace && selectedTrace.hops && selectedTrace.hops.length > 0 && (
-        <div className="hops-table">
-          <h2>Network Hops</h2>
-          <table>
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>IP Address</th>
-                <th>Hostname</th>
-                <th>Location</th>
-                <th>ISP</th>
-                <th>RTT</th>
-                <th>Loss</th>
-              </tr>
-            </thead>
-            <tbody>
-              {selectedTrace.hops.map(hop => (
-                <tr key={hop.id} className={!hop.responded ? 'no-response' : ''}>
-                  <td>{hop.hop_number}</td>
-                  <td className="mono">{hop.ip_address || '* * *'}</td>
-                  <td className="mono small">{hop.hostname || '-'}</td>
-                  <td>
-                    {hop.city && hop.country ? (
-                      <>
-                        {hop.city}, {hop.country_code}
-                      </>
-                    ) : '-'}
-                  </td>
-                  <td className="small">{hop.asn_organization || '-'}</td>
-                  <td className={hop.rtt_ms ? `rtt-${hop.rtt_ms < 20 ? 'good' : hop.rtt_ms < 50 ? 'medium' : 'bad'}` : ''}>
-                    {hop.rtt_ms !== null ? `${hop.rtt_ms.toFixed(1)} ms` : '-'}
-                  </td>
-                  <td>
-                    {hop.packet_loss !== null && hop.packet_loss > 0
-                      ? `${hop.packet_loss.toFixed(1)}%`
-                      : '-'}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      <div className="legend">
-        <h3>Performance Legend</h3>
-        <div className="legend-items">
-          <div className="legend-item">
-            <div className="legend-color" style={{ background: '#4CAF50' }}></div>
-            <span>&lt; 20ms - Excellent</span>
-          </div>
-          <div className="legend-item">
-            <div className="legend-color" style={{ background: '#FFC107' }}></div>
-            <span>20-50ms - Good</span>
-          </div>
-          <div className="legend-item">
-            <div className="legend-color" style={{ background: '#FF9800' }}></div>
-            <span>50-100ms - Fair</span>
-          </div>
-          <div className="legend-item">
-            <div className="legend-color" style={{ background: '#F44336' }}></div>
-            <span>&gt; 100ms - Poor</span>
-          </div>
-        </div>
       </div>
     </div>
   );

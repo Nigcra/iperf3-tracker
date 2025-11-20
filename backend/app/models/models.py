@@ -63,6 +63,9 @@ class Server(Base):
     schedule_enabled = Column(Boolean, default=False)
     schedule_interval_minutes = Column(Integer, default=30)
     
+    # Auto-tracing configuration
+    auto_trace_enabled = Column(Boolean, default=False)
+    
     # Metadata
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())

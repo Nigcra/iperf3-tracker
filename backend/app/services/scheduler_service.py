@@ -2,10 +2,12 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 from datetime import datetime
 import logging
+import asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import AsyncSessionLocal
 from app.models.models import Server
 from app.services.iperf_service import TestService
+from app.services.traceroute_service import TracerouteService
 from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
@@ -76,7 +78,7 @@ class SchedulerService:
                 
                 # Run test using the service
                 test_service = TestService(db)
-                await test_service.create_and_run_test(
+                test = await test_service.create_and_run_test(
                     server_id=server_id,
                     duration=server.default_duration,
                     parallel_streams=server.default_parallel,
@@ -85,6 +87,31 @@ class SchedulerService:
                 )
                 
                 logger.info(f"Scheduled test completed for server: {server.name}")
+                
+                # Run automatic traceroute if enabled
+                if server.auto_trace_enabled:
+                    logger.info(f"Running automatic traceroute for server: {server.name}")
+                    try:
+                        traceroute_service = TracerouteService(db)
+                        
+                        # Run traceroute with 30-second timeout
+                        trace_task = asyncio.create_task(
+                            traceroute_service.run_traceroute(
+                                destination=server.host,
+                                test_id=test.id if test else None,
+                                max_hops=30,
+                                timeout_per_hop=1.0
+                            )
+                        )
+                        
+                        # Wait for traceroute with 30-second timeout
+                        await asyncio.wait_for(trace_task, timeout=30.0)
+                        logger.info(f"Automatic traceroute completed for server: {server.name}")
+                        
+                    except asyncio.TimeoutError:
+                        logger.warning(f"Automatic traceroute timed out for server: {server.name}")
+                    except Exception as e:
+                        logger.error(f"Error running automatic traceroute for server {server.name}: {e}")
                 
             except Exception as e:
                 logger.error(f"Error running scheduled test for server {server_id}: {e}")

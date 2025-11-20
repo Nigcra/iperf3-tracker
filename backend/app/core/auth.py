@@ -79,3 +79,22 @@ async def get_current_admin_user(current_user: User = Depends(get_current_user))
             detail="Not enough privileges"
         )
     return current_user
+
+
+async def verify_token(token: str, db: AsyncSession) -> Optional[User]:
+    """Verify a JWT token and return the user (for SSE endpoints)"""
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+        if username is None:
+            return None
+    except JWTError:
+        return None
+    
+    result = await db.execute(select(User).where(User.username == username))
+    user = result.scalar_one_or_none()
+    
+    if user is None or not user.is_active:
+        return None
+    
+    return user
