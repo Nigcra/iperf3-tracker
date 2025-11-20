@@ -515,8 +515,12 @@ tr:last-child td {
   border-bottom: none;
 }
 
+tbody tr {
+  transition: background 0.2s ease;
+}
+
 tbody tr:hover {
-  background: rgba(59, 130, 246, 0.1);
+  background: rgba(255, 255, 255, 0.03);
 }
 
 /* Common Badges */

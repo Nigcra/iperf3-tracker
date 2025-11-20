@@ -390,36 +390,38 @@ const AdminPanel: React.FC = () => {
             <p>Use these public servers to test your connection</p>
           </div>
 
-          <div className="public-servers-grid">
-            {publicServers.map((server, index) => (
-              <div key={index} className="card public-server-card">
-                <div className="server-name">{server.name}</div>
-                <div className="server-details">
-                  <div className="detail-row">
-                    <span className="label">Host:</span>
-                    <code>{server.host}</code>
-                  </div>
-                  <div className="detail-row">
-                    <span className="label">Port:</span>
-                    <code>{server.port}</code>
-                  </div>
-                  <div className="detail-row">
-                    <span className="label">Location:</span>
-                    <span>{server.location}</span>
-                  </div>
-                  <div className="detail-row">
-                    <span className="label">Provider:</span>
-                    <span>{server.provider}</span>
-                  </div>
-                </div>
-                <button
-                  className="btn btn-sm btn-primary"
-                  onClick={() => copyServerInfo(server)}
-                >
-                  Copy Host:Port
-                </button>
-              </div>
-            ))}
+          <div className="card">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Host</th>
+                  <th>Port</th>
+                  <th>Location</th>
+                  <th>Provider</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {publicServers.map((server, index) => (
+                  <tr key={index}>
+                    <td><strong>{server.name}</strong></td>
+                    <td><code>{server.host}</code></td>
+                    <td><code>{server.port}</code></td>
+                    <td>{server.location}</td>
+                    <td>{server.provider}</td>
+                    <td>
+                      <button
+                        className="btn btn-sm btn-primary"
+                        onClick={() => copyServerInfo(server)}
+                      >
+                        Copy Host:Port
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       )}
