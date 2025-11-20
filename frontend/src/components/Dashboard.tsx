@@ -685,8 +685,8 @@ const Dashboard: React.FC = () => {
                 )}
                 
                 <div className="server-header">
-                  <div className="server-header-left">
-                    <h3>{serverStat.server_name}</h3>
+                  <h3>{serverStat.server_name}</h3>
+                  <div className="server-header-actions">
                     {!isRunning && serverInfo && (
                       <button 
                         className="quick-test-btn"
@@ -696,14 +696,6 @@ const Dashboard: React.FC = () => {
                         ▶
                       </button>
                     )}
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <div className="server-badge">
-                      {serverStat.total_tests > 0 
-                        ? `${Math.round((serverStat.successful_tests / serverStat.total_tests) * 100)}% Success`
-                        : 'No tests yet'
-                      }
-                    </div>
                     {isRunning && (
                       <div className={`testing-indicator ${
                         liveTest.status === 'failed' ? 'failed' : 
@@ -736,6 +728,11 @@ const Dashboard: React.FC = () => {
                     <span className="tag tag-streams">{serverInfo.default_parallel} {serverInfo.default_parallel === 1 ? 'Stream' : 'Streams'}</span>
                     {serverInfo.schedule_enabled && (
                       <span className="tag tag-schedule">Every {serverInfo.schedule_interval_minutes} min</span>
+                    )}
+                    {serverStat.total_tests > 0 && (
+                      <span className="tag tag-success">
+                        {Math.round((serverStat.successful_tests / serverStat.total_tests) * 100)}% OK
+                      </span>
                     )}
                   </div>
                 )}

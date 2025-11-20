@@ -105,7 +105,6 @@
 }
 
 .btn-primary:hover:not(:disabled) {
-  transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(33, 150, 243, 0.4);
 }
 
@@ -571,7 +570,6 @@
 }
 
 .btn-danger:hover {
-  transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
 }
 

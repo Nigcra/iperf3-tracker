@@ -266,12 +266,10 @@ code {
 .btn-theme-toggle:hover {
   background: rgba(255, 255, 255, 0.2) !important;
   border-color: rgba(255, 255, 255, 0.3) !important;
-  transform: scale(1.05);
 }
 
 .btn-theme-toggle:active {
   background: rgba(255, 255, 255, 0.15) !important;
-  transform: scale(0.98);
 }
 
 .version {
@@ -417,7 +415,6 @@ h3 {
 }
 
 .btn-primary:hover:not(:disabled) {
-  transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
 }
 
@@ -428,7 +425,6 @@ h3 {
 }
 
 .btn-success:hover:not(:disabled) {
-  transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
 }
 
@@ -439,18 +435,19 @@ h3 {
 }
 
 .btn-danger:hover:not(:disabled) {
-  transform: translateY(-1px);
   box-shadow: 0 4px 8px rgba(239, 68, 68, 0.4);
 }
 
 .btn-secondary {
-  background: #f3f4f6;
-  color: #6b7280;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
 }
 
 .btn-secondary:hover {
-  background: #e5e7eb;
-  color: #374151;
+  background: var(--bg-tertiary);
+  border-color: var(--border-hover);
+  color: var(--text-primary);
 }
 
 .btn:disabled {
@@ -473,7 +470,6 @@ h3 {
 }
 
 .card:hover {
-  transform: translateY(-2px);
   box-shadow: var(--shadow-lg);
   border-color: var(--border-hover);
 }

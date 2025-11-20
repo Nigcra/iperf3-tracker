@@ -106,151 +106,159 @@ const ServerManager: React.FC = () => {
         )}
       </div>
 
+      {/* Modal Overlay for Add/Edit Form */}
       {showForm && (
-        <div className="form-container">
-          <h2>{editingServer ? 'Edit Server' : 'Add New Server'}</h2>
-          <form onSubmit={handleSubmit}>
-            <div className="form-grid">
-              <div className="form-group">
-                <label>Name *</label>
-                <input
-                  type="text"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  required
-                />
-              </div>
-
-              <div className="form-group">
-                <label>Host *</label>
-                <input
-                  type="text"
-                  value={formData.host}
-                  onChange={(e) => setFormData({ ...formData, host: e.target.value })}
-                  placeholder="192.168.1.100 or server.example.com"
-                  required
-                />
-              </div>
-
-              <div className="form-group">
-                <label>Port</label>
-                <input
-                  type="number"
-                  value={formData.port}
-                  onChange={(e) => setFormData({ ...formData, port: parseInt(e.target.value) })}
-                  min="1"
-                  max="65535"
-                />
-              </div>
-
-              <div className="form-group">
-                <label>Duration (seconds)</label>
-                <input
-                  type="number"
-                  value={formData.default_duration}
-                  onChange={(e) => setFormData({ ...formData, default_duration: parseInt(e.target.value) })}
-                  min="1"
-                  max="300"
-                />
-              </div>
-
-              <div className="form-group">
-                <label>Parallel Streams</label>
-                <input
-                  type="number"
-                  value={formData.default_parallel}
-                  onChange={(e) => setFormData({ ...formData, default_parallel: parseInt(e.target.value) })}
-                  min="1"
-                  max="128"
-                />
-              </div>
-
-              <div className="form-group">
-                <label>Protocol</label>
-                <select
-                  value={formData.default_protocol}
-                  onChange={(e) => setFormData({ ...formData, default_protocol: e.target.value as ProtocolType })}
-                >
-                  <option value={ProtocolType.TCP}>TCP</option>
-                  <option value={ProtocolType.UDP}>UDP</option>
-                </select>
-              </div>
-
-              <div className="form-group">
-                <label>Direction</label>
-                <select
-                  value={formData.default_direction}
-                  onChange={(e) => setFormData({ ...formData, default_direction: e.target.value as TestDirection })}
-                >
-                  <option value={TestDirection.DOWNLOAD}>Download</option>
-                  <option value={TestDirection.UPLOAD}>Upload</option>
-                  <option value={TestDirection.BIDIRECTIONAL}>Bidirectional</option>
-                </select>
-              </div>
-
-              <div className="form-group">
-                <label>Schedule Interval (minutes)</label>
-                <input
-                  type="number"
-                  value={formData.schedule_interval_minutes}
-                  onChange={(e) => setFormData({ ...formData, schedule_interval_minutes: parseInt(e.target.value) })}
-                  min="1"
-                />
-              </div>
-
-              <div className="form-group full-width">
-                <label>Description</label>
-                <textarea
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  rows={3}
-                />
-              </div>
-
-              <div className="form-group checkbox">
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={formData.enabled}
-                    onChange={(e) => setFormData({ ...formData, enabled: e.target.checked })}
-                  />
-                  Enabled
-                </label>
-              </div>
-
-              <div className="form-group checkbox">
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={formData.schedule_enabled}
-                    onChange={(e) => setFormData({ ...formData, schedule_enabled: e.target.checked })}
-                  />
-                  Scheduled Tests
-                </label>
-              </div>
-
-              <div className="form-group checkbox">
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={formData.auto_trace_enabled}
-                    onChange={(e) => setFormData({ ...formData, auto_trace_enabled: e.target.checked })}
-                    disabled={!formData.schedule_enabled}
-                  />
-                  Auto Traceroute (when scheduled)
-                </label>
-              </div>
+        <div className="modal-overlay" onClick={handleCancel}>
+          <div className="modal-content large-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>{editingServer ? 'Edit Server' : 'Add New Server'}</h2>
+              <button className="modal-close" onClick={handleCancel}>×</button>
             </div>
+            <div className="modal-body">
+              <form onSubmit={handleSubmit}>
+                <div className="form-grid">
+                  <div className="form-group">
+                    <label>Name *</label>
+                    <input
+                      type="text"
+                      value={formData.name}
+                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                      required
+                    />
+                  </div>
 
-            <div className="form-actions">
-              <button type="submit" className="btn btn-primary">
-                {editingServer ? 'Update' : 'Create'}
-              </button>
-              <button type="button" className="btn btn-secondary" onClick={handleCancel}>
-                Cancel
-              </button>
+                  <div className="form-group">
+                    <label>Host *</label>
+                    <input
+                      type="text"
+                      value={formData.host}
+                      onChange={(e) => setFormData({ ...formData, host: e.target.value })}
+                      placeholder="192.168.1.100 or server.example.com"
+                      required
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label>Port</label>
+                    <input
+                      type="number"
+                      value={formData.port}
+                      onChange={(e) => setFormData({ ...formData, port: parseInt(e.target.value) })}
+                      min="1"
+                      max="65535"
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label>Duration (seconds)</label>
+                    <input
+                      type="number"
+                      value={formData.default_duration}
+                      onChange={(e) => setFormData({ ...formData, default_duration: parseInt(e.target.value) })}
+                      min="1"
+                      max="300"
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label>Parallel Streams</label>
+                    <input
+                      type="number"
+                      value={formData.default_parallel}
+                      onChange={(e) => setFormData({ ...formData, default_parallel: parseInt(e.target.value) })}
+                      min="1"
+                      max="128"
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label>Protocol</label>
+                    <select
+                      value={formData.default_protocol}
+                      onChange={(e) => setFormData({ ...formData, default_protocol: e.target.value as ProtocolType })}
+                    >
+                      <option value={ProtocolType.TCP}>TCP</option>
+                      <option value={ProtocolType.UDP}>UDP</option>
+                    </select>
+                  </div>
+
+                  <div className="form-group">
+                    <label>Direction</label>
+                    <select
+                      value={formData.default_direction}
+                      onChange={(e) => setFormData({ ...formData, default_direction: e.target.value as TestDirection })}
+                    >
+                      <option value={TestDirection.DOWNLOAD}>Download</option>
+                      <option value={TestDirection.UPLOAD}>Upload</option>
+                      <option value={TestDirection.BIDIRECTIONAL}>Bidirectional</option>
+                    </select>
+                  </div>
+
+                  <div className="form-group">
+                    <label>Schedule Interval (minutes)</label>
+                    <input
+                      type="number"
+                      value={formData.schedule_interval_minutes}
+                      onChange={(e) => setFormData({ ...formData, schedule_interval_minutes: parseInt(e.target.value) })}
+                      min="1"
+                    />
+                  </div>
+
+                  <div className="form-group full-width">
+                    <label>Description</label>
+                    <textarea
+                      value={formData.description}
+                      onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                      rows={3}
+                    />
+                  </div>
+
+                  <div className="form-group checkbox">
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={formData.enabled}
+                        onChange={(e) => setFormData({ ...formData, enabled: e.target.checked })}
+                      />
+                      Enabled
+                    </label>
+                  </div>
+
+                  <div className="form-group checkbox">
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={formData.schedule_enabled}
+                        onChange={(e) => setFormData({ ...formData, schedule_enabled: e.target.checked })}
+                      />
+                      Scheduled Tests
+                    </label>
+                  </div>
+
+                  <div className="form-group checkbox">
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={formData.auto_trace_enabled}
+                        onChange={(e) => setFormData({ ...formData, auto_trace_enabled: e.target.checked })}
+                        disabled={!formData.schedule_enabled}
+                      />
+                      Auto Traceroute (when scheduled)
+                    </label>
+                  </div>
+                </div>
+
+                <div className="form-actions">
+                  <button type="submit" className="btn btn-primary">
+                    {editingServer ? 'Update' : 'Create'}
+                  </button>
+                  <button type="button" className="btn btn-secondary" onClick={handleCancel}>
+                    Cancel
+                  </button>
+                </div>
+              </form>
             </div>
-          </form>
+          </div>
         </div>
       )}
 
@@ -263,41 +271,91 @@ const ServerManager: React.FC = () => {
               No servers configured. Click "Add Server" to get started.
             </div>
           ) : (
-            <div className="servers-grid">
-              {servers.map((server) => (
-                <div key={server.id} className={`server-item ${!server.enabled ? 'disabled' : ''}`}>
-                  <div className="server-header">
-                    <h3>{server.name}</h3>
-                    <div className="server-badges">
-                      {server.schedule_enabled && <span className="badge">Scheduled</span>}
-                      {server.auto_trace_enabled && <span className="badge">Auto Trace</span>}
-                      {!server.enabled && <span className="badge disabled-badge">Disabled</span>}
-                    </div>
-                  </div>
-                  <div className="server-details">
-                    <p><strong>Host:</strong> {server.host}:{server.port}</p>
-                    {server.description && <p><strong>Description:</strong> {server.description}</p>}
-                    <p><strong>Protocol:</strong> {server.default_protocol.toUpperCase()}</p>
-                    <p><strong>Direction:</strong> {server.default_direction}</p>
-                    <p><strong>Duration:</strong> {server.default_duration}s</p>
-                    <p><strong>Parallel Streams:</strong> {server.default_parallel}</p>
-                    {server.schedule_enabled && (
-                      <>
-                        <p><strong>Schedule:</strong> Every {server.schedule_interval_minutes} minutes</p>
-                        {server.auto_trace_enabled && <p><strong>Auto Trace:</strong> Enabled (max 30s)</p>}
-                      </>
-                    )}
-                  </div>
-                  <div className="server-actions">
-                    <button className="btn btn-primary" onClick={() => handleEdit(server)}>
-                      Edit
-                    </button>
-                    <button className="btn btn-danger" onClick={() => handleDelete(server.id)}>
-                      Delete
-                    </button>
-                  </div>
-                </div>
-              ))}
+            <div className="servers-table-container">
+              <table className="servers-table">
+                <thead>
+                  <tr>
+                    <th>Status</th>
+                    <th>Name</th>
+                    <th>Host</th>
+                    <th>Protocol</th>
+                    <th>Direction</th>
+                    <th>Duration</th>
+                    <th>Streams</th>
+                    <th>Schedule</th>
+                    <th>Auto Trace</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {servers.map((server) => (
+                    <tr key={server.id} className={!server.enabled ? 'disabled-row' : ''}>
+                      <td>
+                        <div className="status-cell">
+                          <span className={`status-indicator ${server.enabled ? 'enabled' : 'disabled'}`}></span>
+                          {server.enabled ? 'Enabled' : 'Disabled'}
+                        </div>
+                      </td>
+                      <td>
+                        <strong className="server-name">{server.name}</strong>
+                        {server.description && (
+                          <div className="server-description">{server.description}</div>
+                        )}
+                      </td>
+                      <td>
+                        <code className="host-code">{server.host}:{server.port}</code>
+                      </td>
+                      <td>
+                        <span className="badge protocol-badge">
+                          {server.default_protocol.toUpperCase()}
+                        </span>
+                      </td>
+                      <td>
+                        <span className="direction-text">{server.default_direction}</span>
+                      </td>
+                      <td className="text-center">{server.default_duration}s</td>
+                      <td className="text-center">{server.default_parallel}</td>
+                      <td>
+                        <div className="schedule-cell">
+                          {server.schedule_enabled ? (
+                            <>
+                              <span className="checkmark">✓</span>
+                              <span className="schedule-interval">Every {server.schedule_interval_minutes}m</span>
+                            </>
+                          ) : (
+                            <span className="disabled-text">—</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="text-center">
+                        {server.auto_trace_enabled ? (
+                          <span className="checkmark">✓</span>
+                        ) : (
+                          <span className="disabled-text">—</span>
+                        )}
+                      </td>
+                      <td>
+                        <div className="table-actions">
+                          <button 
+                            className="btn-icon btn-edit" 
+                            onClick={() => handleEdit(server)}
+                            title="Edit"
+                          >
+                            ✏️
+                          </button>
+                          <button 
+                            className="btn-icon btn-delete" 
+                            onClick={() => handleDelete(server.id)}
+                            title="Delete"
+                          >
+                            🗑️
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
         </div>
