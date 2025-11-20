@@ -9,7 +9,8 @@ interface PeeringMapProps {
 }
 
 const PeeringMap: React.FC<PeeringMapProps> = ({ testId }) => {
-  const [traces, setTraces] = useState<Trace[]>([]);
+  const [allTraces, setAllTraces] = useState<Trace[]>([]);
+  const [serverTraces, setServerTraces] = useState<Trace[]>([]);
   const [selectedTrace, setSelectedTrace] = useState<Trace | null>(null);
   const [servers, setServers] = useState<any[]>([]);
   const [selectedServer, setSelectedServer] = useState<number | null>(null);
@@ -37,24 +38,41 @@ const PeeringMap: React.FC<PeeringMapProps> = ({ testId }) => {
       if (testId) {
         const trace = await api.getTrace(testId);
         setSelectedTrace(trace);
-        setTraces([trace]);
+        setAllTraces([trace]);
+        setServerTraces([trace]);
       } else {
-        const recentTraces = await api.getRecentTraces(10);
-        setTraces(recentTraces);
+        const recentTraces = await api.getRecentTraces(100); // Load more traces for grouping
+        setAllTraces(recentTraces);
         console.log('Loaded traces:', recentTraces.length);
-        
-        if (recentTraces.length > 0) {
-          // Select the most recent trace (first in list should be newest)
-          const newest = recentTraces[0];
-          console.log('Auto-selecting trace:', newest.id, 'hops:', newest.total_hops);
-          setSelectedTrace(newest);
-        }
       }
     } catch (err: any) {
       console.error('Error loading data:', err);
       setError(err.message || 'Failed to load data');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Filter traces when server is selected
+  const handleServerSelection = (serverId: number | null) => {
+    setSelectedServer(serverId);
+    setSelectedTrace(null); // Clear selected trace
+    
+    if (serverId) {
+      const server = servers.find(s => s.id === serverId);
+      if (server) {
+        // Filter traces for this server's host
+        const filtered = allTraces.filter(t => t.destination_host === server.host);
+        setServerTraces(filtered);
+        console.log(`Server ${server.name} has ${filtered.length} traces`);
+        
+        // Auto-select newest trace if available
+        if (filtered.length > 0) {
+          setSelectedTrace(filtered[0]);
+        }
+      }
+    } else {
+      setServerTraces([]);
     }
   };
 
@@ -215,15 +233,18 @@ const PeeringMap: React.FC<PeeringMapProps> = ({ testId }) => {
           <label>Select Server:</label>
           <select
             value={selectedServer || ''}
-            onChange={(e) => setSelectedServer(Number(e.target.value))}
+            onChange={(e) => handleServerSelection(e.target.value ? Number(e.target.value) : null)}
             disabled={runningTrace}
           >
             <option value="">-- Choose a server --</option>
-            {servers.map(server => (
-              <option key={server.id} value={server.id}>
-                {server.name} ({server.host})
-              </option>
-            ))}
+            {servers.map(server => {
+              const traceCount = allTraces.filter(t => t.destination_host === server.host).length;
+              return (
+                <option key={server.id} value={server.id}>
+                  {server.name} ({server.host}) - {traceCount} trace{traceCount !== 1 ? 's' : ''}
+                </option>
+              );
+            })}
           </select>
         </div>
         <button
@@ -252,40 +273,37 @@ const PeeringMap: React.FC<PeeringMapProps> = ({ testId }) => {
         </div>
       )}
 
-      {/* Previous Traces */}
-      {!testId && (
-        <div className="trace-selector">
-          <label>View Previous Trace:</label>
-          <select
-            value={selectedTrace?.id || ''}
-            onChange={(e) => {
-              const trace = traces.find(t => t.id === Number(e.target.value));
-              setSelectedTrace(trace || null);
-              // Exit live mode when selecting historical trace
-              if (isLiveMode) {
-                stopTraceroute();
-              }
-            }}
-            disabled={isLiveMode || traces.length === 0}
-          >
-            <option value="">
-              {traces.length === 0 ? '-- No traces available --' : '-- Select a trace --'}
-            </option>
-            {traces.map(trace => (
-              <option key={trace.id} value={trace.id}>
-                {trace.destination_host} - {new Date(trace.created_at).toLocaleString()} ({trace.total_hops} hops)
-              </option>
-            ))}
-          </select>
-          <button onClick={loadData} className="btn btn-secondary" disabled={isLiveMode}>
-            Refresh
-          </button>
-        </div>
-      )}
-
-      {/* Map */}
+      {/* Map Container with Trace Selector Overlay */}
       <div className="map-container">
         {renderMap()}
+        
+        {/* Floating Trace Selector - Only shown when server is selected and has traces */}
+        {!testId && selectedServer && serverTraces.length > 0 && !isLiveMode && (
+          <div className="floating-trace-selector">
+            <div className="floating-header">
+              <h3>Previous Traces</h3>
+              <button onClick={loadData} className="btn-refresh" title="Refresh">
+                🔄
+              </button>
+            </div>
+            <div className="trace-list">
+              {serverTraces.map(trace => (
+                <div
+                  key={trace.id}
+                  className={`trace-item ${selectedTrace?.id === trace.id ? 'active' : ''}`}
+                  onClick={() => setSelectedTrace(trace)}
+                >
+                  <div className="trace-time">
+                    {new Date(trace.created_at).toLocaleString()}
+                  </div>
+                  <div className="trace-details">
+                    <span className="trace-hops">{trace.total_hops} hops</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
