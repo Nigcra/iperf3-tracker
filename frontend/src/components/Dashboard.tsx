@@ -32,6 +32,12 @@ const Dashboard: React.FC = () => {
     return theme === 'dark' ? '#6b7280' : '#9ca3af';
   };
 
+  // Get grid color based on current theme
+  const getGridColor = () => {
+    const theme = document.documentElement.getAttribute('data-theme');
+    return theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#e5e7eb';
+  };
+
   const handleRunTest = async (serverId: number, serverInfo: Server | undefined) => {
     if (!serverInfo) return;
     
@@ -415,7 +421,7 @@ const Dashboard: React.FC = () => {
             </div>
             <ResponsiveContainer width="100%" height={300}>
               <LineChart data={displayChartData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <CartesianGrid strokeDasharray="3 3" stroke={getGridColor()} />
                 <XAxis 
                   dataKey="time" 
                   type="number"
@@ -518,7 +524,7 @@ const Dashboard: React.FC = () => {
             </div>
             <ResponsiveContainer width="100%" height={300}>
               <LineChart data={displayChartData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <CartesianGrid strokeDasharray="3 3" stroke={getGridColor()} />
                 <XAxis 
                   dataKey="time" 
                   type="number"
