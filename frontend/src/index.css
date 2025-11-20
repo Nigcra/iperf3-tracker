@@ -221,9 +221,9 @@ code {
 }
 
 .btn-logout {
-  background: white !important;
-  color: #1e40af !important;
-  border: 1px solid rgba(255, 255, 255, 0.3) !important;
+  background: rgba(255, 255, 255, 0.1) !important;
+  color: white !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
   padding: 10px 20px !important;
   border-radius: 6px !important;
   cursor: pointer;
@@ -236,13 +236,12 @@ code {
 }
 
 .btn-logout:hover {
-  background: rgba(255, 255, 255, 0.95) !important;
-  border-color: rgba(255, 255, 255, 0.5) !important;
-  color: #1e3a8a !important;
+  background: rgba(255, 255, 255, 0.2) !important;
+  border-color: rgba(255, 255, 255, 0.3) !important;
 }
 
 .btn-logout:active {
-  background: rgba(255, 255, 255, 0.9) !important;
+  background: rgba(255, 255, 255, 0.15) !important;
 }
 
 .btn-theme-toggle {
@@ -496,19 +495,24 @@ table {
 
 th {
   background: var(--table-header-bg);
-  padding: 16px;
+  padding: 16px 12px;
   text-align: left;
   font-weight: 600;
-  color: var(--text-secondary);
-  font-size: 14px;
+  color: var(--text-primary);
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
   border-bottom: 2px solid var(--table-border);
 }
 
 td {
-  padding: 16px;
+  padding: 24px 12px;
   border-bottom: 1px solid var(--table-border);
   color: var(--text-primary);
   font-size: 14px;
+  vertical-align: middle;
+  line-height: 1.6;
 }
 
 tr:last-child td {

@@ -124,7 +124,7 @@ const TestRunner: React.FC = () => {
         />
       )}
 
-      <div className="test-form-container">
+      <div className="card">
         <h2>Test Configuration</h2>
         <div className="test-form">
           <div className="form-group">
@@ -210,7 +210,7 @@ const TestRunner: React.FC = () => {
         </div>
       </div>
 
-      <div className="recent-tests">
+      <div className="card">
         <h2>Recent Tests</h2>
         {recentTests.length === 0 ? (
           <div className="empty-state">No tests yet. Run your first test!</div>

@@ -383,7 +383,7 @@
 .server-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   margin-bottom: 12px;
 }
 
@@ -397,6 +397,8 @@
   align-items: center;
   gap: 12px;
   flex-shrink: 0;
+  margin-top: -8px;
+  margin-right: -8px;
 }
 
 .server-meta {
@@ -413,24 +415,24 @@
 }
 
 .quick-test-btn {
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-color);
   color: white;
-  border: none;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
   cursor: pointer;
-  font-size: 12px;
-  display: flex;
+  padding: 8px 12px;
+  border-radius: 8px;
+  transition: all 0.2s;
+  font-size: 16px;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s ease;
-  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);
+  min-width: 36px;
+  min-height: 36px;
 }
 
 .quick-test-btn:hover {
-  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
-  box-shadow: 0 2px 6px rgba(59, 130, 246, 0.4);
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
 }
 
 .quick-test-btn:active {
@@ -512,8 +514,9 @@
 }
 
 .tag-success {
-  background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
-  color: white;
+  background: rgba(100, 116, 139, 0.3);
+  color: #94a3b8;
+  border: 1px solid rgba(100, 116, 139, 0.4);
 }
 
 @keyframes pulse-bg {

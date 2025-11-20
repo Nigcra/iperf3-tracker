@@ -100,7 +100,7 @@ const ServerManager: React.FC = () => {
       <div className="header">
         <h1>Server Management</h1>
         {!showForm && (
-          <button className="btn-primary" onClick={() => setShowForm(true)}>
+          <button className="btn btn-primary" onClick={() => setShowForm(true)}>
             Add Server
           </button>
         )}

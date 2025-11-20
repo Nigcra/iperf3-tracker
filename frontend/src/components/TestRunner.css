@@ -2,8 +2,25 @@
 .test-runner h1 {
   font-size: 28px;
   font-weight: 600;
-  margin-bottom: 8px;
+  margin-bottom: 30px;
   color: var(--text-primary);
+}
+
+.test-runner h2 {
+  font-size: 20px;
+  font-weight: 600;
+  margin-bottom: 20px;
+  color: var(--text-secondary);
+}
+
+.test-runner .card {
+  margin-bottom: 30px;
+}
+
+.test-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
 }
 
 .form-row {
@@ -20,7 +37,10 @@
 
 .tests-table {
   overflow-x: auto;
-  margin-top: 20px;
+}
+
+.tests-table table {
+  margin-top: 0;
 }
 
 tbody tr {
@@ -29,28 +49,37 @@ tbody tr {
 
 /* Status Badges with animations */
 .status-badge {
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  display: inline-block;
   text-transform: uppercase;
 }
 
 .status-pending {
-  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
-  color: #92400e;
+  background: rgba(251, 191, 36, 0.15);
+  color: #fbbf24;
+  border: 1px solid rgba(251, 191, 36, 0.3);
 }
 
 .status-running {
-  background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
-  color: #1e40af;
+  background: rgba(59, 130, 246, 0.15);
+  color: #3b82f6;
+  border: 1px solid rgba(59, 130, 246, 0.3);
   animation: pulse 1.5s infinite;
 }
 
 .status-completed {
-  background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
-  color: #065f46;
+  background: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
+  border: 1px solid rgba(34, 197, 94, 0.3);
 }
 
 .status-failed {
-  background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
-  color: #991b1b;
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.3);
 }
 
 @keyframes pulse {
@@ -76,12 +105,11 @@ tbody tr {
 }
 
 .detail-section h3 {
-  color: #374151;
+  color: var(--text-primary);
   margin: 0 0 15px 0;
-  font-size: 16px;
-  text-transform: uppercase;
+  font-size: 18px;
   font-weight: 600;
-  border-bottom: 2px solid #3b82f6;
+  border-bottom: 2px solid var(--border-color);
   padding-bottom: 8px;
 }
 
@@ -95,18 +123,18 @@ tbody tr {
   display: flex;
   justify-content: space-between;
   padding: 12px;
-  background: #f9fafb;
+  background: var(--bg-secondary);
   border-radius: 8px;
 }
 
 .detail-label {
   font-weight: 600;
-  color: #6b7280;
+  color: var(--text-secondary);
   font-size: 14px;
 }
 
 .detail-item span:last-child {
-  color: #111827;
+  color: var(--text-primary);
   font-weight: 500;
   font-size: 14px;
 }
@@ -127,17 +155,17 @@ tbody tr {
 
 .error-section h3 {
   margin: 0 0 12px 0;
-  color: #991b1b;
-  font-size: 16px;
+  color: #dc2626;
+  font-size: 18px;
   font-weight: 600;
   border-bottom-color: #dc2626;
 }
 
 .error-message {
-  background: white;
+  background: var(--card-bg);
   padding: 15px;
   border-radius: 8px;
-  color: #991b1b;
+  color: #dc2626;
   font-family: 'Courier New', monospace;
   font-size: 13px;
   white-space: pre-wrap;

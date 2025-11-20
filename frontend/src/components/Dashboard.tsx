@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { FiServer, FiActivity, FiTrendingUp, FiTrendingDown, FiAlertTriangle } from 'react-icons/fi';
+import { FaPlay } from 'react-icons/fa';
 import { getDashboardStats, getServerStats, getTests, getTestLiveStatus, getServers, runTest, DashboardStats, ServerStats, Test, TestLiveStatus, Server, TestDirection } from '../services/api';
 import './Dashboard.css';
 
@@ -693,7 +694,8 @@ const Dashboard: React.FC = () => {
                         onClick={() => handleRunTest(serverStat.server_id, serverInfo)}
                         title="Run quick test"
                       >
-                        ▶
+                        {/* @ts-ignore */}
+                        <FaPlay size={14} />
                       </button>
                     )}
                     {isRunning && (
