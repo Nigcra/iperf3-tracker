@@ -25,17 +25,18 @@ const Dashboard: React.FC = () => {
     return saved ? Number(saved) : 50;
   });
   const [runningTests, setRunningTests] = useState<Map<number, TestLiveStatus>>(new Map());
+  const [currentTheme, setCurrentTheme] = useState<string>(() => {
+    return document.documentElement.getAttribute('data-theme') || 'light';
+  });
 
   // Get axis color based on current theme
   const getAxisColor = () => {
-    const theme = document.documentElement.getAttribute('data-theme');
-    return theme === 'dark' ? '#6b7280' : '#9ca3af';
+    return currentTheme === 'dark' ? '#6b7280' : '#9ca3af';
   };
 
   // Get grid color based on current theme
   const getGridColor = () => {
-    const theme = document.documentElement.getAttribute('data-theme');
-    return theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#e5e7eb';
+    return currentTheme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#e5e7eb';
   };
 
   const handleRunTest = async (serverId: number, serverInfo: Server | undefined) => {
@@ -80,9 +81,21 @@ const Dashboard: React.FC = () => {
     const statsInterval = setInterval(loadStats, 30000); // Refresh stats every 30 seconds
     const liveInterval = setInterval(checkRunningTests, 3000); // Check running tests every 3 seconds (reduced from 1s)
     
+    // Observer for theme changes
+    const observer = new MutationObserver(() => {
+      const theme = document.documentElement.getAttribute('data-theme') || 'light';
+      setCurrentTheme(theme);
+    });
+
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-theme']
+    });
+    
     return () => {
       clearInterval(statsInterval);
       clearInterval(liveInterval);
+      observer.disconnect();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Only load once on mount, timeRange changes don't trigger reload
