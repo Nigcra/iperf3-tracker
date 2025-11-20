@@ -197,7 +197,12 @@ const PeeringMap: React.FC<PeeringMapProps> = ({ testId }) => {
       );
     }
 
-    return <LiveMap hops={hopsToDisplay} isLive={isLiveMode} />;
+    return <LiveMap 
+      hops={hopsToDisplay} 
+      isLive={isLiveMode} 
+      destination={liveDestination}
+      onStop={stopTraceroute}
+    />;
   };
 
   if (loading) {
@@ -255,23 +260,6 @@ const PeeringMap: React.FC<PeeringMapProps> = ({ testId }) => {
           {runningTrace ? '🔄 Running Traceroute...' : '🚀 Start Traceroute'}
         </button>
       </div>
-
-      {/* Live Status */}
-      {isLiveMode && (
-        <div className="live-status-compact">
-          <div className="live-indicator">
-            <span className="live-dot"></span>
-            <strong>LIVE TRACING</strong> - {liveDestination}
-          </div>
-          <div className="live-stats">
-            Hops: <strong>{liveHops.length}</strong> | 
-            Located: <strong>{liveHops.filter(h => h.latitude && h.longitude).length}</strong>
-          </div>
-          <button onClick={stopTraceroute} className="btn btn-danger btn-sm">
-            Stop
-          </button>
-        </div>
-      )}
 
       {/* Map Container with Trace Selector Overlay */}
       <div className="map-container">

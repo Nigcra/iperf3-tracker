@@ -6,9 +6,11 @@ import { TraceHop } from '../services/api';
 interface LiveMapProps {
   hops: TraceHop[];
   isLive?: boolean;
+  destination?: string;
+  onStop?: () => void;
 }
 
-const LiveMap: React.FC<LiveMapProps> = ({ hops, isLive = false }) => {
+const LiveMap: React.FC<LiveMapProps> = ({ hops, isLive = false, destination, onStop }) => {
   const mapRef = useRef<L.Map | null>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const markersRef = useRef<L.Marker[]>([]);
@@ -157,17 +159,19 @@ const LiveMap: React.FC<LiveMapProps> = ({ hops, isLive = false }) => {
         <div style={{
           position: 'absolute',
           top: '10px',
-          left: '10px',
-          background: 'rgba(30, 58, 138, 0.9)',
-          color: 'white',
-          padding: '8px 16px',
+          left: '60px',
+          background: 'var(--card-bg)',
+          color: 'var(--text-primary)',
+          padding: '12px 16px',
           borderRadius: '8px',
           fontSize: '14px',
-          fontWeight: 600,
+          fontWeight: 500,
           zIndex: 1000,
           display: 'flex',
           alignItems: 'center',
-          gap: '8px',
+          gap: '12px',
+          border: '1px solid var(--border-color)',
+          backdropFilter: 'blur(10px)',
         }}>
           <div style={{
             width: '8px',
@@ -175,8 +179,46 @@ const LiveMap: React.FC<LiveMapProps> = ({ hops, isLive = false }) => {
             borderRadius: '50%',
             background: '#10b981',
             animation: 'pulse 1.5s ease-in-out infinite',
+            boxShadow: '0 0 8px rgba(16, 185, 129, 0.6)',
           }} />
-          LIVE TRACING - {hops.length} hops
+          <span style={{ textTransform: 'uppercase', letterSpacing: '0.5px', fontSize: '11px', fontWeight: 600 }}>
+            Live Tracing
+          </span>
+          {destination && (
+            <>
+              <span style={{ color: 'var(--text-secondary)' }}>-</span>
+              <span style={{ fontSize: '13px' }}>{destination}</span>
+            </>
+          )}
+          <span style={{ color: 'var(--text-secondary)' }}>|</span>
+          <span style={{ fontSize: '13px' }}>
+            Hops: <strong>{hops.length}</strong>
+          </span>
+          <span style={{ color: 'var(--text-secondary)' }}>|</span>
+          <span style={{ fontSize: '13px' }}>
+            Located: <strong>{hops.filter(h => h.latitude && h.longitude).length}</strong>
+          </span>
+          {onStop && (
+            <button 
+              onClick={onStop}
+              style={{
+                marginLeft: '8px',
+                background: '#ef4444',
+                color: 'white',
+                border: 'none',
+                padding: '4px 12px',
+                borderRadius: '6px',
+                fontSize: '12px',
+                fontWeight: 600,
+                cursor: 'pointer',
+                transition: 'background 0.2s',
+              }}
+              onMouseOver={(e) => e.currentTarget.style.background = '#dc2626'}
+              onMouseOut={(e) => e.currentTarget.style.background = '#ef4444'}
+            >
+              Stop
+            </button>
+          )}
         </div>
       )}
     </div>
