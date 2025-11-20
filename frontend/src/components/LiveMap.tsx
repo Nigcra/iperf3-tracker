@@ -15,6 +15,10 @@ const LiveMap: React.FC<LiveMapProps> = ({ hops, isLive = false, destination, on
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const markersRef = useRef<L.Marker[]>([]);
   const [mapReady, setMapReady] = useState(false);
+  const tileLayerRef = useRef<L.TileLayer | null>(null);
+  const [currentTheme, setCurrentTheme] = useState<string>(() => {
+    return document.documentElement.getAttribute('data-theme') || 'light';
+  });
 
   // Initialize map once
   useEffect(() => {
@@ -29,12 +33,20 @@ const LiveMap: React.FC<LiveMapProps> = ({ hops, isLive = false, destination, on
       zoomControl: true,
     });
 
-    // Add tile layer
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    // Determine initial theme
+    const theme = document.documentElement.getAttribute('data-theme') || 'light';
+    
+    // Add tile layer based on theme
+    const tileUrl = theme === 'dark'
+      ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+      : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
+    
+    const tileLayer = L.tileLayer(tileUrl, {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
       maxZoom: 18,
     }).addTo(map);
 
+    tileLayerRef.current = tileLayer;
     mapRef.current = map;
     setMapReady(true);
 
@@ -50,6 +62,43 @@ const LiveMap: React.FC<LiveMapProps> = ({ hops, isLive = false, destination, on
       }
     };
   }, []);
+
+  // Observer for theme changes
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      const theme = document.documentElement.getAttribute('data-theme') || 'light';
+      setCurrentTheme(theme);
+    });
+
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-theme']
+    });
+
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
+
+  // Update tile layer when theme changes
+  useEffect(() => {
+    if (!mapRef.current || !tileLayerRef.current) return;
+
+    const tileUrl = currentTheme === 'dark'
+      ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+      : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
+
+    // Remove old tile layer
+    tileLayerRef.current.remove();
+
+    // Add new tile layer
+    const newTileLayer = L.tileLayer(tileUrl, {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+      maxZoom: 18,
+    }).addTo(mapRef.current);
+
+    tileLayerRef.current = newTileLayer;
+  }, [currentTheme]);
 
   // Update markers when hops change
   useEffect(() => {
