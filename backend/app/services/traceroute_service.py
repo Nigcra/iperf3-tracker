@@ -77,7 +77,7 @@ class TracerouteService:
     async def _run_windows_tracert(self, destination: str, max_hops: int) -> List[Dict[str, Any]]:
         """Run Windows tracert command and parse output"""
         try:
-            # Run tracert command using executor (asyncio.create_subprocess_exec not supported on Windows)
+            # Run tracert command using executor (asyncio.create_subprocess_exec not always reliable on Windows)
             loop = asyncio.get_event_loop()
             result = await loop.run_in_executor(
                 None,
@@ -178,6 +178,97 @@ class TracerouteService:
             logger.error(f"Error running Windows tracert: {e}", exc_info=True)
             return []
     
+    async def _run_linux_traceroute(self, destination: str, max_hops: int) -> List[Dict[str, Any]]:
+        """Run Linux traceroute command and parse output"""
+        try:
+            # Run traceroute command using asyncio subprocess
+            # -n: no DNS resolution (faster, we'll resolve later if needed)
+            # -m: max hops
+            # -w: wait time (seconds)
+            process = await asyncio.create_subprocess_exec(
+                'traceroute', '-n', '-m', str(max_hops), '-w', '2', destination,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            
+            stdout, stderr = await process.communicate()
+            output = stdout.decode('utf-8', errors='ignore')
+            
+            if process.returncode != 0:
+                logger.error(f"Traceroute failed: {stderr.decode('utf-8', errors='ignore')}")
+                return []
+            
+            logger.info(f"Traceroute output:\n{output[:500]}")
+            
+            hops = []
+            
+            # Parse traceroute output
+            # Format: " 1  192.168.1.1  1.234 ms  1.123 ms  1.456 ms"
+            for line in output.split('\n'):
+                line = line.strip()
+                if not line:
+                    continue
+                
+                # Match hop lines
+                match = re.match(r'^\s*(\d+)\s+(.+)$', line)
+                if not match:
+                    continue
+                
+                hop_num = int(match.group(1))
+                hop_data = match.group(2)
+                
+                # Check for timeout (indicated by *)
+                if hop_data.strip().startswith('*') or '* * *' in hop_data:
+                    hops.append({
+                        'hop_number': hop_num,
+                        'responded': False,
+                        'ip_address': None,
+                        'hostname': None,
+                        'rtt_ms': None
+                    })
+                    logger.debug(f"Hop {hop_num}: timeout/no response")
+                    continue
+                
+                # Extract IP and RTT
+                # Format: "192.168.1.1  1.234 ms  1.123 ms  1.456 ms"
+                parts = hop_data.split()
+                if len(parts) < 2:
+                    continue
+                
+                ip_address = parts[0]
+                
+                # Extract RTT values and calculate average
+                rtt_values = []
+                for i, part in enumerate(parts[1:]):
+                    if part == 'ms' and i > 0:
+                        try:
+                            rtt_values.append(float(parts[i]))
+                        except ValueError:
+                            pass
+                
+                rtt_ms = sum(rtt_values) / len(rtt_values) if rtt_values else None
+                
+                logger.debug(f"Hop {hop_num}: {ip_address} - {rtt_ms}ms")
+                
+                hops.append({
+                    'hop_number': hop_num,
+                    'responded': True,
+                    'ip_address': ip_address,
+                    'hostname': None,  # Will be resolved later
+                    'rtt_ms': rtt_ms,
+                    'packet_loss': 0.0
+                })
+            
+            logger.info(f"Parsed {len(hops)} hops from traceroute output")
+            return hops
+            
+        except FileNotFoundError:
+            logger.error("traceroute command not found. Please install traceroute package.")
+            return []
+        except Exception as e:
+            logger.error(f"Error running Linux traceroute: {e}", exc_info=True)
+            return []
+    
     async def run_traceroute(
         self,
         destination: str,
@@ -186,9 +277,11 @@ class TracerouteService:
         count: int = 3,
         max_total_timeout: int = 90
     ) -> Dict[str, Any]:
-        """Run traceroute to destination using Windows tracert"""
+        """Run traceroute to destination (cross-platform)"""
         try:
-            logger.info(f"Starting Windows traceroute to {destination}")
+            # Detect platform
+            system = platform.system()
+            logger.info(f"Starting traceroute to {destination} on {system}")
             started_at = datetime.utcnow()
             
             # Resolve destination to IP
@@ -216,14 +309,20 @@ class TracerouteService:
             except Exception as e:
                 logger.warning(f"Could not determine source IP: {e}")
             
-            # Run Windows tracert with timeout
+            # Run platform-specific traceroute with timeout
             try:
-                raw_hops = await asyncio.wait_for(
-                    self._run_windows_tracert(destination, max_hops),
-                    timeout=max_total_timeout
-                )
+                if system == "Windows":
+                    raw_hops = await asyncio.wait_for(
+                        self._run_windows_tracert(destination, max_hops),
+                        timeout=max_total_timeout
+                    )
+                else:  # Linux, Darwin (macOS), etc.
+                    raw_hops = await asyncio.wait_for(
+                        self._run_linux_traceroute(destination, max_hops),
+                        timeout=max_total_timeout
+                    )
             except asyncio.TimeoutError:
-                logger.warning(f"Tracert to {destination} exceeded timeout")
+                logger.warning(f"Traceroute to {destination} exceeded timeout")
                 return {
                     "completed": False,
                     "error_message": f"Traceroute exceeded maximum timeout of {max_total_timeout} seconds",
