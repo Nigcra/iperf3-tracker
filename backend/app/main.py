@@ -30,6 +30,10 @@ async def lifespan(app: FastAPI):
     await init_db()
     logger.info("Database initialized")
     
+    # Initialize default admin user if needed
+    from app.core.database import init_default_admin
+    await init_default_admin()
+    
     # Start scheduler if enabled
     if settings.SCHEDULER_ENABLED:
         scheduler_service.start()
