@@ -11,6 +11,7 @@ import logging
 import subprocess
 import re
 import platform
+import shutil
 
 logger = logging.getLogger(__name__)
 
@@ -61,16 +62,35 @@ async def stream_traceroute(
             async def run_tracert_streaming():
                 """Run traceroute and yield hops progressively (cross-platform)"""
                 try:
-                    # Detect platform
-                    system = platform.system()
-                    is_windows = system == "Windows"
+                    # Detect which command is available
+                    has_traceroute = shutil.which('traceroute') is not None
+                    has_tracert = shutil.which('tracert') is not None
+                    
+                    # Determine which command to use
+                    if has_traceroute:
+                        use_traceroute = True
+                        logger.info(f"Using traceroute command for {destination}")
+                    elif has_tracert:
+                        use_traceroute = False
+                        logger.info(f"Using tracert command for {destination}")
+                    else:
+                        raise FileNotFoundError("Neither traceroute nor tracert command found")
                     
                     # Start traceroute process using Popen for real-time output
                     loop = asyncio.get_event_loop()
                     
                     def run_traceroute_sync():
                         """Run traceroute synchronously and return process"""
-                        if is_windows:
+                        if use_traceroute:
+                            # Linux/Unix: traceroute
+                            process = subprocess.Popen(
+                                ['traceroute', '-n', '-m', '30', '-w', '2', destination],
+                                stdout=subprocess.PIPE,
+                                stderr=subprocess.PIPE,
+                                text=True,
+                                bufsize=1  # Line buffered
+                            )
+                        else:
                             # Windows: tracert
                             process = subprocess.Popen(
                                 ['tracert', '-h', '30', '-w', '2000', '-d', destination],
@@ -81,45 +101,10 @@ async def stream_traceroute(
                                 errors='ignore',
                                 bufsize=1  # Line buffered
                             )
-                        else:
-                            # Linux/Unix: traceroute
-                            process = subprocess.Popen(
-                                ['traceroute', '-n', '-m', '30', '-w', '2', destination],
-                                stdout=subprocess.PIPE,
-                                stderr=subprocess.PIPE,
-                                text=True,
-                                bufsize=1  # Line buffered
-                            )
                         return process
                     
                     # Start process in executor
-                    try:
-                        process = await loop.run_in_executor(None, run_traceroute_sync)
-                    except FileNotFoundError:
-                        # Try the other command
-                        logger.warning(f"Primary traceroute command not found, trying fallback")
-                        def run_fallback():
-                            if is_windows:
-                                # Try traceroute instead of tracert
-                                return subprocess.Popen(
-                                    ['traceroute', '-n', '-m', '30', '-w', '2', destination],
-                                    stdout=subprocess.PIPE,
-                                    stderr=subprocess.PIPE,
-                                    text=True,
-                                    bufsize=1
-                                )
-                            else:
-                                # Try tracert instead of traceroute
-                                return subprocess.Popen(
-                                    ['tracert', '-h', '30', '-w', '2000', '-d', destination],
-                                    stdout=subprocess.PIPE,
-                                    stderr=subprocess.PIPE,
-                                    text=True,
-                                    encoding='cp850',
-                                    errors='ignore',
-                                    bufsize=1
-                                )
-                        process = await loop.run_in_executor(None, run_fallback)
+                    process = await loop.run_in_executor(None, run_traceroute_sync)
                     
                     # Read lines as they come
                     while True:

@@ -4,6 +4,7 @@ import socket
 import re
 import subprocess
 import platform
+import shutil
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 import geoip2.database
@@ -279,19 +280,28 @@ class TracerouteService:
     ) -> Dict[str, Any]:
         """Run traceroute to destination (cross-platform)"""
         try:
-            # Detect which traceroute command is available
-            system = platform.system()
+            # Detect which command is available
+            has_traceroute = shutil.which('traceroute') is not None
+            has_tracert = shutil.which('tracert') is not None
             
-            # Try to determine which command to use by checking if the command exists
-            use_windows = system == "Windows"
-            
-            # On Linux/Unix systems in Docker, even if platform.system() returns something else
-            # we should use traceroute if tracert is not available
-            if not use_windows:
-                # We're likely on Linux, use traceroute
-                logger.info(f"Starting traceroute to {destination} on {system} (using traceroute)")
+            if has_traceroute:
+                use_windows = False
+                logger.info(f"Starting traceroute to {destination} using traceroute command")
+            elif has_tracert:
+                use_windows = True
+                logger.info(f"Starting traceroute to {destination} using tracert command")
             else:
-                logger.info(f"Starting traceroute to {destination} on {system} (using tracert)")
+                return {
+                    "completed": False,
+                    "error_message": "Neither traceroute nor tracert command found on system",
+                    "destination_ip": None,
+                    "destination_host": destination,
+                    "hops": [],
+                    "total_hops": 0,
+                    "total_rtt_ms": 0,
+                    "started_at": datetime.utcnow(),
+                    "completed_at": datetime.utcnow()
+                }
             
             started_at = datetime.utcnow()
             
@@ -332,38 +342,6 @@ class TracerouteService:
                         self._run_linux_traceroute(destination, max_hops),
                         timeout=max_total_timeout
                     )
-            except FileNotFoundError as e:
-                # Command not found, try the other one
-                logger.warning(f"Traceroute command not found: {e}, trying alternative")
-                try:
-                    if use_windows:
-                        # tracert not found, try traceroute
-                        logger.info("tracert not found, falling back to traceroute")
-                        raw_hops = await asyncio.wait_for(
-                            self._run_linux_traceroute(destination, max_hops),
-                            timeout=max_total_timeout
-                        )
-                    else:
-                        # traceroute not found, try tracert
-                        logger.info("traceroute not found, falling back to tracert")
-                        raw_hops = await asyncio.wait_for(
-                            self._run_windows_tracert(destination, max_hops),
-                            timeout=max_total_timeout
-                        )
-                except Exception as fallback_error:
-                    logger.error(f"Both traceroute commands failed: {fallback_error}")
-                    return {
-                        "completed": False,
-                        "error_message": f"Neither tracert nor traceroute command available: {fallback_error}",
-                        "destination_ip": dest_ip,
-                        "destination_host": destination,
-                        "source_ip": source_ip,
-                        "hops": [],
-                        "total_hops": 0,
-                        "total_rtt_ms": 0,
-                        "started_at": started_at,
-                        "completed_at": datetime.utcnow()
-                    }
             except asyncio.TimeoutError:
                 logger.warning(f"Traceroute to {destination} exceeded timeout")
                 return {
