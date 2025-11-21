@@ -10,6 +10,7 @@ import json
 import logging
 import subprocess
 import re
+import platform
 
 logger = logging.getLogger(__name__)
 
@@ -58,27 +59,67 @@ async def stream_traceroute(
             loop = asyncio.get_event_loop()
             
             async def run_tracert_streaming():
-                """Run tracert and yield hops progressively"""
+                """Run traceroute and yield hops progressively (cross-platform)"""
                 try:
-                    # Start tracert process using Popen for real-time output
+                    # Detect platform
+                    system = platform.system()
+                    is_windows = system == "Windows"
+                    
+                    # Start traceroute process using Popen for real-time output
                     loop = asyncio.get_event_loop()
                     
-                    def run_tracert_sync():
-                        """Run tracert synchronously and return lines as they come"""
-                        import subprocess
-                        process = subprocess.Popen(
-                            ['tracert', '-h', '30', '-w', '2000', '-d', destination],
-                            stdout=subprocess.PIPE,
-                            stderr=subprocess.PIPE,
-                            text=True,
-                            encoding='cp850',
-                            errors='ignore',
-                            bufsize=1  # Line buffered
-                        )
+                    def run_traceroute_sync():
+                        """Run traceroute synchronously and return process"""
+                        if is_windows:
+                            # Windows: tracert
+                            process = subprocess.Popen(
+                                ['tracert', '-h', '30', '-w', '2000', '-d', destination],
+                                stdout=subprocess.PIPE,
+                                stderr=subprocess.PIPE,
+                                text=True,
+                                encoding='cp850',
+                                errors='ignore',
+                                bufsize=1  # Line buffered
+                            )
+                        else:
+                            # Linux/Unix: traceroute
+                            process = subprocess.Popen(
+                                ['traceroute', '-n', '-m', '30', '-w', '2', destination],
+                                stdout=subprocess.PIPE,
+                                stderr=subprocess.PIPE,
+                                text=True,
+                                bufsize=1  # Line buffered
+                            )
                         return process
                     
                     # Start process in executor
-                    process = await loop.run_in_executor(None, run_tracert_sync)
+                    try:
+                        process = await loop.run_in_executor(None, run_traceroute_sync)
+                    except FileNotFoundError:
+                        # Try the other command
+                        logger.warning(f"Primary traceroute command not found, trying fallback")
+                        def run_fallback():
+                            if is_windows:
+                                # Try traceroute instead of tracert
+                                return subprocess.Popen(
+                                    ['traceroute', '-n', '-m', '30', '-w', '2', destination],
+                                    stdout=subprocess.PIPE,
+                                    stderr=subprocess.PIPE,
+                                    text=True,
+                                    bufsize=1
+                                )
+                            else:
+                                # Try tracert instead of traceroute
+                                return subprocess.Popen(
+                                    ['tracert', '-h', '30', '-w', '2000', '-d', destination],
+                                    stdout=subprocess.PIPE,
+                                    stderr=subprocess.PIPE,
+                                    text=True,
+                                    encoding='cp850',
+                                    errors='ignore',
+                                    bufsize=1
+                                )
+                        process = await loop.run_in_executor(None, run_fallback)
                     
                     # Read lines as they come
                     while True:
@@ -101,24 +142,26 @@ async def stream_traceroute(
                         # Parse hop data
                         hop_info = {'hop_number': hop_num}
                         
-                        # Check for timeout
-                        if 'Request timed out' in hop_data or 'Zeitüberschreitung' in hop_data or '*' in hop_data[:20]:
+                        # Check for timeout (works for both tracert and traceroute)
+                        if 'Request timed out' in hop_data or 'Zeitüberschreitung' in hop_data or hop_data.strip().startswith('*') or '* * *' in hop_data:
                             hop_info['responded'] = False
                             hop_info['ip_address'] = None
                             hop_info['hostname'] = None
                             hop_info['rtt_ms'] = None
                         else:
-                            # Extract IP
+                            # Extract IP (works for both formats)
                             ip_match = re.search(r'((?:\d{1,3}\.){3}\d{1,3})', hop_data)
                             if ip_match:
                                 ip_address = ip_match.group(1)
                                 hop_info['responded'] = True
                                 hop_info['ip_address'] = ip_address
                                 
-                                # Extract RTT
-                                rtt_matches = re.findall(r'(\d+)\s*ms', hop_data)
+                                # Extract RTT values and calculate average
+                                rtt_matches = re.findall(r'(\d+(?:\.\d+)?)\s*ms', hop_data)
                                 if rtt_matches:
-                                    hop_info['rtt_ms'] = float(rtt_matches[0])
+                                    # Average all RTT values found (Linux traceroute shows 3, Windows tracert shows 3)
+                                    rtt_values = [float(x) for x in rtt_matches]
+                                    hop_info['rtt_ms'] = sum(rtt_values) / len(rtt_values)
                                 else:
                                     hop_info['rtt_ms'] = None
                                 
