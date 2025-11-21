@@ -76,6 +76,15 @@ async def stream_traceroute(
                     else:
                         raise FileNotFoundError("Neither traceroute nor tracert command found")
                     
+                    # Resolve destination IP to detect when we've reached it
+                    try:
+                        import socket
+                        destination_ip = socket.gethostbyname(destination)
+                        logger.info(f"Destination IP: {destination_ip}")
+                    except Exception as e:
+                        logger.warning(f"Could not resolve destination: {e}")
+                        destination_ip = None
+                    
                     # Start traceroute process using Popen for real-time output
                     loop = asyncio.get_event_loop()
                     
@@ -106,6 +115,10 @@ async def stream_traceroute(
                     # Start process in executor
                     process = await loop.run_in_executor(None, run_traceroute_sync)
                     
+                    # Track if we've reached destination
+                    reached_destination = False
+                    consecutive_timeouts = 0
+                    
                     # Read lines as they come
                     while True:
                         line = await loop.run_in_executor(None, process.stdout.readline)
@@ -133,11 +146,25 @@ async def stream_traceroute(
                             hop_info['ip_address'] = None
                             hop_info['hostname'] = None
                             hop_info['rtt_ms'] = None
+                            consecutive_timeouts += 1
+                            
+                            # If we've reached destination and now have 3+ consecutive timeouts, stop
+                            if reached_destination and consecutive_timeouts >= 3:
+                                logger.info(f"Stopping traceroute: reached destination and {consecutive_timeouts} consecutive timeouts")
+                                process.kill()
+                                break
                         else:
+                            consecutive_timeouts = 0
+                            
                             # Extract IP (works for both formats)
                             ip_match = re.search(r'((?:\d{1,3}\.){3}\d{1,3})', hop_data)
                             if ip_match:
                                 ip_address = ip_match.group(1)
+                                
+                                # Check if we've reached the destination
+                                if destination_ip and ip_address == destination_ip:
+                                    reached_destination = True
+                                    logger.info(f"Reached destination at hop {hop_num}: {ip_address}")
                                 hop_info['responded'] = True
                                 hop_info['ip_address'] = ip_address
                                 

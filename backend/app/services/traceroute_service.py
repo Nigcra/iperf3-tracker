@@ -182,6 +182,12 @@ class TracerouteService:
     async def _run_linux_traceroute(self, destination: str, max_hops: int) -> List[Dict[str, Any]]:
         """Run Linux traceroute command and parse output"""
         try:
+            # Resolve destination to know when to stop
+            try:
+                dest_ip = socket.gethostbyname(destination)
+            except socket.gaierror:
+                dest_ip = None
+            
             # Run traceroute command using asyncio subprocess
             # -n: no DNS resolution (faster, we'll resolve later if needed)
             # -m: max hops
@@ -202,6 +208,8 @@ class TracerouteService:
             logger.info(f"Traceroute output:\n{output[:500]}")
             
             hops = []
+            reached_destination = False
+            consecutive_timeouts = 0
             
             # Parse traceroute output
             # Format: " 1  192.168.1.1  1.234 ms  1.123 ms  1.456 ms"
@@ -220,6 +228,13 @@ class TracerouteService:
                 
                 # Check for timeout (indicated by *)
                 if hop_data.strip().startswith('*') or '* * *' in hop_data:
+                    consecutive_timeouts += 1
+                    
+                    # If we've reached destination and have 3+ consecutive timeouts, stop parsing
+                    if reached_destination and consecutive_timeouts >= 3:
+                        logger.info(f"Stopping at hop {hop_num}: reached destination and {consecutive_timeouts} consecutive timeouts")
+                        break
+                    
                     hops.append({
                         'hop_number': hop_num,
                         'responded': False,
@@ -230,6 +245,7 @@ class TracerouteService:
                     logger.debug(f"Hop {hop_num}: timeout/no response")
                     continue
                 
+                consecutive_timeouts = 0
                 # Extract IP and RTT
                 # Format: "192.168.1.1  1.234 ms  1.123 ms  1.456 ms"
                 parts = hop_data.split()
@@ -237,6 +253,11 @@ class TracerouteService:
                     continue
                 
                 ip_address = parts[0]
+                
+                # Check if we reached the destination
+                if dest_ip and ip_address == dest_ip:
+                    reached_destination = True
+                    logger.info(f"Reached destination at hop {hop_num}: {ip_address}")
                 
                 # Extract RTT values and calculate average
                 rtt_values = []
@@ -260,7 +281,7 @@ class TracerouteService:
                     'packet_loss': 0.0
                 })
             
-            logger.info(f"Parsed {len(hops)} hops from traceroute output")
+            logger.info(f"Parsed {len(hops)} hops from traceroute output (reached_destination={reached_destination})")
             return hops
             
         except FileNotFoundError:

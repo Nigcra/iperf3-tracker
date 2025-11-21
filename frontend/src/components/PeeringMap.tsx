@@ -272,12 +272,19 @@ const PeeringMap: React.FC<PeeringMapProps> = ({ testId }) => {
 
     // Check if we should use topology view (for private IPs or when no coordinates available)
     const hasGeoData = hopsToDisplay.some(hop => hop.latitude !== null && hop.longitude !== null);
-    const useTopology = (destinationIP && isPrivateIP(destinationIP)) || !hasGeoData;
+    const geoHopsCount = hopsToDisplay.filter(hop => hop.latitude !== null && hop.longitude !== null).length;
+    const totalHops = hopsToDisplay.length;
+    
+    // Use topology view only if destination is private IP AND we have less than 3 geo hops
+    // OR if we have absolutely no geo data at all
+    const useTopology = (destinationIP && isPrivateIP(destinationIP) && geoHopsCount < 3) || (totalHops > 0 && geoHopsCount === 0);
 
     console.log('Visualization mode:', { 
       destinationIP, 
       isPrivate: destinationIP ? isPrivateIP(destinationIP) : false,
       hasGeoData,
+      geoHopsCount,
+      totalHops,
       useTopology 
     });
 
