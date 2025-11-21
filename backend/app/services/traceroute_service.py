@@ -284,6 +284,8 @@ class TracerouteService:
             has_traceroute = shutil.which('traceroute') is not None
             has_tracert = shutil.which('tracert') is not None
             
+            logger.info(f"Command availability check: traceroute={has_traceroute}, tracert={has_tracert}")
+            
             if has_traceroute:
                 use_windows = False
                 logger.info(f"Starting traceroute to {destination} using traceroute command")
@@ -291,6 +293,7 @@ class TracerouteService:
                 use_windows = True
                 logger.info(f"Starting traceroute to {destination} using tracert command")
             else:
+                logger.error("Neither traceroute nor tracert command found on system")
                 return {
                     "completed": False,
                     "error_message": "Neither traceroute nor tracert command found on system",

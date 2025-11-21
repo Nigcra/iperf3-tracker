@@ -1,8 +1,8 @@
 FROM python:3.11-slim
 
-# Install iperf3 and traceroute
+# Install iperf3, traceroute and wget
 RUN apt-get update && \
-    apt-get install -y iperf3 traceroute && \
+    apt-get install -y iperf3 traceroute wget && \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -13,6 +13,12 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
 COPY . .
+
+# Make download script executable
+RUN chmod +x download_geoip.sh
+
+# Download GeoIP database
+RUN ./download_geoip.sh
 
 # Expose port
 EXPOSE 8000
