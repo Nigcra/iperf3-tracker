@@ -4,6 +4,7 @@ import './PeeringMap.css';
 import * as api from '../services/api';
 import { Trace, TraceHop } from '../services/api';
 import LiveMap from './LiveMap';
+import NetworkTopology from './NetworkTopology';
 
 interface PeeringMapProps {
   testId?: number;
@@ -218,6 +219,29 @@ const PeeringMap: React.FC<PeeringMapProps> = ({ testId }) => {
     console.log('Traceroute stopped by user');
   };
 
+  // Check if destination is a local/private IP
+  const isPrivateIP = (ip: string): boolean => {
+    const parts = ip.split('.');
+    if (parts.length !== 4) return false;
+    
+    const firstOctet = parseInt(parts[0]);
+    const secondOctet = parseInt(parts[1]);
+    
+    // Class A: 10.0.0.0 - 10.255.255.255
+    if (firstOctet === 10) return true;
+    
+    // Class B: 172.16.0.0 - 172.31.255.255
+    if (firstOctet === 172 && secondOctet >= 16 && secondOctet <= 31) return true;
+    
+    // Class C: 192.168.0.0 - 192.168.255.255
+    if (firstOctet === 192 && secondOctet === 168) return true;
+    
+    // Localhost
+    if (firstOctet === 127) return true;
+    
+    return false;
+  };
+
   const renderMap = () => {
     const hopsToDisplay = isLiveMode ? liveHops : (selectedTrace?.hops || []);
     
@@ -235,6 +259,32 @@ const PeeringMap: React.FC<PeeringMapProps> = ({ testId }) => {
           {isLiveMode && <div className="spinner"></div>}
         </div>
       );
+    }
+
+    // Determine destination IP
+    let destinationIP = liveDestination;
+    if (!isLiveMode && selectedTrace) {
+      destinationIP = selectedTrace.destination_host;
+    }
+
+    // Check if we should use topology view (for private IPs or when no coordinates available)
+    const hasGeoData = hopsToDisplay.some(hop => hop.latitude !== null && hop.longitude !== null);
+    const useTopology = (destinationIP && isPrivateIP(destinationIP)) || !hasGeoData;
+
+    console.log('Visualization mode:', { 
+      destinationIP, 
+      isPrivate: destinationIP ? isPrivateIP(destinationIP) : false,
+      hasGeoData,
+      useTopology 
+    });
+
+    if (useTopology) {
+      return <NetworkTopology 
+        hops={hopsToDisplay} 
+        isLive={isLiveMode} 
+        destination={liveDestination}
+        onStop={stopTraceroute}
+      />;
     }
 
     return <LiveMap 
