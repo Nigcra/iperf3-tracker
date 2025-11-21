@@ -24,6 +24,14 @@ A self-hosted application to monitor and track network performance using iperf3 
 ![Dashboard](_screenshots/dashboard.png)
 *Main Dashboard*
 
+![iperf Test](_screenshots/iperf_test.gif)
+*Running iperf3 Performance Tests*
+
+![Peering Map](_screenshots/peering_map.gif)
+*Live Traceroute Visualization*
+
+> **Note:** The map visualization relies on free GeoIP data for hop location. Geographic accuracy may vary depending on the IP address database and is not guaranteed to be 100% precise.
+
 ## Architecture
 
 - **Backend**: Python FastAPI with SQLAlchemy ORM
