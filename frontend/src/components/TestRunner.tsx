@@ -163,6 +163,19 @@ const TestRunner: React.FC = () => {
                 max="128"
               />
               <small>Number of simultaneous connections</small>
+              {parallelStreams > 4 && (
+                <div className="warning-message" style={{ 
+                  marginTop: '8px', 
+                  padding: '8px', 
+                  backgroundColor: '#fff3cd', 
+                  border: '1px solid #ffc107', 
+                  borderRadius: '4px',
+                  color: '#856404',
+                  fontSize: '13px'
+                }}>
+                  ⚠️ Most public servers only support up to 4 parallel streams
+                </div>
+              )}
             </div>
           </div>
 

@@ -279,9 +279,20 @@ class TracerouteService:
     ) -> Dict[str, Any]:
         """Run traceroute to destination (cross-platform)"""
         try:
-            # Detect platform
+            # Detect which traceroute command is available
             system = platform.system()
-            logger.info(f"Starting traceroute to {destination} on {system}")
+            
+            # Try to determine which command to use by checking if the command exists
+            use_windows = system == "Windows"
+            
+            # On Linux/Unix systems in Docker, even if platform.system() returns something else
+            # we should use traceroute if tracert is not available
+            if not use_windows:
+                # We're likely on Linux, use traceroute
+                logger.info(f"Starting traceroute to {destination} on {system} (using traceroute)")
+            else:
+                logger.info(f"Starting traceroute to {destination} on {system} (using tracert)")
+            
             started_at = datetime.utcnow()
             
             # Resolve destination to IP
@@ -311,7 +322,7 @@ class TracerouteService:
             
             # Run platform-specific traceroute with timeout
             try:
-                if system == "Windows":
+                if use_windows:
                     raw_hops = await asyncio.wait_for(
                         self._run_windows_tracert(destination, max_hops),
                         timeout=max_total_timeout
@@ -321,6 +332,38 @@ class TracerouteService:
                         self._run_linux_traceroute(destination, max_hops),
                         timeout=max_total_timeout
                     )
+            except FileNotFoundError as e:
+                # Command not found, try the other one
+                logger.warning(f"Traceroute command not found: {e}, trying alternative")
+                try:
+                    if use_windows:
+                        # tracert not found, try traceroute
+                        logger.info("tracert not found, falling back to traceroute")
+                        raw_hops = await asyncio.wait_for(
+                            self._run_linux_traceroute(destination, max_hops),
+                            timeout=max_total_timeout
+                        )
+                    else:
+                        # traceroute not found, try tracert
+                        logger.info("traceroute not found, falling back to tracert")
+                        raw_hops = await asyncio.wait_for(
+                            self._run_windows_tracert(destination, max_hops),
+                            timeout=max_total_timeout
+                        )
+                except Exception as fallback_error:
+                    logger.error(f"Both traceroute commands failed: {fallback_error}")
+                    return {
+                        "completed": False,
+                        "error_message": f"Neither tracert nor traceroute command available: {fallback_error}",
+                        "destination_ip": dest_ip,
+                        "destination_host": destination,
+                        "source_ip": source_ip,
+                        "hops": [],
+                        "total_hops": 0,
+                        "total_rtt_ms": 0,
+                        "started_at": started_at,
+                        "completed_at": datetime.utcnow()
+                    }
             except asyncio.TimeoutError:
                 logger.warning(f"Traceroute to {destination} exceeded timeout")
                 return {
