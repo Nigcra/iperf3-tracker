@@ -10,8 +10,8 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "iperf3-Tracker"
     VERSION: str = "1.0.0"
     
-    # CORS
-    BACKEND_CORS_ORIGINS: list = ["http://localhost:3000", "http://localhost:8000"]
+    # CORS - Allow all origins by default (can be restricted via environment variable)
+    BACKEND_CORS_ORIGINS: list = ["*"]
     
     # Database
     DATABASE_URL: str = "sqlite+aiosqlite:///./iperf_tracker.db"
