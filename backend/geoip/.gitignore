@@ -1,7 +1,11 @@
-# GeoIP databases are too large for git
-*.mmdb
+# Keep GeoIP database in repository for easy deployment
+# The file is ~70MB which is acceptable for Git
+
+# Ignore temporary files
 *.tar.gz
 *.zip
+*.gz
 
 # Keep this directory
 !.gitignore
+!*.mmdb
