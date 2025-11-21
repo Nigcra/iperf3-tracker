@@ -1,9 +1,10 @@
 .live-test-container {
-  background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
   border-radius: 12px;
   padding: 24px;
-  color: white;
-  box-shadow: 0 8px 16px rgba(0,0,0,0.2);
+  color: var(--text-primary);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   margin-bottom: 20px;
 }
 
@@ -16,30 +17,33 @@
 
 .live-test-header h3 {
   margin: 0;
-  font-size: 24px;
-  font-weight: 700;
-  color: white;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-primary);
 }
 
 .live-indicator {
   display: flex;
   align-items: center;
   gap: 8px;
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-color);
   padding: 6px 12px;
-  border-radius: 20px;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 1px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--text-primary);
 }
 
 .pulse-dot {
   width: 8px;
   height: 8px;
-  background: #ef4444;
+  background: #10b981;
   border-radius: 50%;
   animation: pulse 1.5s ease-in-out infinite;
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.6);
 }
 
 @keyframes pulse {
@@ -58,8 +62,9 @@
 }
 
 .progress-bar-container {
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 10px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
   height: 30px;
   overflow: hidden;
   position: relative;
@@ -68,8 +73,8 @@
 
 .progress-bar-fill {
   height: 100%;
-  background: linear-gradient(90deg, #10b981 0%, #34d399 100%);
-  border-radius: 10px;
+  background: #10b981;
+  border-radius: 8px;
   transition: width 0.3s ease;
   display: flex;
   align-items: center;
@@ -78,19 +83,17 @@
 }
 
 .progress-text {
-  font-size: 14px;
-  font-weight: 700;
+  font-size: 13px;
+  font-weight: 600;
   color: white;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.3);
 }
 
 .time-info {
   display: flex;
   justify-content: space-between;
-  font-size: 14px;
-  font-weight: 600;
-  color: white;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
 }
 
 .live-metrics {
@@ -101,25 +104,25 @@
 }
 
 .live-metric {
-  background: rgba(255, 255, 255, 0.15);
-  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
   padding: 16px;
   display: flex;
   align-items: center;
   gap: 12px;
-  backdrop-filter: blur(10px);
 }
 
 .live-metric.download {
-  border-left: 4px solid #3b82f6;
+  border-left: 3px solid #3b82f6;
 }
 
 .live-metric.upload {
-  border-left: 4px solid #10b981;
+  border-left: 3px solid #10b981;
 }
 
 .metric-icon {
-  font-size: 32px;
+  font-size: 28px;
 }
 
 .metric-content {
@@ -127,35 +130,43 @@
 }
 
 .metric-label {
-  font-size: 12px;
-  opacity: 0.9;
+  font-size: 11px;
+  color: var(--text-secondary);
   margin-bottom: 4px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+  font-weight: 600;
 }
 
 .metric-value {
-  font-size: 28px;
-  font-weight: 700;
+  font-size: 24px;
+  font-weight: 600;
   line-height: 1;
   display: flex;
   align-items: baseline;
   gap: 6px;
+  color: var(--text-primary);
 }
 
 .metric-unit {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
-  opacity: 0.8;
+  color: var(--text-secondary);
 }
 
 .live-status {
   text-align: center;
-  font-size: 14px;
+  font-size: 13px;
   padding: 12px;
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
-  opacity: 0.9;
+  color: var(--text-secondary);
+}
+
+.live-status strong {
+  color: var(--text-primary);
+  font-weight: 600;
 }
 
 .live-test-loading,
@@ -167,13 +178,15 @@
 }
 
 .live-test-loading {
-  background: #f3f4f6;
-  color: #6b7280;
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
 }
 
 .live-test-error {
-  background: #fee2e2;
-  color: #dc2626;
+  background: var(--card-bg);
+  border: 1px solid #ef4444;
+  color: #ef4444;
 }
 
 @media (max-width: 600px) {
