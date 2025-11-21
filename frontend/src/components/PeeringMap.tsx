@@ -141,9 +141,12 @@ const PeeringMap: React.FC<PeeringMapProps> = ({ testId }) => {
         return;
       }
       
-      const eventSource = new EventSource(
-        `http://localhost:8000/api/live-trace/stream/${encodeURIComponent(server.host)}?token=${encodeURIComponent(token)}`
-      );
+      // Dynamically construct the SSE URL based on current location
+      const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:';
+      const hostname = window.location.hostname;
+      const sseUrl = `${protocol}//${hostname}:8000/api/live-trace/stream/${encodeURIComponent(server.host)}?token=${encodeURIComponent(token)}`;
+      
+      const eventSource = new EventSource(sseUrl);
       
       eventSourceRef.current = eventSource;
 
