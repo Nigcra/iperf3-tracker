@@ -220,7 +220,7 @@
 
 .servers-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(550px, 1fr));
+  grid-template-columns: repeat(3, 1fr);
   gap: 28px;
 }
 
@@ -395,7 +395,7 @@
 .server-header-actions {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 6px;
   flex-shrink: 0;
   margin-top: -8px;
   margin-right: -8px;
@@ -412,6 +412,10 @@
   font-weight: 700;
   padding: 0;
   line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
 }
 
 .quick-test-btn {

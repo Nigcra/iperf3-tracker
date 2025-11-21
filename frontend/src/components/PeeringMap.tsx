@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import './PeeringMap.css';
 import * as api from '../services/api';
 import { Trace, TraceHop } from '../services/api';
@@ -9,6 +10,7 @@ interface PeeringMapProps {
 }
 
 const PeeringMap: React.FC<PeeringMapProps> = ({ testId }) => {
+  const [searchParams] = useSearchParams();
   const [allTraces, setAllTraces] = useState<Trace[]>([]);
   const [serverTraces, setServerTraces] = useState<Trace[]>([]);
   const [selectedTrace, setSelectedTrace] = useState<Trace | null>(null);
@@ -21,11 +23,49 @@ const PeeringMap: React.FC<PeeringMapProps> = ({ testId }) => {
   const [liveDestination, setLiveDestination] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
+  const autoStartedRef = useRef(false);
+  const shouldAutoStartRef = useRef(false);
 
   useEffect(() => {
     loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [testId]);
+
+  // Check for server parameter in URL
+  useEffect(() => {
+    const serverParam = searchParams.get('server');
+    if (serverParam && servers.length > 0 && !autoStartedRef.current) {
+      const serverId = parseInt(serverParam);
+      if (!isNaN(serverId)) {
+        const server = servers.find(s => s.id === serverId);
+        if (server) {
+          console.log('Auto-starting traceroute for server:', serverId, server.name);
+          setSelectedServer(serverId);
+          shouldAutoStartRef.current = true;
+          autoStartedRef.current = true;
+          
+          // Filter traces for this server
+          const filtered = allTraces.filter(t => t.destination_host === server.host);
+          setServerTraces(filtered);
+          
+          // Auto-select newest trace if available
+          if (filtered.length > 0) {
+            setSelectedTrace(filtered[0]);
+          }
+        }
+      }
+    }
+  }, [searchParams, servers, allTraces]);
+
+  // Auto-start traceroute when server is selected
+  useEffect(() => {
+    if (shouldAutoStartRef.current && selectedServer && !runningTrace && !loading) {
+      shouldAutoStartRef.current = false;
+      setTimeout(() => {
+        startTraceroute();
+      }, 500);
+    }
+  }, [selectedServer, runningTrace, loading]);
 
   const loadData = async () => {
     try {

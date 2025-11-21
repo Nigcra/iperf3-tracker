@@ -1,13 +1,17 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { FiServer, FiActivity, FiTrendingUp, FiTrendingDown, FiAlertTriangle } from 'react-icons/fi';
-import { FaPlay } from 'react-icons/fa';
+// @ts-ignore - FiShare2 exists at runtime but not in type definitions
+import { FiShare2 } from 'react-icons/fi';
+import { FaPlay, FaRoute } from 'react-icons/fa';
 import { getDashboardStats, getServerStats, getTests, getTestLiveStatus, getServers, runTest, DashboardStats, ServerStats, Test, TestLiveStatus, Server, TestDirection } from '../services/api';
 import './Dashboard.css';
 
 type TimeRange = '1h' | '24h' | '7d' | '30d';
 
 const Dashboard: React.FC = () => {
+  const navigate = useNavigate();
   const [dashStats, setDashStats] = useState<DashboardStats | null>(null);
   const [serverStats, setServerStats] = useState<ServerStats[]>([]);
   const [servers, setServers] = useState<Server[]>([]);
@@ -57,6 +61,11 @@ const Dashboard: React.FC = () => {
       console.error('Error starting test:', error);
       alert('Failed to start test');
     }
+  };
+
+  const handleStartTraceroute = (serverId: number) => {
+    // Navigate to Peering Map with the selected server
+    navigate(`/peering?server=${serverId}`);
   };
 
   // Helper functions to save settings to localStorage
@@ -708,14 +717,23 @@ const Dashboard: React.FC = () => {
                   <h3>{serverStat.server_name}</h3>
                   <div className="server-header-actions">
                     {!isRunning && serverInfo && (
-                      <button 
-                        className="quick-test-btn"
-                        onClick={() => handleRunTest(serverStat.server_id, serverInfo)}
-                        title="Run quick test"
-                      >
-                        {/* @ts-ignore */}
-                        <FaPlay size={14} />
-                      </button>
+                      <>
+                        <button 
+                          className="quick-test-btn"
+                          onClick={() => handleStartTraceroute(serverStat.server_id)}
+                          title="Start traceroute"
+                        >
+                          {/* @ts-ignore */}
+                          <FiShare2 size={14} />
+                        </button>
+                        <button 
+                          className="quick-test-btn"
+                          onClick={() => handleRunTest(serverStat.server_id, serverInfo)}
+                          title="Run quick test"
+                        >
+                          <FiActivity size={14} />
+                        </button>
+                      </>
                     )}
                     {isRunning && (
                       <div className={`testing-indicator ${
