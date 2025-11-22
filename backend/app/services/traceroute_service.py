@@ -291,6 +291,66 @@ class TracerouteService:
             logger.error(f"Error running Linux traceroute: {e}", exc_info=True)
             return []
     
+    def _interpolate_missing_geoip(self, hops_data: List[Dict[str, Any]]) -> None:
+        """
+        Interpolate missing GeoIP data for hops in the same subnet.
+        Marks interpolated hops with a special flag.
+        """
+        for i, hop in enumerate(hops_data):
+            # Skip if hop already has coordinates or didn't respond
+            if hop['latitude'] is not None or not hop['responded'] or not hop['ip_address']:
+                continue
+            
+            # Find nearest hop with GeoIP data in same /24 subnet
+            hop_ip_parts = hop['ip_address'].split('.')
+            if len(hop_ip_parts) != 4:
+                continue
+            
+            hop_subnet = '.'.join(hop_ip_parts[:3])  # /24 subnet
+            
+            # Look for nearby hops with GeoIP data in same subnet
+            donor_hop = None
+            
+            # First try: look backwards for a hop in same subnet
+            for j in range(i - 1, max(0, i - 5), -1):
+                if (hops_data[j]['latitude'] is not None and 
+                    hops_data[j]['ip_address'] and 
+                    hops_data[j]['ip_address'].startswith(hop_subnet + '.')):
+                    donor_hop = hops_data[j]
+                    break
+            
+            # Second try: look forwards
+            if not donor_hop:
+                for j in range(i + 1, min(len(hops_data), i + 5)):
+                    if (hops_data[j]['latitude'] is not None and 
+                        hops_data[j]['ip_address'] and 
+                        hops_data[j]['ip_address'].startswith(hop_subnet + '.')):
+                        donor_hop = hops_data[j]
+                        break
+            
+            # Third try: just use nearest hop with GeoIP (different subnet)
+            if not donor_hop:
+                for j in range(max(0, i - 3), min(len(hops_data), i + 4)):
+                    if j != i and hops_data[j]['latitude'] is not None:
+                        donor_hop = hops_data[j]
+                        break
+            
+            if donor_hop:
+                # Add small random offset to distinguish from original
+                # This creates a "nearby" location on the map
+                import random
+                lat_offset = random.uniform(-0.05, 0.05)  # ~5km offset
+                lon_offset = random.uniform(-0.05, 0.05)
+                
+                hop['latitude'] = donor_hop['latitude'] + lat_offset
+                hop['longitude'] = donor_hop['longitude'] + lon_offset
+                hop['city'] = f"? {donor_hop['city']}" if donor_hop['city'] else "? Unknown"
+                hop['country'] = donor_hop['country']
+                hop['country_code'] = donor_hop['country_code']
+                hop['geoip_interpolated'] = True  # Mark as interpolated
+                
+                logger.debug(f"Interpolated GeoIP for hop {hop['hop_number']} from hop with IP {donor_hop.get('ip_address')}")
+    
     async def run_traceroute(
         self,
         destination: str,
@@ -385,7 +445,7 @@ class TracerouteService:
             hops_data = []
             total_rtt = 0
             
-            for hop in raw_hops:
+            for i, hop in enumerate(raw_hops):
                 hop_info = {
                     "hop_number": hop['hop_number'],
                     "ip_address": hop['ip_address'],
@@ -425,6 +485,9 @@ class TracerouteService:
                     logger.info(f"Hop {hop['hop_number']}: {hop['ip_address']} ({hop_info['hostname']}) - {hop['rtt_ms']}ms")
                 
                 hops_data.append(hop_info)
+            
+            # Fill in missing GeoIP data by interpolating from nearby hops in same subnet
+            self._interpolate_missing_geoip(hops_data)
             
             completed_at = datetime.utcnow()
             

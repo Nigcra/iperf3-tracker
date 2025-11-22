@@ -12,10 +12,93 @@ import subprocess
 import re
 import platform
 import shutil
+import random
+from typing import List, Dict, Any
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/live-trace", tags=["live-trace"])
+
+
+def interpolate_missing_geoip(hops_data: List[Dict[str, Any]]) -> None:
+    """
+    Interpolate missing GeoIP coordinates from nearby hops.
+    Prioritizes hops in the same /24 subnet (likely same provider network).
+    Adds a small random offset to avoid overlapping markers.
+    """
+    for i, hop in enumerate(hops_data):
+        # Skip if already has coordinates or didn't respond
+        if hop.get('latitude') is not None and hop.get('longitude') is not None:
+            continue
+        if not hop.get('responded') or not hop.get('ip_address'):
+            continue
+        
+        # Extract IP subnet (/24)
+        hop_ip = hop['ip_address']
+        hop_subnet = '.'.join(hop_ip.split('.')[:3])
+        
+        # Search for donor hop with coordinates
+        donor_hop = None
+        
+        # First, try to find a hop in the same /24 subnet within 5 hops
+        search_range = 5
+        for offset in range(1, search_range + 1):
+            # Check backward
+            if i - offset >= 0:
+                candidate = hops_data[i - offset]
+                if (candidate.get('latitude') is not None and 
+                    candidate.get('longitude') is not None and
+                    candidate.get('ip_address')):
+                    candidate_subnet = '.'.join(candidate['ip_address'].split('.')[:3])
+                    if candidate_subnet == hop_subnet:
+                        donor_hop = candidate
+                        logger.debug(f"Found same-subnet donor at hop {candidate['hop_number']} for hop {hop['hop_number']}")
+                        break
+            
+            # Check forward
+            if i + offset < len(hops_data):
+                candidate = hops_data[i + offset]
+                if (candidate.get('latitude') is not None and 
+                    candidate.get('longitude') is not None and
+                    candidate.get('ip_address')):
+                    candidate_subnet = '.'.join(candidate['ip_address'].split('.')[:3])
+                    if candidate_subnet == hop_subnet:
+                        donor_hop = candidate
+                        logger.debug(f"Found same-subnet donor at hop {candidate['hop_number']} for hop {hop['hop_number']}")
+                        break
+        
+        # If no same-subnet donor found, use nearest hop with coordinates
+        if not donor_hop:
+            # Search backward first (more likely to be in same region)
+            for offset in range(1, len(hops_data)):
+                if i - offset >= 0:
+                    candidate = hops_data[i - offset]
+                    if candidate.get('latitude') is not None and candidate.get('longitude') is not None:
+                        donor_hop = candidate
+                        logger.debug(f"Found nearest donor at hop {candidate['hop_number']} for hop {hop['hop_number']}")
+                        break
+                if i + offset < len(hops_data):
+                    candidate = hops_data[i + offset]
+                    if candidate.get('latitude') is not None and candidate.get('longitude') is not None:
+                        donor_hop = candidate
+                        logger.debug(f"Found nearest donor at hop {candidate['hop_number']} for hop {hop['hop_number']}")
+                        break
+        
+        # Apply interpolation if donor found
+        if donor_hop:
+            # Add small random offset (~5km radius) to avoid exact overlap
+            lat_offset = random.uniform(-0.05, 0.05)
+            lon_offset = random.uniform(-0.05, 0.05)
+            
+            hop['latitude'] = donor_hop['latitude'] + lat_offset
+            hop['longitude'] = donor_hop['longitude'] + lon_offset
+            hop['city'] = f"? {donor_hop.get('city', 'Unknown')}"
+            hop['country'] = donor_hop.get('country')
+            hop['country_code'] = donor_hop.get('country_code')
+            hop['geoip_interpolated'] = True
+            
+            logger.info(f"Interpolated coordinates for hop {hop['hop_number']} ({hop_ip}) from hop {donor_hop['hop_number']}")
+
 
 
 @router.get("/stream/{destination}")
@@ -201,6 +284,12 @@ async def stream_traceroute(
                 all_hops.append(hop)
                 yield f"data: {json.dumps({'type': 'hop', 'data': hop})}\n\n"
             
+            # Apply GeoIP interpolation for missing coordinates
+            interpolate_missing_geoip(all_hops)
+            
+            # Send updated hops with interpolation
+            yield f"data: {json.dumps({'type': 'interpolation_complete', 'hops': all_hops})}\n\n"
+            
             # Save trace to database
             try:
                 from app.models.models import Trace, TraceHop
@@ -233,7 +322,8 @@ async def stream_traceroute(
                         country=hop_data.get('country'),
                         country_code=hop_data.get('country_code'),
                         asn=hop_data.get('asn'),
-                        asn_organization=hop_data.get('asn_organization')
+                        asn_organization=hop_data.get('asn_organization'),
+                        geoip_interpolated=hop_data.get('geoip_interpolated', False)
                     )
                     db.add(hop)
                 

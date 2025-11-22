@@ -158,6 +158,10 @@ const PeeringMap: React.FC<PeeringMapProps> = ({ testId }) => {
             console.log('Traceroute started:', data.destination);
           } else if (data.type === 'hop') {
             setLiveHops(prev => [...prev, data.data]);
+          } else if (data.type === 'interpolation_complete') {
+            // Replace all hops with interpolated versions
+            console.log('GeoIP interpolation complete, updating hops');
+            setLiveHops(data.hops);
           } else if (data.type === 'complete') {
             console.log('Traceroute complete');
             eventSource.close();

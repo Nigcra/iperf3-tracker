@@ -149,12 +149,15 @@ const LiveMap: React.FC<LiveMapProps> = ({ hops, isLive = false, destination, on
     validHops.forEach((hop, index) => {
       const isFirst = index === 0;
       const isLast = index === validHops.length - 1;
+      const isInterpolated = hop.geoip_interpolated === true;
       
       let icon: L.DivIcon;
       if (isFirst) {
         icon = createIcon('#10b981', '🚀');
       } else if (isLast) {
         icon = createIcon('#ef4444', '🎯');
+      } else if (isInterpolated) {
+        icon = createIcon('#f59e0b', '?');
       } else {
         icon = createIcon('#3b82f6', String(hop.hop_number));
       }
@@ -162,12 +165,13 @@ const LiveMap: React.FC<LiveMapProps> = ({ hops, isLive = false, destination, on
       const marker = L.marker([hop.latitude, hop.longitude], { icon })
         .bindPopup(`
           <div style="font-family: system-ui; min-width: 200px;">
-            <strong style="font-size: 14px;">Hop #${hop.hop_number}</strong><br/>
+            <strong style="font-size: 14px;">Hop #${hop.hop_number}</strong>${isInterpolated ? ' <span style="color: #f59e0b;">⚠️ Estimated</span>' : ''}<br/>
             ${hop.city ? `📍 ${hop.city}, ${hop.country}<br/>` : ''}
             ${hop.ip_address ? `IP: ${hop.ip_address}<br/>` : ''}
             ${hop.hostname ? `Host: ${hop.hostname}<br/>` : ''}
             ${hop.rtt_ms ? `RTT: ${hop.rtt_ms.toFixed(1)}ms<br/>` : ''}
             ${hop.asn_organization ? `ISP: ${hop.asn_organization}` : ''}
+            ${isInterpolated ? `<br/><span style="color: #f59e0b; font-size: 12px; font-style: italic;">Location estimated from nearby hops</span>` : ''}
           </div>
         `)
         .addTo(mapRef.current);

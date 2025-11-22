@@ -170,6 +170,7 @@ class TraceHop(Base):
     country_code = Column(String(2), nullable=True)
     asn = Column(Integer, nullable=True)
     asn_organization = Column(String(255), nullable=True)
+    geoip_interpolated = Column(Boolean, default=False)  # True if coordinates were interpolated
     
     # Performance metrics
     rtt_ms = Column(Float, nullable=True)  # Round trip time

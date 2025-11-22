@@ -198,6 +198,7 @@ class TraceHopResponse(BaseModel):
     rtt_ms: Optional[float]
     packet_loss: Optional[float]
     responded: bool
+    geoip_interpolated: bool = False
     
     class Config:
         from_attributes = True

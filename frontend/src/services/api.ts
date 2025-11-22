@@ -217,6 +217,7 @@ export interface TraceHop {
   rtt_ms: number | null;
   packet_loss: number | null;
   responded: boolean;
+  geoip_interpolated?: boolean;
 }
 
 export interface Trace {
