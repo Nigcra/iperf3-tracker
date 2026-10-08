@@ -102,6 +102,59 @@ func (s ServerSettings) Validate() string {
 	return ""
 }
 
+// TestStatus ist der Ausführungsstatus eines Tests.
+type TestStatus string
+
+const (
+	StatusPending   TestStatus = "pending"
+	StatusRunning   TestStatus = "running"
+	StatusCompleted TestStatus = "completed"
+	StatusFailed    TestStatus = "failed"
+)
+
+// Valid meldet, ob s ein bekannter Wert ist.
+func (s TestStatus) Valid() bool {
+	return s == StatusPending || s == StatusRunning || s == StatusCompleted || s == StatusFailed
+}
+
+// TestResult sind die Messwerte eines abgeschlossenen Tests.
+type TestResult struct {
+	DownloadBandwidthMbps     *float64 `json:"download_bandwidth_mbps"`
+	DownloadBytes             *int64   `json:"download_bytes"`
+	DownloadJitterMs          *float64 `json:"download_jitter_ms"`
+	DownloadPacketLossPercent *float64 `json:"download_packet_loss_percent"`
+	UploadBandwidthMbps       *float64 `json:"upload_bandwidth_mbps"`
+	UploadBytes               *int64   `json:"upload_bytes"`
+	UploadJitterMs            *float64 `json:"upload_jitter_ms"`
+	UploadPacketLossPercent   *float64 `json:"upload_packet_loss_percent"`
+	Retransmits               *int64   `json:"retransmits"`
+	CPUPercent                *float64 `json:"cpu_percent"`
+}
+
+// Test ist ein iperf3-Testlauf. Die Rohausgabe wird nur in der Detailansicht
+// geliefert (siehe TestDetail).
+type Test struct {
+	ID              int64      `json:"id"`
+	ServerID        int64      `json:"server_id"`
+	Protocol        Protocol   `json:"protocol"`
+	Direction       Direction  `json:"direction"`
+	Duration        int        `json:"duration"`
+	ParallelStreams int        `json:"parallel_streams"`
+	Status          TestStatus `json:"status"`
+	StartedAt       *time.Time `json:"started_at"`
+	CompletedAt     *time.Time `json:"completed_at"`
+	TestResult
+	ErrorMessage *string   `json:"error_message"`
+	CreatedAt    time.Time `json:"created_at"`
+}
+
+// TestDetail ist ein Test inklusive Server-Profil und Rohausgabe.
+type TestDetail struct {
+	Test
+	Server    Server  `json:"server"`
+	RawOutput *string `json:"raw_output"`
+}
+
 // Server ist ein iperf3-Server-Profil.
 type Server struct {
 	ID int64 `json:"id"`

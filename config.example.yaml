@@ -3,7 +3,7 @@
 # mit zufälligem secret_key erzeugt. Diese Datei dient nur als Referenz.
 #
 # Einzelne Werte lassen sich per Umgebungsvariable überschreiben:
-#   LISTEN_ADDR, DB_PATH, SECRET_KEY, SCHEDULER_ENABLED, LOG_LEVEL
+#   LISTEN_ADDR, DB_PATH, SECRET_KEY, SCHEDULER_ENABLED, IPERF3_PATH, LOG_LEVEL
 
 web:
   listen: "0.0.0.0:8000"
@@ -19,6 +19,10 @@ auth:
 
 scheduler:
   enabled: true
+
+iperf:
+  # Pfad zur iperf3-Binary (mind. Version 3.17); leer = automatisch suchen.
+  path: ""
 
 log:
   # debug | info | warn | error

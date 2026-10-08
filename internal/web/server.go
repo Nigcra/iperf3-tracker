@@ -9,6 +9,7 @@ import (
 	"net/http"
 
 	"iperf3-tracker/internal/auth"
+	"iperf3-tracker/internal/iperf"
 	"iperf3-tracker/internal/store"
 	"iperf3-tracker/internal/version"
 )
@@ -17,12 +18,13 @@ import (
 type Server struct {
 	store  *store.Store
 	tokens *auth.Tokens
+	runner *iperf.Runner
 	mux    *http.ServeMux
 }
 
 // NewServer erstellt den HTTP-Server.
-func NewServer(st *store.Store, tokens *auth.Tokens) *Server {
-	s := &Server{store: st, tokens: tokens, mux: http.NewServeMux()}
+func NewServer(st *store.Store, tokens *auth.Tokens, runner *iperf.Runner) *Server {
+	s := &Server{store: st, tokens: tokens, runner: runner, mux: http.NewServeMux()}
 	s.routes()
 	return s
 }
@@ -49,6 +51,13 @@ func (s *Server) routes() {
 	s.mux.Handle("GET /api/servers/{server_id}", s.requireUser(s.handleGetServer))
 	s.mux.Handle("PUT /api/servers/{server_id}", s.requireUser(s.handleUpdateServer))
 	s.mux.Handle("DELETE /api/servers/{server_id}", s.requireUser(s.handleDeleteServer))
+
+	s.mux.Handle("GET /api/tests", s.requireUser(s.handleListTests))
+	s.mux.Handle("POST /api/tests/run", s.requireUser(s.handleRunTest))
+	s.mux.Handle("GET /api/tests/{test_id}", s.requireUser(s.handleGetTest))
+	s.mux.Handle("DELETE /api/tests/{test_id}", s.requireUser(s.handleDeleteTest))
+	s.mux.Handle("GET /api/tests/{test_id}/live", s.requireUser(s.handleTestLive))
+	s.mux.Handle("GET /api/tests/server/{server_id}/latest", s.requireUser(s.handleLatestTest))
 }
 
 func (s *Server) handleInfo(w http.ResponseWriter, r *http.Request) {

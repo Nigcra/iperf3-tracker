@@ -20,6 +20,7 @@ type Config struct {
 	Storage   StorageConfig   `yaml:"storage"`
 	Auth      AuthConfig      `yaml:"auth"`
 	Scheduler SchedulerConfig `yaml:"scheduler"`
+	Iperf     IperfConfig     `yaml:"iperf"`
 	Log       LogConfig       `yaml:"log"`
 }
 
@@ -47,6 +48,13 @@ type SchedulerConfig struct {
 	Enabled bool `yaml:"enabled"`
 }
 
+// IperfConfig konfiguriert die iperf3-Binary.
+type IperfConfig struct {
+	// Path zur iperf3-Binary; leer = automatisch suchen (PATH, unter Windows
+	// zusätzlich übliche Installationsorte).
+	Path string `yaml:"path"`
+}
+
 // LogConfig steuert die Protokollierung.
 type LogConfig struct {
 	Level string `yaml:"level"`
@@ -65,7 +73,7 @@ func (l LogConfig) SlogLevel() slog.Level {
 // zufällig erzeugte Token-Schlüssel.
 const defaultYAML = `# iperf3-Tracker – Konfiguration
 # Einzelne Werte lassen sich per Umgebungsvariable überschreiben:
-#   LISTEN_ADDR, DB_PATH, SECRET_KEY, SCHEDULER_ENABLED, LOG_LEVEL
+#   LISTEN_ADDR, DB_PATH, SECRET_KEY, SCHEDULER_ENABLED, IPERF3_PATH, LOG_LEVEL
 
 web:
   listen: "0.0.0.0:8000"
@@ -80,6 +88,10 @@ auth:
 
 scheduler:
   enabled: true
+
+iperf:
+  # Pfad zur iperf3-Binary (mind. Version 3.17); leer = automatisch suchen.
+  path: ""
 
 log:
   level: "info"
@@ -152,6 +164,9 @@ func (c *Config) applyEnv() error {
 			return fmt.Errorf("SCHEDULER_ENABLED ist ungültig: %q", v)
 		}
 		c.Scheduler.Enabled = b
+	}
+	if v := os.Getenv("IPERF3_PATH"); v != "" {
+		c.Iperf.Path = v
 	}
 	if v := os.Getenv("LOG_LEVEL"); v != "" {
 		c.Log.Level = v

@@ -9,7 +9,8 @@ Ziel: Das bestehende Python/FastAPI-Backend **und** das React-Frontend werden du
 > | 0 – Setup | ✅ erledigt: `go.mod`, `build.cmd`, Config (YAML + Env), Schema, `/health`, `/api/info`, CORS |
 > | 1 – Auth | ✅ erledigt: bcrypt, JWT, Middleware, alle `/auth/*`-Endpunkte, Standard-Admin, Go-Tests (`internal/web/handlers_auth_test.go`) |
 > | 2 – Server-CRUD | ✅ erledigt: `/api/servers` (Liste mit `enabled`/`skip`/`limit`, Detail, Anlegen, partielles Update, Löschen per Cascade), Go-Tests. Scheduler-Aufrufe folgen in Phase 7 |
-> | 3–10 | offen |
+> | 3 – Tests | ✅ erledigt: `/api/tests/*` (Liste mit Filtern, Detail, Start, Löschen, latest, live), Runner mit Warteschlange und Live-Status, Auswertung per `iperf3 --json-stream`, Fixture- und Runner-Tests, End-to-End gegen lokalen iperf3-Server geprüft |
+> | 4–10 | offen |
 >
 > Abweichungen bei der Umsetzung:
 > - Das Schema stammt aus den **SQLAlchemy-Modellen** (`models.py`) und nicht aus den Migrationen. Eine frische Python-DB entsteht per `create_all` aus den Modellen. Unterschied zur Migration 002: `traces.test_id` ist nullable und nicht `UNIQUE`.
@@ -18,6 +19,7 @@ Ziel: Das bestehende Python/FastAPI-Backend **und** das React-Frontend werden du
 > - Zeitstempel werden als TEXT im festen Format `2006-01-02T15:04:05.000000Z` gespeichert. Das Format ist sortierbar, sodass Datumsfilter direkt per Stringvergleich funktionieren.
 > - `detail`-Fehlermeldungen sind deutsch. Das React-Frontend wertet nur die Statuscodes aus, und die sind unverändert.
 > - `servers`, `tests` und `stats` waren in Python **ohne Anmeldung** erreichbar. In Go verlangen sie ein gültiges Token. Das React-Frontend sendet es immer mit, der Ablauf bleibt also unverändert.
+> - **iperf3 (Phase 3):** Download nutzt jetzt `-R`. Python hatte Download und Upload vertauscht, weil `-R` „Server sendet“ bedeutet. Die Testsperre wird direkt nach dem Test freigegeben; Python hielt sie noch 10 s länger fest. Die Live-Werte funktionieren jetzt auch unter Linux, Python lieferte sie nur unter Windows. Zusätzlich werden Bytes, CPU-Last, Retransmits (wo iperf3 sie liefert) sowie bei UDP Jitter und Verlust gespeichert; in Python waren diese Felder immer `null`. `raw_output` enthält die JSON-Zeilen statt der Textausgabe. Beim Start werden Tests, die durch einen Absturz in `pending`/`running` hängen geblieben sind, als fehlgeschlagen markiert.
 > - Noch offen: Smoke-Test von Phase 1 mit dem React-Frontend im Browser. Die API ist per curl und Go-Tests geprüft.
 >
 > **Änderungen gegenüber der Fassung vom 3. Aug.:**
@@ -52,7 +54,8 @@ Ziel: Das bestehende Python/FastAPI-Backend **und** das React-Frontend werden du
 | Konfiguration | pydantic-settings / Env | `config.yaml` (`gopkg.in/yaml.v3`) **plus** Env-Override | YAML wie im Spherifyer, Env für Docker. |
 | Scheduler | APScheduler | `time.Ticker` je Server in Goroutines | Interval-basiert, leichtgewichtig. |
 | GeoIP | geoip2 | `oschwald/geoip2-golang` | Liest dasselbe `GeoLite2-City.mmdb`. |
-| iperf3 / traceroute | subprocess | `os/exec` | Die Binaries bleiben Systemvoraussetzung. |
+| iperf3 | subprocess + Text-Regex | `os/exec` + `iperf3 --json-stream` (ab iperf 3.17) | Kein ausgereifter Go-Client mit iperf3-Protokoll verfügbar (go-iperf ist nur ein Wrapper, pre-v1). Strukturiertes JSON statt Regex auf Textausgabe. |
+| traceroute | subprocess | `os/exec` | Die Binary bleibt Systemvoraussetzung. |
 | SSE | StreamingResponse | `http.Flusher` | Nativ. |
 | Logging | logging + Filter | `log/slog` | Standardbibliothek. |
 | UI-Framework | React 18 + CRA + react-router | Vanilla `index.html` + `app.js`, Tabs über `showTab()` | Wie im Spherifyer. |
@@ -85,8 +88,10 @@ internal/
     (Middleware: siehe web/middleware.go)
   store/                       # users.go, servers.go, tests.go, traces.go
   iperf/
-    runner.go                  # iperf3 ausführen, Text-Parser, Live-Status-Map
-    parser_test.go             # Fixtures TCP/UDP/upload/download/bidir
+    runner.go                  # Warteschlange, iperf3 ausführen, Live-Status
+    stream.go                  # Auswertung --json-stream
+    binary.go                  # iperf3 finden, Version prüfen
+    testdata/*.jsonl           # echte Mitschnitte (iperf 3.21)
   trace/
     traceroute.go              # tracert/traceroute je runtime.GOOS
     geoip.go                   # mmdb-Reader
@@ -182,7 +187,7 @@ Sobald React entfernt ist, gilt:
 4. **Statuswerte** bleiben lowercase.
 5. **Sequenzielle Testausführung:** Ein globaler Semaphore (`chan struct{}` mit Kapazität 1) stellt sicher, dass nur ein iperf3-Test gleichzeitig läuft.
 6. **Live-Status:** `map[int]LiveStatus` hinter `sync.RWMutex`.
-7. **Das iperf3-Kommando bleibt exakt gleich:** `iperf3 -c <host> -p <port> -t <dur> -P <streams> -i 1 --forceflush`, ergänzt um `-u`, `-R` oder `--bidir`. Geparst wird der Text-Output mit denselben Regexes und derselben Einheitenlogik (K/M/G).
+7. **iperf3-Aufruf:** `iperf3 -c <host> -p <port> -t <dur> -P <streams> -i 1 --json-stream --forceflush`, ergänzt um `-u`, `-R` (**Download**) oder `--bidir`. Ausgewertet werden die JSON-Ereignisse `interval` (Live-Werte), `end` (Ergebnis) und `error`. Abweichungen zu Python siehe Stand oben.
 8. **traceroute/tracert-Parser:** plattformabhängig über `runtime.GOOS`, gleiche Zeilenformate wie bisher.
 9. **GeoIP-Interpolation** 1:1: gleiche /24-Nachbarschaft (±5 Hops), Fallback auf den nächsten Hop, ±0,05° Zufalls-Offset, `geoip_interpolated=true`.
 
@@ -211,7 +216,7 @@ Phase 1–8 bauen das Backend und werden jeweils gegen das **unveränderte React
 - **Meilenstein:** `ServerManager` funktioniert vollständig.
 
 ### Phase 3 – Tests
-- CRUD, Filter, Pagination, iperf3-Runner, Parser mit Fixture-Tests, Semaphore, Live-Status
+- CRUD, Filter, Pagination, iperf3-Runner, JSON-Stream-Auswertung mit Fixture-Tests, Semaphore, Live-Status
 - **Meilenstein:** `TestRunner`, `LiveTestDisplay` und der Dashboard-Live-Test funktionieren.
 
 ### Phase 4 – Statistiken
@@ -239,7 +244,7 @@ Phase 1–8 bauen das Backend und werden jeweils gegen das **unveränderte React
 - **Meilenstein:** Alle Funktionen des React-Frontends sind in der neuen UI verfügbar.
 
 ### Phase 10 – Deployment & Abschluss
-- `Dockerfile` als Multi-Stage-Build (`golang:1.24` → `debian:bookworm-slim` mit `iperf3`, `traceroute` und `ca-certificates`)
+- `Dockerfile` als Multi-Stage-Build (`golang:1.24` → `debian:trixie-slim` (iperf3 3.18; bookworm hat nur 3.12 ohne `--json-stream`) mit `iperf3`, `traceroute` und `ca-certificates`)
 - `docker-compose.yml` mit **einem** Service: Port 8000, Volumes für DB und GeoIP. Der Frontend-Service und nginx entfallen.
 - `start.bat` wird ersetzt durch `build.cmd` und den direkten Aufruf der `.exe`
 - Optional: Betrieb als Windows-Dienst, nach dem Muster von `internal/svc` im Spherifyer
@@ -283,7 +288,7 @@ Wie im Spherifyer per CDN: Chart.js 4.4 (jsDelivr) und Leaflet 1.9 (jsDelivr, JS
 
 ## 9. Test- & Abnahmestrategie
 
-1. **Parser-Fixtures** (Go-Unit-Tests): reale iperf3-Outputs (TCP/UDP × download/upload/bidir) und tracert/traceroute-Ausgaben (Windows/Linux). Die Ergebnisse werden mit den Werten des Python-Parsers abgeglichen.
+1. **Parser-Fixtures** (Go-Unit-Tests): echte `--json-stream`-Mitschnitte (TCP/UDP × download/upload/bidir, Fehlerfall) und tracert/traceroute-Ausgaben (Windows/Linux).
 2. **Contract-Tests** (Phase 1–8): Gleiche Requests gehen an Python (`:8001`) und Go (`:8000`), die JSON-Bodies werden verglichen. Bekannte Abweichung: Zeitstempel haben jetzt ein `Z`-Suffix.
 3. **Smoke-Test mit React** nach jeder Backend-Phase.
 4. **UI-Abnahme** in Phase 9: jede Seite in Hell und Dunkel, schmale Fensterbreite und Funktionsvergleich mit dem React-Stand.
@@ -295,7 +300,7 @@ Wie im Spherifyer per CDN: Chart.js 4.4 (jsDelivr) und Leaflet 1.9 (jsDelivr, JS
 
 | Risiko | Auswirkung | Gegenmaßnahme |
 |---|---|---|
-| Abweichungen im iperf3-Text-Parser | Falsche Bandbreitenwerte | Fixtures, 1:1-Portierung der Regexes |
+| iperf3 älter als 3.17 auf dem Zielsystem | Tests schlagen fehl | Versionsprüfung beim Start mit Warnung im Log; Docker-Image auf trixie |
 | UI-Neubau dauert länger als das Backend | Lange Phase mit zwei Frontends | React bleibt bis Phase 9 voll funktionsfähig; die neue UI geht Tab für Tab live (`/`), React läuft bis dahin parallel auf `:3000` |
 | Funktionen gehen beim UI-Neubau verloren | Regressionen | Checkliste je React-Komponente (8.3) als Abnahmeliste |
 | CDN nicht erreichbar | Keine Charts/Karte | Vendoring-Option (8.4) |

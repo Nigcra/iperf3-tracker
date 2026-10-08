@@ -11,6 +11,7 @@ import (
 
 	"iperf3-tracker/internal/auth"
 	"iperf3-tracker/internal/db"
+	"iperf3-tracker/internal/iperf"
 	"iperf3-tracker/internal/store"
 )
 
@@ -32,7 +33,12 @@ func newTestServer(t *testing.T) *httptest.Server {
 		t.Fatal(err)
 	}
 
-	srv := httptest.NewServer(NewServer(st, auth.NewTokens("test-secret")).Handler())
+	// Nicht vorhandene Binary: Tests schlagen sofort und deterministisch fehl.
+	// Die eigentliche Ausführung testet das Paket iperf.
+	runner := iperf.NewRunner(st, filepath.Join(t.TempDir(), "kein-iperf3"))
+	t.Cleanup(runner.Stop)
+
+	srv := httptest.NewServer(NewServer(st, auth.NewTokens("test-secret"), runner).Handler())
 	t.Cleanup(srv.Close)
 	return srv
 }

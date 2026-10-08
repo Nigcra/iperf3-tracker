@@ -17,6 +17,7 @@ import (
 	"iperf3-tracker/internal/auth"
 	"iperf3-tracker/internal/config"
 	"iperf3-tracker/internal/db"
+	"iperf3-tracker/internal/iperf"
 	"iperf3-tracker/internal/store"
 	"iperf3-tracker/internal/version"
 	"iperf3-tracker/internal/web"
@@ -69,11 +70,26 @@ func run(cfgPath string) error {
 	if err := ensureDefaultAdmin(st); err != nil {
 		return err
 	}
+	if n, err := st.FailUnfinishedTests(context.Background(), "Abgebrochen: Dienst wurde neu gestartet"); err != nil {
+		return fmt.Errorf("Offene Tests konnten nicht bereinigt werden: %w", err)
+	} else if n > 0 {
+		slog.Warn("Unterbrochene Tests als fehlgeschlagen markiert", "anzahl", n)
+	}
+
+	// --- iperf3 ---
+	iperfBin := iperf.FindBinary(cfg.Iperf.Path)
+	if v, err := iperf.CheckVersion(iperfBin); err != nil {
+		slog.Warn("iperf3 nicht nutzbar – Tests werden fehlschlagen", "pfad", iperfBin, "fehler", err)
+	} else {
+		slog.Info("iperf3 gefunden", "pfad", iperfBin, "version", v)
+	}
+	runner := iperf.NewRunner(st, iperfBin)
+	defer runner.Stop()
 
 	// --- HTTP-Server ---
 	srv := &http.Server{
 		Addr:              cfg.Web.Listen,
-		Handler:           web.NewServer(st, auth.NewTokens(cfg.Auth.SecretKey)).Handler(),
+		Handler:           web.NewServer(st, auth.NewTokens(cfg.Auth.SecretKey), runner).Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	errCh := make(chan error, 1)
