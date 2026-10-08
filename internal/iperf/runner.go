@@ -39,7 +39,9 @@ type LiveStatus struct {
 // Runner führt Tests nacheinander aus – es läuft immer nur ein iperf3 gleichzeitig.
 type Runner struct {
 	store   *store.Store
+	cmdMu   sync.RWMutex
 	command []string // iperf3-Binary, ggf. mit festen Vorab-Argumenten (Tests)
+	status  Status
 	sem     chan struct{}
 	ctx     context.Context
 	cancel  context.CancelFunc
@@ -56,6 +58,7 @@ func NewRunner(st *store.Store, command ...string) *Runner {
 	return &Runner{
 		store:   st,
 		command: command,
+		status:  Status{Path: command[0]}, // geprüft wird erst in Prepare
 		sem:     make(chan struct{}, 1),
 		ctx:     ctx,
 		cancel:  cancel,
@@ -197,8 +200,9 @@ func (r *Runner) execute(t *model.Test, sv *model.Server) (res model.TestResult,
 	ctx, cancel := context.WithTimeout(r.ctx, timeout)
 	defer cancel()
 
-	args := append(append([]string{}, r.command[1:]...), Args(sv.Host, sv.Port, t)...)
-	cmd := exec.CommandContext(ctx, r.command[0], args...)
+	command := r.commandLine()
+	args := append(append([]string{}, command[1:]...), Args(sv.Host, sv.Port, t)...)
+	cmd := exec.CommandContext(ctx, command[0], args...)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	stdout, err := cmd.StdoutPipe()

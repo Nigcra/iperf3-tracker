@@ -29,3 +29,24 @@ func TestStatsRoutes(t *testing.T) {
 	expectStatus(t, srv, "GET", "/api/stats/servers/1", tok, "", http.StatusOK)
 	expectStatus(t, srv, "GET", "/api/stats/servers/999", tok, "", http.StatusNotFound)
 }
+
+func TestStatusRoute(t *testing.T) {
+	srv := newTestServer(t)
+	tok := login(t, srv, "admin", "admin123")
+	expectStatus(t, srv, "GET", "/api/status", "", "", http.StatusUnauthorized)
+
+	var st struct {
+		SchedulerRunning bool `json:"scheduler_running"`
+		Iperf3           struct {
+			Available bool   `json:"available"`
+			Path      string `json:"path"`
+		} `json:"iperf3"`
+	}
+	if code := call(t, srv, "GET", "/api/status", tok, "", &st); code != http.StatusOK || st.Iperf3.Path == "" {
+		t.Fatalf("status: %d, %+v", code, st)
+	}
+	// Der Test-Runner hat keine iperf3-Binary.
+	if st.Iperf3.Available || st.SchedulerRunning {
+		t.Errorf("status: %+v", st)
+	}
+}

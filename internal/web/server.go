@@ -14,6 +14,7 @@ import (
 
 	"iperf3-tracker/internal/auth"
 	"iperf3-tracker/internal/iperf"
+	"iperf3-tracker/internal/model"
 	"iperf3-tracker/internal/scheduler"
 	"iperf3-tracker/internal/store"
 	"iperf3-tracker/internal/trace"
@@ -68,6 +69,7 @@ func (s *Server) routes() {
 	s.mux.Handle("GET /static/", noCache(http.FileServerFS(static)))
 	s.mux.HandleFunc("GET /api/info", s.handleInfo)
 	s.mux.HandleFunc("GET /health", s.handleHealth)
+	s.mux.Handle("GET /api/status", s.requireUser(s.handleStatus))
 
 	s.mux.HandleFunc("POST /api/auth/login", s.handleLogin)
 	s.mux.HandleFunc("POST /api/auth/init-admin", s.handleInitAdmin)
@@ -121,6 +123,15 @@ func (s *Server) handleInfo(w http.ResponseWriter, r *http.Request) {
 		"name":       version.Name,
 		"version":    version.Version,
 		"build_date": version.BuildDate,
+	})
+}
+
+// handleStatus liefert den Betriebszustand für den Statuspunkt der Oberfläche.
+// Anders als /health nur für angemeldete Benutzer, da er lokale Pfade enthält.
+func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request, _ *model.User) {
+	writeJSON(w, http.StatusOK, map[string]any{
+		"scheduler_running": s.scheduler.Running(),
+		"iperf3":            s.runner.Status(),
 	})
 }
 

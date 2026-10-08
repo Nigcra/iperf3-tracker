@@ -80,14 +80,9 @@ func run(cfgPath string) error {
 	}
 
 	// --- iperf3 ---
-	iperfBin := iperf.FindBinary(cfg.Iperf.Path)
-	if v, err := iperf.CheckVersion(iperfBin); err != nil {
-		slog.Warn("iperf3 nicht nutzbar – Tests werden fehlschlagen", "pfad", iperfBin, "fehler", err)
-	} else {
-		slog.Info("iperf3 gefunden", "pfad", iperfBin, "version", v)
-	}
-	runner := iperf.NewRunner(st, iperfBin)
+	runner := iperf.NewRunner(st, iperf.FindBinary(cfg.Iperf.Path))
 	defer runner.Stop()
+	runner.Prepare(cfg.Iperf.Path, cfg.Iperf.AutoInstall)
 
 	// --- GeoIP für Trace-Standorte ---
 	geo, geoPath, err := trace.OpenGeoIP(cfg.GeoIP.Path, "/var/lib/GeoIP/GeoLite2-City.mmdb")

@@ -187,19 +187,28 @@ async function loadStatus() {
   const panel = document.getElementById('statusPanel');
   let cls, sym, title, rows;
   try {
-    const [health, running, pending] = await Promise.all([
-      fetch('/health').then(r => r.json()),
+    const [status, running, pending] = await Promise.all([
+      apiGet('/status'),
       apiGet('/tests?status=running&limit=10'),
       apiGet('/tests?status=pending&limit=10'),
     ]);
+    const ip = status.iperf3;
     const active = running.length + pending.length;
+    let iperfRow;
+    if (ip.installing) iperfRow = 'wird installiert …';
+    else if (ip.available) iperfRow = esc(ip.version);
+    else iperfRow = `<span class="sp-err">${esc(ip.error || 'nicht verfügbar')}</span>`;
     rows = '<div class="sp-row"><span class="sp-label">Dienst:</span> erreichbar</div>'
-         + '<div class="sp-row"><span class="sp-label">Scheduler:</span> ' + (health.scheduler_running ? 'aktiv' : 'aus') + '</div>'
+         + '<div class="sp-row"><span class="sp-label">iperf3:</span> ' + iperfRow + '</div>'
+         + '<div class="sp-row"><span class="sp-label">Scheduler:</span> ' + (status.scheduler_running ? 'aktiv' : 'aus') + '</div>'
          + '<div class="sp-row"><span class="sp-label">Laufende Tests:</span> ' + running.length
          + (pending.length ? ' (+' + pending.length + ' wartend)' : '') + '</div>';
-    if (active) { cls = 'status-dot-warn'; sym = '&#9679;'; title = 'Test läuft'; }
+    const broken = !ip.available && !ip.installing;
+    if (broken) { cls = 'status-dot-err'; sym = '&#9888;'; title = 'iperf3 nicht verfügbar – Details anzeigen'; }
+    else if (ip.installing) { cls = 'status-dot-warn'; sym = '&#9679;'; title = 'iperf3 wird installiert'; }
+    else if (active) { cls = 'status-dot-warn'; sym = '&#9679;'; title = 'Test läuft'; }
     else { cls = 'status-dot-ok'; sym = '&#9679;'; title = 'Status: OK'; }
-    btn.classList.remove('has-error');
+    btn.classList.toggle('has-error', broken);
   } catch (e) {
     if (e instanceof ApiError && e.status === 401) return;
     cls = 'status-dot-err'; sym = '&#9888;'; title = 'Dienst nicht erreichbar';
