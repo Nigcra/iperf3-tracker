@@ -120,6 +120,22 @@
                padding: 7px 8px; border-radius: 8px; cursor: pointer; font: inherit; text-align: left; }
   .menu-item:hover { background: var(--surface-2); color: var(--heading); }
 
+  /* Sprachwahl: Globus mit Kürzel in der Kopfzeile, Umschalter auf der Anmeldekarte. */
+  .lang-btn { width: auto; padding: 0 9px; gap: 5px; font-size: 0.74em; font-weight: 700; letter-spacing: .4px; }
+  .lang-panel { min-width: 170px; padding: 6px; }
+  .lang-panel .menu-item { justify-content: space-between; }
+  .lang-panel .lang-code { color: var(--faint); font-size: .85em; font-weight: 600; }
+  .lang-panel .menu-item.active { color: var(--heading); font-weight: 600; background: rgb(var(--accent-rgb) / .14); }
+  .lang-panel .menu-item.active .lang-code { color: var(--accent); }
+  .login-card { position: relative; }
+  .login-lang { position: absolute; top: 14px; right: 14px; display: inline-flex; align-items: center; gap: 2px; padding: 3px;
+                border-radius: 9px; background: var(--surface-2); border: 1px solid var(--border); color: var(--muted); }
+  .login-lang svg { margin: 0 4px 0 5px; flex: none; }
+  .login-lang button { background: none; border: none; color: var(--muted); font: inherit; font-size: .72em; font-weight: 700;
+                       letter-spacing: .4px; padding: 4px 8px; border-radius: 6px; cursor: pointer; }
+  .login-lang button:hover { color: var(--heading); }
+  .login-lang button.active { color: var(--heading); background: rgb(var(--accent-rgb) / .2); }
+
   .theme-icon-light { display: none; }
   :root[data-theme="light"] .theme-icon-dark { display: none; }
   :root[data-theme="light"] .theme-icon-light { display: inline; }
@@ -333,8 +349,15 @@
     .nav { order: 3; width: 100%; justify-content: space-between; }
     .nav button { padding: 8px 12px; }
     .nav button span, .btn-label { display: none; }
+    .header .actions { gap: 6px; }
+    .lang-btn { width: 36px; padding: 0; }
+    .lang-btn [data-lang-current] { display: none; }
     .section, .summary { padding-left: 16px; padding-right: 16px; }
     .grid-2 { grid-template-columns: 1fr; }
+  }
+  /* Auf Telefonen passen Logo und alle Aktionen nur ohne Schriftzug in eine Zeile. */
+  @media (max-width: 480px) {
+    .header .brand-title { display: none; }
   }
 </style>
 </head>
@@ -343,11 +366,16 @@
 <!-- Anmeldung -->
 <div class="login-wrap" id="loginView" hidden>
   <form class="ds-card login-card" id="loginForm" onsubmit="submitLogin(event)">
+    <div class="login-lang" role="group" data-i18n-aria="lang.choose" data-i18n-title="lang.choose">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
+      <button type="button" data-lang="de" lang="de" title="Deutsch" onclick="setLang('de')">DE</button>
+      <button type="button" data-lang="en" lang="en" title="English" onclick="setLang('en')">EN</button>
+    </div>
     <div class="brand"><span class="brand-icon"></span><span class="brand-title">iperf3-Tracker</span></div>
     <div class="form-error" id="loginError" hidden></div>
-    <div class="field"><label for="loginUser">Benutzername</label><input id="loginUser" autocomplete="username" required autofocus></div>
-    <div class="field"><label for="loginPass">Passwort</label><input id="loginPass" type="password" autocomplete="current-password" required></div>
-    <button class="btn" id="loginBtn" type="submit">Anmelden</button>
+    <div class="field"><label for="loginUser" data-i18n="login.user">Benutzername</label><input id="loginUser" autocomplete="username" required autofocus></div>
+    <div class="field"><label for="loginPass" data-i18n="login.pass">Passwort</label><input id="loginPass" type="password" autocomplete="current-password" required></div>
+    <button class="btn" id="loginBtn" type="submit" data-i18n="login.submit">Anmelden</button>
   </form>
 </div>
 
@@ -358,55 +386,65 @@
     <nav class="nav" id="nav">
       <button data-tab="dashboard" onclick="showTab('dashboard')">
         <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>
-        <span>Dashboard</span>
+        <span data-i18n="nav.dashboard">Dashboard</span>
       </button>
       <button data-tab="tests" onclick="showTab('tests')">
         <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/></svg>
-        <span>Tests</span>
+        <span data-i18n="nav.tests">Tests</span>
       </button>
       <button data-tab="peering" onclick="showTab('peering')">
         <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.106 5.553a2 2 0 0 0 1.788 0l3.659-1.83A1 1 0 0 1 21 4.619v12.764a1 1 0 0 1-.553.894l-4.553 2.277a2 2 0 0 1-1.788 0l-4.212-2.106a2 2 0 0 0-1.788 0l-3.659 1.83A1 1 0 0 1 3 19.381V6.618a1 1 0 0 1 .553-.894l4.553-2.277a2 2 0 0 1 1.788 0z"/><path d="M15 5.764v15"/><path d="M9 3.236v15"/></svg>
-        <span>Peering-Map</span>
+        <span data-i18n="nav.peering">Peering-Map</span>
       </button>
       <button data-tab="servers" onclick="showTab('servers')">
         <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="20" height="8" x="2" y="2" rx="2"/><rect width="20" height="8" x="2" y="14" rx="2"/><line x1="6" x2="6.01" y1="6" y2="6"/><line x1="6" x2="6.01" y1="18" y2="18"/></svg>
-        <span>Server</span>
+        <span data-i18n="nav.servers">Server</span>
       </button>
       <button data-tab="admin" onclick="showTab('admin')" id="navAdmin" hidden>
         <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-        <span>Admin</span>
+        <span data-i18n="nav.admin">Admin</span>
       </button>
     </nav>
     <div class="actions">
       <div class="menu" id="statusMenu">
-        <button class="icon-btn" id="statusBtn" title="Status anzeigen" aria-label="Status" onclick="toggleMenu(event, 'statusPanel')">
+        <button class="icon-btn" id="statusBtn" title="Status anzeigen" aria-label="Status" data-i18n-title="status.show" data-i18n-aria="tests.status" onclick="toggleMenu(event, 'statusPanel')">
           <span id="statusIcon" class="status-dot-ok">&#9679;</span>
         </button>
         <div class="menu-panel" id="statusPanel" hidden></div>
       </div>
-      <button class="icon-btn" id="themeBtn" title="Hell / Dunkel umschalten" aria-label="Theme umschalten" onclick="toggleTheme()">
+      <button class="icon-btn" id="themeBtn" title="Hell / Dunkel umschalten" aria-label="Theme umschalten" data-i18n-title="theme.title" data-i18n-aria="theme.aria" onclick="toggleTheme()">
         <span class="theme-icon-dark" aria-hidden="true">☀</span>
         <span class="theme-icon-light" aria-hidden="true">🌙</span>
       </button>
+      <div class="menu" id="langMenu">
+        <button class="icon-btn lang-btn" id="langBtn" title="Sprache wählen" aria-label="Sprache wählen" data-i18n-title="lang.choose" data-i18n-aria="lang.choose" aria-haspopup="true" onclick="toggleMenu(event, 'langPanel')">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
+          <span data-lang-current>DE</span>
+        </button>
+        <div class="menu-panel lang-panel" id="langPanel" hidden>
+          <button class="menu-item" data-lang="de" lang="de" onclick="closeMenus(); setLang('de')">Deutsch <span class="lang-code">DE</span></button>
+          <button class="menu-item" data-lang="en" lang="en" onclick="closeMenus(); setLang('en')">English <span class="lang-code">EN</span></button>
+        </div>
+      </div>
       <div class="menu" id="userMenu">
-        <button class="icon-btn" title="Benutzer" aria-label="Benutzermenü" onclick="toggleMenu(event, 'userPanel')">
+        <button class="icon-btn" title="Benutzer" aria-label="Benutzermenü" data-i18n-title="user.title" data-i18n-aria="user.menu" onclick="toggleMenu(event, 'userPanel')">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="10" r="3"/><path d="M7 20.662V19a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v1.662"/></svg>
         </button>
         <div class="menu-panel" id="userPanel" hidden>
           <div class="user-head"><span class="user-name" id="userName"></span><span class="badge-type" id="userAdminBadge" hidden>Admin</span></div>
           <button class="menu-item" onclick="closeMenus(); passwordDialog.open()">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-            Passwort ändern
+            <span data-i18n="user.changePassword">Passwort ändern</span>
           </button>
           <button class="menu-item" onclick="logout()">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>
-            Abmelden
+            <span data-i18n="user.logout">Abmelden</span>
           </button>
         </div>
       </div>
-      <button class="btn" onclick="showTab('tests'); document.getElementById('tfServer').focus()" title="Neuen Test starten">
+      <button class="btn" onclick="showTab('tests'); document.getElementById('tfServer').focus()" title="Neuen Test starten" data-i18n-title="test.startNew">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="6 3 20 12 6 21 6 3"/></svg>
-        <span class="btn-label">Test starten</span>
+        <span class="btn-label" data-i18n="test.start">Test starten</span>
       </button>
     </div>
   </div>
@@ -418,18 +456,18 @@
     <div class="summary" id="dashSummary"></div>
 
     <div class="section">
-      <div class="section-title">Bandbreite im Verlauf</div>
+      <div class="section-title" data-i18n="dash.history">Bandbreite im Verlauf</div>
       <div class="hist-controls">
-        <label class="ds-toggle-label">Min. Download
+        <label class="ds-toggle-label"><span data-i18n="dash.minDown">Min. Download</span>
           <input type="number" id="thrDown" min="0" step="1" onchange="dashboard.setThreshold('down', this.value)"> Mbit/s</label>
-        <label class="ds-toggle-label">Min. Upload
+        <label class="ds-toggle-label"><span data-i18n="dash.minUp">Min. Upload</span>
           <input type="number" id="thrUp" min="0" step="1" onchange="dashboard.setThreshold('up', this.value)"> Mbit/s</label>
         <span class="spacer"></span>
         <div class="view-switch" id="dashRange">
           <button class="view-btn" data-range="1h" onclick="dashboard.setRange('1h')">1 h</button>
           <button class="view-btn" data-range="24h" onclick="dashboard.setRange('24h')">24 h</button>
-          <button class="view-btn" data-range="7d" onclick="dashboard.setRange('7d')">7 Tage</button>
-          <button class="view-btn" data-range="30d" onclick="dashboard.setRange('30d')">30 Tage</button>
+          <button class="view-btn" data-range="7d" onclick="dashboard.setRange('7d')" data-i18n="dash.range7d">7 Tage</button>
+          <button class="view-btn" data-range="30d" onclick="dashboard.setRange('30d')" data-i18n="dash.range30d">30 Tage</button>
         </div>
       </div>
       <div class="grid-2">
@@ -439,7 +477,7 @@
     </div>
 
     <div class="section">
-      <div class="section-title">Server</div>
+      <div class="section-title" data-i18n="dash.servers">Server</div>
       <div class="ds-grid" id="dashServers"></div>
     </div>
   </div>
@@ -447,23 +485,23 @@
   <!-- Tests -->
   <div class="page" id="page-tests">
     <div class="section">
-      <div class="section-title">Test starten</div>
+      <div class="section-title" data-i18n="test.start">Test starten</div>
       <div class="grid-2">
         <form class="ds-card" id="testForm" onsubmit="testsPage.start(event)">
           <div class="form-grid">
-            <div class="field full"><label for="tfServer">Server</label>
+            <div class="field full"><label for="tfServer" data-i18n="f.server">Server</label>
               <select id="tfServer" onchange="testsPage.applyServerDefaults()"></select></div>
-            <div class="field"><label for="tfProto">Protokoll</label>
+            <div class="field"><label for="tfProto" data-i18n="f.protocol">Protokoll</label>
               <select id="tfProto" onchange="testsPage.syncForm()"><option value="tcp">TCP</option><option value="udp">UDP</option></select></div>
-            <div class="field"><label for="tfDir">Richtung</label>
-              <select id="tfDir"><option value="download">Download</option><option value="upload">Upload</option><option value="bidirectional">Bidirektional</option></select></div>
-            <div class="field"><label for="tfDuration">Testdauer (s)</label><input id="tfDuration" type="number" min="1" max="300"></div>
-            <div class="field"><label for="tfParallel">Parallele Streams</label><input id="tfParallel" type="number" min="1" max="128" oninput="testsPage.syncForm()"></div>
-            <div class="hint full" id="tfParallelHint" hidden>⚠ Viele öffentliche Server erlauben höchstens 4 parallele Streams.</div>
-            <div class="field full" id="tfUdpField"><label for="tfUdp">UDP-Zielbandbreite (Mbit/s)</label>
-              <input id="tfUdp" type="number" min="0.1" max="100000" step="any" placeholder="leer = iperf3-Standard (1 Mbit/s)"></div>
+            <div class="field"><label for="tfDir" data-i18n="f.direction">Richtung</label>
+              <select id="tfDir"><option value="download">Download</option><option value="upload">Upload</option><option value="bidirectional" data-i18n="dir.bidirectional">Bidirektional</option></select></div>
+            <div class="field"><label for="tfDuration" data-i18n="f.duration">Testdauer (s)</label><input id="tfDuration" type="number" min="1" max="300"></div>
+            <div class="field"><label for="tfParallel" data-i18n="f.parallel">Parallele Streams</label><input id="tfParallel" type="number" min="1" max="128" oninput="testsPage.syncForm()"></div>
+            <div class="hint full" id="tfParallelHint" hidden data-i18n="tests.parallelHint">⚠ Viele öffentliche Server erlauben höchstens 4 parallele Streams.</div>
+            <div class="field full" id="tfUdpField"><label for="tfUdp" data-i18n="f.udp">UDP-Zielbandbreite (Mbit/s)</label>
+              <input id="tfUdp" type="number" min="0.1" max="100000" step="any" placeholder="leer = iperf3-Standard (1 Mbit/s)" data-i18n-placeholder="f.udpPlaceholder"></div>
           </div>
-          <button class="btn" id="tfStart" type="submit" style="width:100%">Test starten</button>
+          <button class="btn" id="tfStart" type="submit" style="width:100%" data-i18n="test.start">Test starten</button>
         </form>
 
         <div class="ds-card live-panel" id="livePanel"></div>
@@ -472,22 +510,22 @@
 
     <div class="section">
       <div class="section-head">
-        <div class="section-title">Testverlauf</div>
+        <div class="section-title" data-i18n="tests.history">Testverlauf</div>
         <div class="hist-controls" style="margin:0">
-          <select id="tlServer" onchange="testsPage.reloadList()"><option value="">Alle Server</option></select>
+          <select id="tlServer" onchange="testsPage.reloadList()"><option value="" data-i18n="tests.allServers">Alle Server</option></select>
           <select id="tlStatus" onchange="testsPage.reloadList()">
-            <option value="">Alle Status</option><option value="completed">Abgeschlossen</option><option value="failed">Fehlgeschlagen</option>
-            <option value="running">Läuft</option><option value="pending">Wartet</option>
+            <option value="" data-i18n="tests.allStatus">Alle Status</option><option value="completed" data-i18n="st.completed">Abgeschlossen</option><option value="failed" data-i18n="st.failed">Fehlgeschlagen</option>
+            <option value="running" data-i18n="st.running">Läuft</option><option value="pending" data-i18n="st.pending">Wartet</option>
           </select>
         </div>
       </div>
       <div class="tbl-wrap">
         <table class="clickable">
-          <thead><tr><th>Zeitpunkt</th><th>Server</th><th>Protokoll</th><th>Richtung</th><th>Streams</th><th style="text-align:right">Download</th><th style="text-align:right">Upload</th><th>Status</th></tr></thead>
+          <thead><tr><th data-i18n="tests.time">Zeitpunkt</th><th data-i18n="f.server">Server</th><th data-i18n="f.protocol">Protokoll</th><th data-i18n="f.direction">Richtung</th><th data-i18n="servers.streams">Streams</th><th style="text-align:right">Download</th><th style="text-align:right">Upload</th><th data-i18n="tests.status">Status</th></tr></thead>
           <tbody id="testRows"></tbody>
         </table>
       </div>
-      <div style="text-align:center;margin-top:14px"><button class="btn btn-secondary" id="tlMore" onclick="testsPage.loadMore()" hidden>Mehr laden</button></div>
+      <div style="text-align:center;margin-top:14px"><button class="btn btn-secondary" id="tlMore" onclick="testsPage.loadMore()" hidden data-i18n="tests.loadMore">Mehr laden</button></div>
     </div>
   </div>
 
@@ -495,10 +533,10 @@
   <div class="page" id="page-peering">
     <div class="section">
       <div class="section-head">
-        <div class="section-title">Peering-Map</div>
+        <div class="section-title" data-i18n="nav.peering">Peering-Map</div>
         <div class="hist-controls" style="margin:0">
           <select id="pmServer" onchange="peering.selectServer(this.value)"></select>
-          <button class="btn" id="pmStart" onclick="peering.toggleLive()">Traceroute starten</button>
+          <button class="btn" id="pmStart" onclick="peering.toggleLive()" data-i18n="peering.start">Traceroute starten</button>
         </div>
       </div>
       <div class="peering-grid">
@@ -508,7 +546,7 @@
           <div class="chart-empty map-empty" id="pmMapEmpty" hidden></div>
         </div>
         <div class="ds-card trace-side">
-          <div class="side-title">Gespeicherte Traces</div>
+          <div class="side-title" data-i18n="peering.saved">Gespeicherte Traces</div>
           <div class="trace-list" id="pmTraceList"></div>
         </div>
       </div>
@@ -525,7 +563,7 @@
       </div>
       <div class="tbl-wrap">
         <table>
-          <thead><tr><th>#</th><th>IP-Adresse</th><th>Hostname</th><th style="text-align:right">RTT</th><th>Standort</th></tr></thead>
+          <thead><tr><th>#</th><th data-i18n="peering.ip">IP-Adresse</th><th data-i18n="peering.hostname">Hostname</th><th style="text-align:right">RTT</th><th data-i18n="peering.location">Standort</th></tr></thead>
           <tbody id="pmHops"></tbody>
         </table>
       </div>
@@ -536,8 +574,8 @@
   <div class="page" id="page-servers">
     <div class="section">
       <div class="section-head">
-        <div class="section-title">Server-Profile</div>
-        <button class="btn" onclick="serversPage.openForm()">+ Server hinzufügen</button>
+        <div class="section-title" data-i18n="servers.title">Server-Profile</div>
+        <button class="btn" onclick="serversPage.openForm()" data-i18n="servers.add">+ Server hinzufügen</button>
       </div>
       <div class="ds-grid" id="serverGrid"></div>
     </div>
@@ -549,40 +587,40 @@
 
     <div class="section">
       <div class="section-head">
-        <div class="section-title">Benutzer</div>
-        <button class="btn" onclick="adminPage.openUserForm()">+ Benutzer anlegen</button>
+        <div class="section-title" data-i18n="admin.users">Benutzer</div>
+        <button class="btn" onclick="adminPage.openUserForm()" data-i18n="admin.addUser">+ Benutzer anlegen</button>
       </div>
       <div class="tbl-wrap">
         <table>
-          <thead><tr><th>Benutzername</th><th>E-Mail</th><th>Rolle</th><th>Angelegt</th><th>Letzte Anmeldung</th><th></th></tr></thead>
+          <thead><tr><th data-i18n="admin.username">Benutzername</th><th data-i18n="admin.email">E-Mail</th><th data-i18n="admin.role">Rolle</th><th data-i18n="admin.created">Angelegt</th><th data-i18n="admin.lastLogin">Letzte Anmeldung</th><th></th></tr></thead>
           <tbody id="userRows"></tbody>
         </table>
       </div>
     </div>
 
     <div class="section">
-      <div class="section-title">Bereinigung</div>
+      <div class="section-title" data-i18n="admin.cleanup">Bereinigung</div>
       <div class="grid-2">
         <div class="ds-card">
-          <div class="ds-header"><span class="ds-name">Tests löschen</span></div>
-          <p class="desc">Mit den Tests werden auch ihre Traces gelöscht.</p>
+          <div class="ds-header"><span class="ds-name" data-i18n="admin.deleteTests">Tests löschen</span></div>
+          <p class="desc" data-i18n="admin.deleteTestsDesc">Mit den Tests werden auch ihre Traces gelöscht.</p>
           <div class="form-grid">
-            <div class="field"><label for="ctScope">Umfang</label>
-              <select id="ctScope" onchange="adminPage.syncCleanup()"><option value="days">älter als … Tage</option><option value="all">alle</option></select></div>
-            <div class="field" id="ctDaysField"><label for="ctDays">Tage</label><input id="ctDays" type="number" min="0" value="30"></div>
-            <div class="field full"><label for="ctServer">Server</label><select id="ctServer"><option value="">alle Server</option></select></div>
+            <div class="field"><label for="ctScope" data-i18n="admin.scope">Umfang</label>
+              <select id="ctScope" onchange="adminPage.syncCleanup()"><option value="days" data-i18n="admin.olderThan">älter als … Tage</option><option value="all" data-i18n="admin.all">alle</option></select></div>
+            <div class="field" id="ctDaysField"><label for="ctDays" data-i18n="admin.days">Tage</label><input id="ctDays" type="number" min="0" value="30"></div>
+            <div class="field full"><label for="ctServer" data-i18n="f.server">Server</label><select id="ctServer"><option value="" data-i18n="admin.allServers">alle Server</option></select></div>
           </div>
-          <button class="btn btn-danger" onclick="adminPage.cleanupTests()">Tests löschen</button>
+          <button class="btn btn-danger" onclick="adminPage.cleanupTests()" data-i18n="admin.deleteTests">Tests löschen</button>
         </div>
         <div class="ds-card">
-          <div class="ds-header"><span class="ds-name">Traces löschen</span></div>
-          <p class="desc">Betrifft gespeicherte und Live-Traces samt ihrer Hops.</p>
+          <div class="ds-header"><span class="ds-name" data-i18n="admin.deleteTraces">Traces löschen</span></div>
+          <p class="desc" data-i18n="admin.deleteTracesDesc">Betrifft gespeicherte und Live-Traces samt ihrer Hops.</p>
           <div class="form-grid">
-            <div class="field"><label for="crScope">Umfang</label>
-              <select id="crScope" onchange="adminPage.syncCleanup()"><option value="days">älter als … Tage</option><option value="all">alle</option></select></div>
-            <div class="field" id="crDaysField"><label for="crDays">Tage</label><input id="crDays" type="number" min="0" value="30"></div>
+            <div class="field"><label for="crScope" data-i18n="admin.scope">Umfang</label>
+              <select id="crScope" onchange="adminPage.syncCleanup()"><option value="days" data-i18n="admin.olderThan">älter als … Tage</option><option value="all" data-i18n="admin.all">alle</option></select></div>
+            <div class="field" id="crDaysField"><label for="crDays" data-i18n="admin.days">Tage</label><input id="crDays" type="number" min="0" value="30"></div>
           </div>
-          <button class="btn btn-danger" onclick="adminPage.cleanupTraces()">Traces löschen</button>
+          <button class="btn btn-danger" onclick="adminPage.cleanupTraces()" data-i18n="admin.deleteTraces">Traces löschen</button>
         </div>
       </div>
     </div>
@@ -594,40 +632,40 @@
   <form class="modal" id="serverForm" onsubmit="serversPage.save(event)" novalidate>
     <div class="modal-head">
       <h2 id="serverFormTitle">Server hinzufügen</h2>
-      <button type="button" class="icon-btn" aria-label="Schließen" onclick="serversPage.closeForm()">✕</button>
+      <button type="button" class="icon-btn" aria-label="Schließen" data-i18n-aria="close" onclick="serversPage.closeForm()">✕</button>
     </div>
     <div class="modal-body">
       <div class="form-error" id="serverFormError" hidden></div>
       <div class="form-grid">
         <div class="field full" id="publicPick">
-          <label for="sfPublic">Öffentlichen Server übernehmen</label>
-          <select id="sfPublic" onchange="serversPage.applyPublic(this.value)"><option value="">– eigenen Server eintragen –</option></select>
+          <label for="sfPublic" data-i18n="servers.public">Öffentlichen Server übernehmen</label>
+          <select id="sfPublic" onchange="serversPage.applyPublic(this.value)"><option value="" data-i18n="servers.own">– eigenen Server eintragen –</option></select>
         </div>
-        <div class="field"><label for="sfName">Name *</label><input id="sfName" maxlength="100" required></div>
-        <div class="field"><label for="sfHost">Host *</label><input id="sfHost" maxlength="255" required placeholder="iperf.example.org"></div>
-        <div class="field"><label for="sfPort">Port</label><input id="sfPort" type="number" min="1" max="65535"></div>
-        <div class="field"><label for="sfDesc">Beschreibung</label><input id="sfDesc"></div>
+        <div class="field"><label for="sfName" data-i18n="servers.name">Name *</label><input id="sfName" maxlength="100" required></div>
+        <div class="field"><label for="sfHost" data-i18n="servers.host">Host *</label><input id="sfHost" maxlength="255" required placeholder="iperf.example.org"></div>
+        <div class="field"><label for="sfPort" data-i18n="servers.port">Port</label><input id="sfPort" type="number" min="1" max="65535"></div>
+        <div class="field"><label for="sfDesc" data-i18n="servers.desc">Beschreibung</label><input id="sfDesc"></div>
 
-        <div class="form-section">Testvorgaben</div>
-        <div class="field"><label for="sfProto">Protokoll</label>
+        <div class="form-section" data-i18n="servers.defaults">Testvorgaben</div>
+        <div class="field"><label for="sfProto" data-i18n="f.protocol">Protokoll</label>
           <select id="sfProto" onchange="serversPage.syncForm()"><option value="tcp">TCP</option><option value="udp">UDP</option></select></div>
-        <div class="field"><label for="sfDir">Richtung</label>
-          <select id="sfDir"><option value="download">Download</option><option value="upload">Upload</option><option value="bidirectional">Bidirektional</option></select></div>
-        <div class="field"><label for="sfDuration">Testdauer (s)</label><input id="sfDuration" type="number" min="1" max="300"></div>
-        <div class="field"><label for="sfParallel">Parallele Streams</label><input id="sfParallel" type="number" min="1" max="128"></div>
-        <div class="field full" id="sfUdpField"><label for="sfUdp">UDP-Zielbandbreite (Mbit/s)</label>
-          <input id="sfUdp" type="number" min="0.1" max="100000" step="any" placeholder="leer = iperf3-Standard (1 Mbit/s)"></div>
+        <div class="field"><label for="sfDir" data-i18n="f.direction">Richtung</label>
+          <select id="sfDir"><option value="download">Download</option><option value="upload">Upload</option><option value="bidirectional" data-i18n="dir.bidirectional">Bidirektional</option></select></div>
+        <div class="field"><label for="sfDuration" data-i18n="f.duration">Testdauer (s)</label><input id="sfDuration" type="number" min="1" max="300"></div>
+        <div class="field"><label for="sfParallel" data-i18n="f.parallel">Parallele Streams</label><input id="sfParallel" type="number" min="1" max="128"></div>
+        <div class="field full" id="sfUdpField"><label for="sfUdp" data-i18n="f.udp">UDP-Zielbandbreite (Mbit/s)</label>
+          <input id="sfUdp" type="number" min="0.1" max="100000" step="any" placeholder="leer = iperf3-Standard (1 Mbit/s)" data-i18n-placeholder="f.udpPlaceholder"></div>
 
-        <div class="form-section">Zeitplan</div>
-        <label class="check-row"><input type="checkbox" id="sfSchedule" onchange="serversPage.syncForm()"> Regelmäßig testen</label>
-        <div class="field"><label for="sfInterval">Intervall (min)</label><input id="sfInterval" type="number" min="1"></div>
-        <label class="check-row full" id="sfAutoTraceRow"><input type="checkbox" id="sfAutoTrace"> Nach jedem geplanten Test eine Traceroute aufzeichnen</label>
-        <label class="check-row full"><input type="checkbox" id="sfEnabled"> Server aktiv (inaktive Server werden weder geplant noch getestet)</label>
+        <div class="form-section" data-i18n="servers.schedule">Zeitplan</div>
+        <label class="check-row"><input type="checkbox" id="sfSchedule" onchange="serversPage.syncForm()"> <span data-i18n="servers.scheduleCheck">Regelmäßig testen</span></label>
+        <div class="field"><label for="sfInterval" data-i18n="servers.interval">Intervall (min)</label><input id="sfInterval" type="number" min="1"></div>
+        <label class="check-row full" id="sfAutoTraceRow"><input type="checkbox" id="sfAutoTrace"> <span data-i18n="servers.autoTraceCheck">Nach jedem geplanten Test eine Traceroute aufzeichnen</span></label>
+        <label class="check-row full"><input type="checkbox" id="sfEnabled"> <span data-i18n="servers.enabledCheck">Server aktiv (inaktive Server werden weder geplant noch getestet)</span></label>
       </div>
     </div>
     <div class="modal-foot">
-      <button type="button" class="btn btn-secondary" onclick="serversPage.closeForm()">Abbrechen</button>
-      <button type="submit" class="btn" id="serverFormSave">Speichern</button>
+      <button type="button" class="btn btn-secondary" onclick="serversPage.closeForm()" data-i18n="cancel">Abbrechen</button>
+      <button type="submit" class="btn" id="serverFormSave" data-i18n="save">Speichern</button>
     </div>
   </form>
 </div>
@@ -637,12 +675,12 @@
   <div class="modal">
     <div class="modal-head">
       <h2 id="testModalTitle">Test</h2>
-      <button type="button" class="icon-btn" aria-label="Schließen" onclick="testsPage.closeDetail()">✕</button>
+      <button type="button" class="icon-btn" aria-label="Schließen" data-i18n-aria="close" onclick="testsPage.closeDetail()">✕</button>
     </div>
     <div class="modal-body" id="testModalBody"></div>
     <div class="modal-foot">
-      <button type="button" class="btn btn-danger" id="testModalDelete">Test löschen</button>
-      <button type="button" class="btn btn-secondary" onclick="testsPage.closeDetail()">Schließen</button>
+      <button type="button" class="btn btn-danger" id="testModalDelete" data-i18n="tests.delete">Test löschen</button>
+      <button type="button" class="btn btn-secondary" onclick="testsPage.closeDetail()" data-i18n="close">Schließen</button>
     </div>
   </div>
 </div>
@@ -651,19 +689,19 @@
 <div class="modal-backdrop" id="userModal" hidden onclick="if (event.target === this) adminPage.closeUserForm()">
   <form class="modal small" onsubmit="adminPage.saveUser(event)" novalidate>
     <div class="modal-head">
-      <h2>Benutzer anlegen</h2>
-      <button type="button" class="icon-btn" aria-label="Schließen" onclick="adminPage.closeUserForm()">✕</button>
+      <h2 data-i18n="admin.createUser">Benutzer anlegen</h2>
+      <button type="button" class="icon-btn" aria-label="Schließen" data-i18n-aria="close" onclick="adminPage.closeUserForm()">✕</button>
     </div>
     <div class="modal-body">
       <div class="form-error" id="userFormError" hidden></div>
-      <div class="field"><label for="ufName">Benutzername *</label><input id="ufName" maxlength="50" autocomplete="off"></div>
-      <div class="field"><label for="ufMail">E-Mail *</label><input id="ufMail" type="email" maxlength="100" autocomplete="off"></div>
-      <div class="field"><label for="ufPass">Passwort * (mind. 6 Zeichen)</label><input id="ufPass" type="password" autocomplete="new-password"></div>
-      <label class="check-row"><input type="checkbox" id="ufAdmin"> Administrator (darf Benutzer verwalten und Daten bereinigen)</label>
+      <div class="field"><label for="ufName" data-i18n="admin.ufName">Benutzername *</label><input id="ufName" maxlength="50" autocomplete="off"></div>
+      <div class="field"><label for="ufMail" data-i18n="admin.ufMail">E-Mail *</label><input id="ufMail" type="email" maxlength="100" autocomplete="off"></div>
+      <div class="field"><label for="ufPass" data-i18n="admin.ufPass">Passwort * (mind. 6 Zeichen)</label><input id="ufPass" type="password" autocomplete="new-password"></div>
+      <label class="check-row"><input type="checkbox" id="ufAdmin"> <span data-i18n="admin.ufAdmin">Administrator (darf Benutzer verwalten und Daten bereinigen)</span></label>
     </div>
     <div class="modal-foot">
-      <button type="button" class="btn btn-secondary" onclick="adminPage.closeUserForm()">Abbrechen</button>
-      <button type="submit" class="btn" id="userFormSave">Anlegen</button>
+      <button type="button" class="btn btn-secondary" onclick="adminPage.closeUserForm()" data-i18n="cancel">Abbrechen</button>
+      <button type="submit" class="btn" id="userFormSave" data-i18n="admin.create">Anlegen</button>
     </div>
   </form>
 </div>
@@ -672,18 +710,18 @@
 <div class="modal-backdrop" id="passwordModal" hidden onclick="if (event.target === this) passwordDialog.close()">
   <form class="modal small" onsubmit="passwordDialog.save(event)" novalidate>
     <div class="modal-head">
-      <h2>Passwort ändern</h2>
-      <button type="button" class="icon-btn" aria-label="Schließen" onclick="passwordDialog.close()">✕</button>
+      <h2 data-i18n="user.changePassword">Passwort ändern</h2>
+      <button type="button" class="icon-btn" aria-label="Schließen" data-i18n-aria="close" onclick="passwordDialog.close()">✕</button>
     </div>
     <div class="modal-body">
       <div class="form-error" id="passwordError" hidden></div>
-      <div class="field"><label for="pwCurrent">Aktuelles Passwort</label><input id="pwCurrent" type="password" autocomplete="current-password"></div>
-      <div class="field"><label for="pwNew">Neues Passwort (mind. 6 Zeichen)</label><input id="pwNew" type="password" autocomplete="new-password"></div>
-      <div class="field"><label for="pwRepeat">Neues Passwort wiederholen</label><input id="pwRepeat" type="password" autocomplete="new-password"></div>
+      <div class="field"><label for="pwCurrent" data-i18n="pw.current">Aktuelles Passwort</label><input id="pwCurrent" type="password" autocomplete="current-password"></div>
+      <div class="field"><label for="pwNew" data-i18n="pw.new">Neues Passwort (mind. 6 Zeichen)</label><input id="pwNew" type="password" autocomplete="new-password"></div>
+      <div class="field"><label for="pwRepeat" data-i18n="pw.repeat">Neues Passwort wiederholen</label><input id="pwRepeat" type="password" autocomplete="new-password"></div>
     </div>
     <div class="modal-foot">
-      <button type="button" class="btn btn-secondary" onclick="passwordDialog.close()">Abbrechen</button>
-      <button type="submit" class="btn" id="passwordSave">Ändern</button>
+      <button type="button" class="btn btn-secondary" onclick="passwordDialog.close()" data-i18n="cancel">Abbrechen</button>
+      <button type="submit" class="btn" id="passwordSave" data-i18n="pw.change">Ändern</button>
     </div>
   </form>
 </div>
@@ -704,6 +742,7 @@
   iperf3-Tracker <span id="appVersion"></span> · Build <span id="buildDate">–</span>
 </footer>
 
+<script src="/static/i18n.js"></script>
 <script src="/static/app.js"></script>
 </body>
 </html>

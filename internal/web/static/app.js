@@ -39,9 +39,9 @@ function esc(s) {
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 function fmt(n, digits = 2) {
-  return n == null ? '–' : Number(n).toLocaleString('de-DE', { maximumFractionDigits: digits });
+  return n == null ? '–' : Number(n).toLocaleString(locale(), { maximumFractionDigits: digits });
 }
-function fmtDate(iso) { return iso ? new Date(iso).toLocaleString('de-DE') : '–'; }
+function fmtDate(iso) { return iso ? new Date(iso).toLocaleString(locale()) : '–'; }
 
 function storageGet(key) { try { return localStorage.getItem(key); } catch (e) { return null; } }
 function storageSet(key, value) {
@@ -117,9 +117,9 @@ async function submitLogin(ev) {
     storageSet('iperf-token', res.access_token);
     document.getElementById('loginPass').value = '';
     showApp(res.user);
-    if (usesDefault) notify('Das Standardpasswort ist noch aktiv – bitte über das Benutzermenü ändern.', 'warn');
+    if (usesDefault) notify(t('login.defaultPw'), 'warn');
   } catch (e) {
-    showLogin(e.status === 401 ? 'Benutzername oder Passwort falsch.' : e.message);
+    showLogin(e.status === 401 ? t('login.failed') : e.message);
   } finally {
     btn.disabled = false;
   }
@@ -178,6 +178,17 @@ document.addEventListener('click', ev => {
   if (!ev.target.closest('.menu')) closeMenus();
 });
 
+// ---------- Sprache ----------
+
+// Die statischen Texte setzt setLang() selbst; hier bauen Statusmenü und
+// aktive Seite ihre dynamischen Inhalte in der neuen Sprache auf.
+window.addEventListener('langchange', () => {
+  if (!currentUser) return;
+  loadStatus();
+  const page = pages[currentTab];
+  if (page && page.onLang) page.onLang();
+});
+
 // ---------- Status ----------
 let statusTimer = null;
 
@@ -196,28 +207,28 @@ async function loadStatus() {
     const ip = status.iperf3;
     const active = running.length + pending.length;
     let iperfRow;
-    if (ip.installing) iperfRow = 'wird installiert …';
+    if (ip.installing) iperfRow = t('status.installing');
     else if (ip.available) iperfRow = esc(ip.version);
-    else iperfRow = `<span class="sp-err">${esc(ip.error || 'nicht verfügbar')}</span>`;
-    rows = '<div class="sp-row"><span class="sp-label">Dienst:</span> erreichbar</div>'
+    else iperfRow = `<span class="sp-err">${esc(ip.error || t('status.unavailable'))}</span>`;
+    rows = `<div class="sp-row"><span class="sp-label">${t('status.service')}</span> ${t('status.reachable')}</div>`
          + '<div class="sp-row"><span class="sp-label">iperf3:</span> ' + iperfRow + '</div>'
-         + '<div class="sp-row"><span class="sp-label">Scheduler:</span> ' + (status.scheduler_running ? 'aktiv' : 'aus') + '</div>'
-         + '<div class="sp-row"><span class="sp-label">Laufende Tests:</span> ' + running.length
-         + (pending.length ? ' (+' + pending.length + ' wartend)' : '') + '</div>';
+         + `<div class="sp-row"><span class="sp-label">${t('status.scheduler')}</span> ${status.scheduler_running ? t('status.on') : t('status.off')}</div>`
+         + `<div class="sp-row"><span class="sp-label">${t('status.running')}</span> ${running.length}`
+         + (pending.length ? ' ' + t('status.waiting', { n: pending.length }) : '') + '</div>';
     if (ip.installable && !ip.installing && currentUser && currentUser.is_admin) {
-      rows += '<button class="btn" style="width:100%;margin-top:10px" onclick="iperfSetup.prompt()">iperf3 installieren</button>';
+      rows += '<button class="btn" style="width:100%;margin-top:10px" onclick="iperfSetup.prompt()">' + t('status.install') + '</button>';
     }
     iperfSetup.update(ip);
     const broken = !ip.available && !ip.installing;
-    if (broken) { cls = 'status-dot-err'; sym = '&#9888;'; title = 'iperf3 nicht verfügbar – Details anzeigen'; }
-    else if (ip.installing) { cls = 'status-dot-warn'; sym = '&#9679;'; title = 'iperf3 wird installiert'; }
-    else if (active) { cls = 'status-dot-warn'; sym = '&#9679;'; title = 'Test läuft'; }
-    else { cls = 'status-dot-ok'; sym = '&#9679;'; title = 'Status: OK'; }
+    if (broken) { cls = 'status-dot-err'; sym = '&#9888;'; title = t('status.titleBroken'); }
+    else if (ip.installing) { cls = 'status-dot-warn'; sym = '&#9679;'; title = t('status.titleInstall'); }
+    else if (active) { cls = 'status-dot-warn'; sym = '&#9679;'; title = t('status.titleTest'); }
+    else { cls = 'status-dot-ok'; sym = '&#9679;'; title = t('status.titleOk'); }
     btn.classList.toggle('has-error', broken);
   } catch (e) {
     if (e instanceof ApiError && e.status === 401) return;
-    cls = 'status-dot-err'; sym = '&#9888;'; title = 'Dienst nicht erreichbar';
-    rows = '<div class="sp-row sp-err">&#9888; Dienst nicht erreichbar</div>';
+    cls = 'status-dot-err'; sym = '&#9888;'; title = t('status.down');
+    rows = '<div class="sp-row sp-err">&#9888; ' + t('status.down') + '</div>';
     btn.classList.add('has-error');
   }
   icon.className = cls;
@@ -239,14 +250,14 @@ const iperfSetup = {
   update(ip) {
     this.status = ip;
     if (this.wasInstalling && !ip.installing) {
-      if (ip.available) notify(`iperf3 ${ip.version} installiert – Tests können jetzt laufen.`);
-      else notify('iperf3-Installation fehlgeschlagen: ' + (ip.error || 'unbekannter Fehler'), 'err');
+      if (ip.available) notify(t('setup.installed', { version: ip.version }));
+      else notify(t('setup.failed', { msg: ip.error || t('unknownError') }), 'err');
     }
     this.wasInstalling = ip.installing;
     if (ip.available || ip.installing || this.prompting || this.asked) return;
     this.asked = true;
     if (!currentUser || !currentUser.is_admin) {
-      notify('iperf3 ist auf dem Server nicht verfügbar – Tests schlagen fehl. Bitte einen Administrator informieren.', 'warn');
+      notify(t('setup.missingUser'), 'warn');
       return;
     }
     let later = false;
@@ -259,10 +270,8 @@ const iperfSetup = {
     if (!ip || !ip.installable || this.prompting) return;
     closeMenus();
     this.prompting = true;
-    const ok = await confirmDialog('iperf3 installieren?',
-      'iperf3 wurde auf diesem System nicht gefunden – ohne iperf3 laufen keine Tests.\n\n'
-      + 'Soll es jetzt über den Paketmanager installiert werden? Ausgeführt wird:\n' + ip.install_command,
-      'Installieren', false, 'Später');
+    const ok = await confirmDialog(t('setup.question'), t('setup.text', { cmd: ip.install_command }),
+      t('setup.install'), false, t('later'));
     this.prompting = false;
     if (!ok) {
       try { sessionStorage.setItem('iperf-install-later', '1'); } catch (e) {}
@@ -271,10 +280,10 @@ const iperfSetup = {
     try {
       await api('POST', '/iperf3/install');
       this.wasInstalling = true;
-      notify('iperf3 wird installiert – das kann einige Minuten dauern …');
+      notify(t('setup.started'));
       loadStatus();
     } catch (e) {
-      notify('Installation nicht möglich: ' + e.message, 'err');
+      notify(t('setup.impossible', { msg: e.message }), 'err');
     }
   },
 };
@@ -307,13 +316,13 @@ function notify(message, kind = 'ok') {
     box.id = 'toasts';
     document.body.appendChild(box);
   }
-  const t = document.createElement('div');
-  t.className = 'toast toast-' + kind;
-  t.textContent = message;
-  box.appendChild(t);
+  const el = document.createElement('div');
+  el.className = 'toast toast-' + kind;
+  el.textContent = message;
+  box.appendChild(el);
   // Höchstens drei Meldungen gleichzeitig, damit sie keine Formulare verdecken.
   while (box.children.length > 3) box.firstChild.remove();
-  setTimeout(() => t.remove(), { ok: 3500, err: 7000, warn: 12000 }[kind] || 3500);
+  setTimeout(() => el.remove(), { ok: 3500, err: 7000, warn: 12000 }[kind] || 3500);
 }
 
 // ---------- Icons ----------
@@ -332,10 +341,8 @@ function serverColor(servers, id) {
 }
 
 function protocolLabel(p) { return (p || '').toUpperCase(); }
-function directionLabel(d) {
-  return { download: 'Download', upload: 'Upload', bidirectional: 'Bidirektional' }[d] || d;
-}
-function streamsLabel(n) { return n + (n === 1 ? ' Stream' : ' Streams'); }
+function directionLabel(d) { return STRINGS['dir.' + d] ? t('dir.' + d) : d; }
+function streamsLabel(n) { return t(n === 1 ? 'streams.one' : 'streams.other', { n }); }
 
 // syncCards gleicht ein Raster stabiler Karten ab (je Schlüssel ein Element):
 // Karten bleiben erhalten, ihr Inhalt wird nur bei Änderungen ersetzt. So gehen
@@ -401,6 +408,11 @@ const dashboard = {
     this.timers = [];
   },
   onTheme() { this.renderCharts(); },
+  onLang() {
+    this.renderSummary();
+    this.renderCharts();
+    this.renderServers();
+  },
 
   setRange(r) {
     this.range = r;
@@ -433,16 +445,16 @@ const dashboard = {
       this.renderCharts();
       this.renderServers();
     } catch (e) {
-      if (e.status !== 401) notify('Dashboard konnte nicht geladen werden: ' + e.message, 'err');
+      if (e.status !== 401) notify(t('dash.loadFailed', { msg: e.message }), 'err');
     }
   },
 
   // belowThreshold zählt Tests im Zeitraum, die in einer gemessenen Richtung
   // unter dem jeweiligen Schwellwert liegen.
   belowThreshold() {
-    return this.tests.filter(t =>
-      (t.download_bandwidth_mbps != null && t.download_bandwidth_mbps < this.thrDown) ||
-      (t.upload_bandwidth_mbps != null && t.upload_bandwidth_mbps < this.thrUp)).length;
+    return this.tests.filter(x =>
+      (x.download_bandwidth_mbps != null && x.download_bandwidth_mbps < this.thrDown) ||
+      (x.upload_bandwidth_mbps != null && x.upload_bandwidth_mbps < this.thrUp)).length;
   },
 
   renderSummary() {
@@ -453,11 +465,11 @@ const dashboard = {
     const card = (val, lbl, sub, cls = '') =>
       `<div class="sum-card ${cls}"><div class="val">${val}</div><div class="lbl">${esc(lbl)}</div><div class="sub">${esc(sub)}</div></div>`;
     document.getElementById('dashSummary').innerHTML =
-      card(d.total_servers, 'Server', d.active_servers + ' aktiv') +
-      card(fmt(d.total_tests, 0), 'Tests', d.tests_today + ' heute') +
-      card(fmt(d.avg_download_mbps, 1), 'Ø Download', 'Mbit/s · alle Tests') +
-      card(fmt(d.avg_upload_mbps, 1), 'Ø Upload', 'Mbit/s · alle Tests') +
-      card(below, 'Unter Schwellwert', pct + ' % im Zeitraum', below ? 'warn' : 'ok');
+      card(d.total_servers, t('dash.servers'), t('dash.activeCount', { n: d.active_servers })) +
+      card(fmt(d.total_tests, 0), t('dash.tests'), t('dash.today', { n: d.tests_today })) +
+      card(fmt(d.avg_download_mbps, 1), t('dash.avgDown'), t('dash.allTests')) +
+      card(fmt(d.avg_upload_mbps, 1), t('dash.avgUp'), t('dash.allTests')) +
+      card(below, t('dash.below'), t('dash.belowPct', { n: pct }), below ? 'warn' : 'ok');
   },
 
   renderCharts() {
@@ -471,18 +483,18 @@ const dashboard = {
     if (this.charts[canvasId]) { this.charts[canvasId].destroy(); delete this.charts[canvasId]; }
     wrap.querySelector('.chart-empty')?.remove();
     if (!window.Chart) {
-      wrap.insertAdjacentHTML('beforeend', '<div class="chart-empty">Diagramme nicht verfügbar (Chart.js nicht geladen)</div>');
+      wrap.insertAdjacentHTML('beforeend', '<div class="chart-empty">' + t('dash.noChart') + '</div>');
       return;
     }
 
     const now = Date.now();
     const min = now - RANGE_HOURS[this.range] * 3600e3;
     const points = new Map(); // Server-ID → Punkte
-    for (const t of this.tests) {
-      const v = t[key];
+    for (const x of this.tests) {
+      const v = x[key];
       if (v == null || v <= 0) continue;
-      if (!points.has(t.server_id)) points.set(t.server_id, []);
-      points.get(t.server_id).push({ x: Date.parse(t.created_at), y: v });
+      if (!points.has(x.server_id)) points.set(x.server_id, []);
+      points.get(x.server_id).push({ x: Date.parse(x.created_at), y: v });
     }
     const datasets = [...points.entries()].sort((a, b) => a[0] - b[0]).map(([id, data]) => {
       const sv = this.servers.find(s => s.id === id);
@@ -501,15 +513,15 @@ const dashboard = {
     // Skala in üblichen Leitungsstufen: 1 / 2,5 / 10 Gbit/s, darüber in 10-Gbit-Schritten.
     const yMax = max <= 1000 ? 1000 : max <= 2500 ? 2500 : max <= 10000 ? 10000 : Math.ceil(max / 10000) * 10000;
     datasets.push({
-      label: 'Schwellwert', data: [{ x: min, y: threshold }, { x: now, y: threshold }],
+      label: t('dash.threshold'), isThreshold: true, data: [{ x: min, y: threshold }, { x: now, y: threshold }],
       borderColor: thresholdColor, backgroundColor: thresholdColor, borderDash: [6, 4], borderWidth: 1.5, pointRadius: 0, pointHoverRadius: 0,
     });
 
     const hours = RANGE_HOURS[this.range];
     const tick = v => {
       const d = new Date(v);
-      return hours <= 24 ? d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })
-                         : d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
+      return hours <= 24 ? d.toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' })
+                         : d.toLocaleDateString(locale(), { day: '2-digit', month: '2-digit' });
     };
     this.charts[canvasId] = new Chart(canvas, {
       type: 'line',
@@ -534,27 +546,27 @@ const dashboard = {
             },
           },
           tooltip: {
-            filter: item => item.dataset.label !== 'Schwellwert',
+            filter: item => !item.dataset.isThreshold,
             callbacks: {
-              title: items => items.length ? new Date(items[0].raw.x).toLocaleString('de-DE') : '',
+              title: items => items.length ? new Date(items[0].raw.x).toLocaleString(locale()) : '',
               label: item => `${item.dataset.label}: ${fmt(item.raw.y, 1)} Mbit/s`,
             },
           },
         },
       },
     });
-    if (!points.size) wrap.insertAdjacentHTML('beforeend', '<div class="chart-empty">Keine Messwerte im Zeitraum</div>');
+    if (!points.size) wrap.insertAdjacentHTML('beforeend', '<div class="chart-empty">' + t('dash.noData') + '</div>');
   },
 
   renderServers() {
     const grid = document.getElementById('dashServers');
     if (!this.servers.length) {
-      grid.innerHTML = '<div class="ds-card"><p class="muted" style="margin-bottom:12px">Noch keine Server angelegt.</p>'
-        + '<button class="btn" onclick="showTab(\'servers\')">Server anlegen</button></div>';
+      grid.innerHTML = `<div class="ds-card"><p class="muted" style="margin-bottom:12px">${t('dash.noServers')}</p>`
+        + `<button class="btn" onclick="showTab('servers')">${t('dash.createServer')}</button></div>`;
       return;
     }
     const byId = new Map(this.stats.map(s => [s.server_id, s]));
-    syncCards(grid, [...this.servers].sort((a, b) => a.name.localeCompare(b.name, 'de')).map(sv => {
+    syncCards(grid, [...this.servers].sort((a, b) => a.name.localeCompare(b.name, LANG)).map(sv => {
       const st = byId.get(sv.id) || {};
       const live = this.liveByServer.get(sv.id);
       const color = serverColor(this.servers, sv.id);
@@ -564,14 +576,14 @@ const dashboard = {
         `<span class="badge-type">${protocolLabel(sv.default_protocol)}</span>`,
         `<span class="sev-badge sev-info">${directionLabel(sv.default_direction)}</span>`,
         `<span class="sev-badge sev-info">${streamsLabel(sv.default_parallel)}</span>`,
-        sv.schedule_enabled ? `<span class="sev-badge sev-info">alle ${sv.schedule_interval_minutes} min</span>` : '',
-        okPct != null ? `<span class="sev-badge ${okPct >= 90 ? 'sev-ok' : okPct >= 50 ? 'sev-warn' : 'sev-crit'}">${okPct} % OK</span>` : '',
-        sv.enabled ? '' : '<span class="sev-badge sev-crit">deaktiviert</span>',
+        sv.schedule_enabled ? `<span class="sev-badge sev-info">${t('badge.every', { n: sv.schedule_interval_minutes })}</span>` : '',
+        okPct != null ? `<span class="sev-badge ${okPct >= 90 ? 'sev-ok' : okPct >= 50 ? 'sev-warn' : 'sev-crit'}">${t('badge.okPct', { n: okPct })}</span>` : '',
+        sv.enabled ? '' : `<span class="sev-badge sev-crit">${t('badge.disabled')}</span>`,
       ].join('');
 
       let liveBlock = '';
       if (live) {
-        const state = { pending: 'Wartet', running: 'Läuft', completed: 'Abgeschlossen', failed: 'Fehlgeschlagen' }[live.status] || live.status;
+        const state = statusLabel(live.status);
         const time = live.status === 'running' ? ` · ${live.elapsed_seconds} / ${live.total_seconds} s` : '';
         liveBlock = `<div class="live-line"><span class="${live.status === 'running' ? 'pulse' : ''}">${state}${time}</span><span>${live.progress} %</span></div>`
           + `<div class="bar-bg"><div class="bar-fill ${live.status === 'failed' ? 'failed' : ''}" style="width:${live.status === 'failed' ? 100 : live.progress}%"></div></div>`;
@@ -579,7 +591,7 @@ const dashboard = {
       const showLive = live && live.status !== 'failed' && live.status !== 'pending';
       const down = showLive ? live.current_download_mbps : st.avg_download_mbps;
       const up = showLive ? live.current_upload_mbps : st.avg_upload_mbps;
-      const prefix = showLive ? '' : 'Ø ';
+      const prefix = showLive ? '' : t('dash.avgPrefix');
       const stat = (label, val, cls = '') => `<div class="stat"><span class="stat-label">${label}</span><span class="stat-val ${cls}">${val}</span></div>`;
 
       return [sv.id, `
@@ -587,19 +599,19 @@ const dashboard = {
           <span style="width:10px;height:10px;border-radius:50%;background:${color};flex:none"></span>
           <span class="ds-name">${esc(sv.name)}</span>
           <div class="card-actions">
-            <button class="icon-btn" title="Traceroute auf der Peering-Map" onclick="openPeering(${sv.id})">${ICON_MAP}</button>
-            <button class="icon-btn" title="Schnelltest mit den Vorgaben des Servers" onclick="dashboard.quickTest(${sv.id})" ${live || !sv.enabled ? 'disabled' : ''}>${ICON_PLAY}</button>
+            <button class="icon-btn" title="${t('dash.toMap')}" onclick="openPeering(${sv.id})">${ICON_MAP}</button>
+            <button class="icon-btn" title="${t('dash.quickTest')}" onclick="dashboard.quickTest(${sv.id})" ${live || !sv.enabled ? 'disabled' : ''}>${ICON_PLAY}</button>
           </div>
         </div>
         <div class="ds-badges">${badges}</div>
         ${liveBlock}
         <div class="ds-stats">
-          ${stat(prefix + 'Download', down == null ? '–' : fmt(down, 1) + ' Mbit/s', 'down')}
-          ${stat(prefix + 'Upload', up == null ? '–' : fmt(up, 1) + ' Mbit/s', 'up')}
-          ${stat('Ø Jitter', st.avg_jitter_ms == null ? '–' : fmt(st.avg_jitter_ms, 2) + ' ms')}
-          ${stat('Ø Paketverlust', st.avg_packet_loss_percent == null ? '–' : fmt(st.avg_packet_loss_percent, 2) + ' %')}
-          ${stat('Tests', st.total_tests ? fmt(st.total_tests, 0) + (st.failed_tests ? ` (${st.failed_tests} fehlgeschl.)` : '') : '–')}
-          ${stat('Letzter Test', st.last_test_at ? fmtDate(st.last_test_at) : '–')}
+          ${stat(prefix + t('dir.download'), down == null ? '–' : fmt(down, 1) + ' Mbit/s', 'down')}
+          ${stat(prefix + t('dir.upload'), up == null ? '–' : fmt(up, 1) + ' Mbit/s', 'up')}
+          ${stat(t('dash.jitter'), st.avg_jitter_ms == null ? '–' : fmt(st.avg_jitter_ms, 2) + ' ms')}
+          ${stat(t('dash.loss'), st.avg_packet_loss_percent == null ? '–' : fmt(st.avg_packet_loss_percent, 2) + ' %')}
+          ${stat(t('dash.tests'), st.total_tests ? fmt(st.total_tests, 0) + (st.failed_tests ? ' ' + t('dash.failedShort', { n: st.failed_tests }) : '') : '–')}
+          ${stat(t('dash.lastTest'), st.last_test_at ? fmtDate(st.last_test_at) : '–')}
         </div>`];
     }));
   },
@@ -612,7 +624,7 @@ const dashboard = {
         apiGet('/tests?status=running&limit=50'),
         apiGet('/tests?status=pending&limit=50'),
       ]);
-      for (const t of [...running, ...pending]) this.liveIds.set(t.id, t.server_id);
+      for (const x of [...running, ...pending]) this.liveIds.set(x.id, x.server_id);
       if (!this.liveIds.size && !this.liveByServer.size) return;
 
       const results = await Promise.all([...this.liveIds].map(([id, sid]) =>
@@ -635,18 +647,18 @@ const dashboard = {
     const sv = this.servers.find(s => s.id === serverId);
     if (!sv) return;
     try {
-      const t = await api('POST', '/tests/run', {
+      const test = await api('POST', '/tests/run', {
         server_id: sv.id,
         protocol: sv.default_protocol,
         direction: sv.default_direction,
         duration: sv.default_duration,
         parallel_streams: sv.default_parallel,
       });
-      this.liveIds.set(t.id, sv.id);
-      notify(`Test für ${sv.name} gestartet`);
+      this.liveIds.set(test.id, sv.id);
+      notify(t('dash.testStarted', { name: sv.name }));
       this.pollLive();
     } catch (e) {
-      notify('Test konnte nicht gestartet werden: ' + e.message, 'err');
+      notify(t('test.startFailed', { msg: e.message }), 'err');
     }
   },
 };
@@ -656,7 +668,7 @@ pages.dashboard = dashboard;
 
 // confirmDialog fragt eine Bestätigung ab und liefert true bei "OK". danger
 // färbt die Bestätigung rot (Löschen); sonst erscheint sie als normale Aktion.
-function confirmDialog(title, text, okLabel, danger = true, cancelLabel = 'Abbrechen') {
+function confirmDialog(title, text, okLabel, danger = true, cancelLabel = t('cancel')) {
   const modal = document.getElementById('confirmModal');
   document.getElementById('confirmTitle').textContent = title;
   document.getElementById('confirmText').textContent = text;
@@ -694,50 +706,50 @@ const serversPage = {
   editing: null, // Server-ID beim Bearbeiten, sonst null
 
   enter() { this.load(); },
+  onLang() { this.render(); },
 
   async load() {
     try {
       this.servers = await apiGet('/servers');
       this.render();
     } catch (e) {
-      if (e.status !== 401) notify('Server konnten nicht geladen werden: ' + e.message, 'err');
+      if (e.status !== 401) notify(t('servers.loadFailed', { msg: e.message }), 'err');
     }
   },
 
   render() {
     const grid = document.getElementById('serverGrid');
     if (!this.servers.length) {
-      grid.innerHTML = '<div class="ds-card"><p class="muted">Noch keine Server angelegt. '
-        + 'Über „Server hinzufügen“ einen eigenen oder einen öffentlichen iperf3-Server eintragen.</p></div>';
+      grid.innerHTML = `<div class="ds-card"><p class="muted">${t('servers.empty')}</p></div>`;
       return;
     }
     const row = (label, val) => `<div class="stat"><span class="stat-label">${label}</span><span class="stat-val">${val}</span></div>`;
-    syncCards(grid, [...this.servers].sort((a, b) => a.name.localeCompare(b.name, 'de')).map(sv => {
+    syncCards(grid, [...this.servers].sort((a, b) => a.name.localeCompare(b.name, LANG)).map(sv => {
       const color = serverColor(this.servers, sv.id);
       const udp = sv.default_protocol === 'udp'
-        ? row('UDP-Zielrate', sv.default_udp_bandwidth_mbps ? fmt(sv.default_udp_bandwidth_mbps, 1) + ' Mbit/s' : 'Standard (1 Mbit/s)') : '';
+        ? row(t('udp.rate'), sv.default_udp_bandwidth_mbps ? fmt(sv.default_udp_bandwidth_mbps, 1) + ' Mbit/s' : t('udp.default')) : '';
       return [sv.id, `
         <div class="ds-header">
           <span style="width:10px;height:10px;border-radius:50%;background:${color};flex:none"></span>
           <span class="ds-name">${esc(sv.name)}</span>
           <div class="card-actions">
-            <button class="icon-btn" title="Bearbeiten" onclick="serversPage.openForm(${sv.id})">${ICON_EDIT}</button>
-            <button class="icon-btn" title="${sv.enabled ? 'Deaktivieren' : 'Aktivieren'}" onclick="serversPage.toggle(${sv.id})">${ICON_POWER}</button>
-            <button class="icon-btn" title="Löschen" onclick="serversPage.remove(${sv.id})">${ICON_TRASH}</button>
+            <button class="icon-btn" title="${t('servers.edit')}" onclick="serversPage.openForm(${sv.id})">${ICON_EDIT}</button>
+            <button class="icon-btn" title="${sv.enabled ? t('servers.disable') : t('servers.enable')}" onclick="serversPage.toggle(${sv.id})">${ICON_POWER}</button>
+            <button class="icon-btn" title="${t('delete')}" onclick="serversPage.remove(${sv.id})">${ICON_TRASH}</button>
           </div>
         </div>
         <div class="host">${esc(sv.host)}:${sv.port}</div>
         ${sv.description ? `<div class="desc">${esc(sv.description)}</div>` : ''}
         <div class="ds-badges">
-          <span class="sev-badge ${sv.enabled ? 'sev-ok' : 'sev-crit'}">${sv.enabled ? 'aktiv' : 'deaktiviert'}</span>
-          ${sv.schedule_enabled ? `<span class="sev-badge sev-info">alle ${sv.schedule_interval_minutes} min</span>` : '<span class="sev-badge sev-info">kein Zeitplan</span>'}
-          ${sv.schedule_enabled && sv.auto_trace_enabled ? '<span class="sev-badge sev-info">Auto-Trace</span>' : ''}
+          <span class="sev-badge ${sv.enabled ? 'sev-ok' : 'sev-crit'}">${sv.enabled ? t('badge.active') : t('badge.disabled')}</span>
+          <span class="sev-badge sev-info">${sv.schedule_enabled ? t('badge.every', { n: sv.schedule_interval_minutes }) : t('servers.noSchedule')}</span>
+          ${sv.schedule_enabled && sv.auto_trace_enabled ? `<span class="sev-badge sev-info">${t('servers.autoTrace')}</span>` : ''}
         </div>
         <div class="ds-stats">
-          ${row('Protokoll', protocolLabel(sv.default_protocol))}
-          ${row('Richtung', directionLabel(sv.default_direction))}
-          ${row('Testdauer', sv.default_duration + ' s')}
-          ${row('Streams', sv.default_parallel)}
+          ${row(t('f.protocol'), protocolLabel(sv.default_protocol))}
+          ${row(t('f.direction'), directionLabel(sv.default_direction))}
+          ${row(t('servers.duration'), sv.default_duration + ' s')}
+          ${row(t('servers.streams'), sv.default_parallel)}
           ${udp}
         </div>`];
     }));
@@ -758,7 +770,7 @@ const serversPage = {
       default_protocol: 'tcp', default_direction: 'download', default_duration: 10, default_parallel: 1,
       default_udp_bandwidth_mbps: null, schedule_enabled: false, schedule_interval_minutes: 30, auto_trace_enabled: false,
     };
-    this.val('serverFormTitle').textContent = sv ? 'Server bearbeiten' : 'Server hinzufügen';
+    this.val('serverFormTitle').textContent = sv ? t('servers.formEdit') : t('servers.formAdd');
     this.val('sfName').value = d.name;
     this.val('sfHost').value = d.host;
     this.val('sfPort').value = d.port;
@@ -841,14 +853,14 @@ const serversPage = {
       auto_trace_enabled: this.val('sfSchedule').checked && this.val('sfAutoTrace').checked,
       enabled: this.val('sfEnabled').checked,
     };
-    if (!body.name || !body.host) { this.showError('Name und Host sind Pflichtfelder.'); return; }
+    if (!body.name || !body.host) { this.showError(t('servers.required')); return; }
     const btn = this.val('serverFormSave');
     btn.disabled = true;
     try {
       if (this.editing) await api('PUT', '/servers/' + this.editing, body);
       else await api('POST', '/servers', body);
       this.closeForm();
-      notify(`Server „${body.name}“ gespeichert`);
+      notify(t('servers.saved', { name: body.name }));
       await this.load();
     } catch (e) {
       this.showError(e.message);
@@ -862,7 +874,7 @@ const serversPage = {
     if (!sv) return;
     try {
       await api('PUT', '/servers/' + id, { enabled: !sv.enabled });
-      notify(`„${sv.name}“ ${sv.enabled ? 'deaktiviert' : 'aktiviert'}`);
+      notify(t(sv.enabled ? 'servers.disabled' : 'servers.enabled', { name: sv.name }));
       await this.load();
     } catch (e) {
       notify(e.message, 'err');
@@ -872,12 +884,11 @@ const serversPage = {
   async remove(id) {
     const sv = this.servers.find(s => s.id === id);
     if (!sv) return;
-    const ok = await confirmDialog('Server löschen?',
-      `„${sv.name}“ wird mit allen zugehörigen Tests und Traces endgültig gelöscht.`, 'Löschen');
+    const ok = await confirmDialog(t('servers.deleteQ'), t('servers.deleteText', { name: sv.name }), t('delete'));
     if (!ok) return;
     try {
       await api('DELETE', '/servers/' + id);
-      notify(`„${sv.name}“ gelöscht`);
+      notify(t('servers.deleted', { name: sv.name }));
       await this.load();
     } catch (e) {
       notify(e.message, 'err');
@@ -888,11 +899,11 @@ pages.servers = serversPage;
 
 // ---------- Tests ----------
 
-const STATUS_LABEL = { pending: 'Wartet', running: 'Läuft', completed: 'Abgeschlossen', failed: 'Fehlgeschlagen' };
 const STATUS_CLASS = { pending: 'sev-info', running: 'sev-warn', completed: 'sev-ok', failed: 'sev-crit' };
 
+function statusLabel(status) { return STRINGS['st.' + status] ? t('st.' + status) : esc(status); }
 function statusBadge(status) {
-  return `<span class="sev-badge ${STATUS_CLASS[status] || 'sev-info'}">${STATUS_LABEL[status] || esc(status)}</span>`;
+  return `<span class="sev-badge ${STATUS_CLASS[status] || 'sev-info'}">${statusLabel(status)}</span>`;
 }
 function fmtMbps(v) { return v == null ? '–' : fmt(v, 1) + ' Mbit/s'; }
 function fmtBytes(b) {
@@ -938,11 +949,18 @@ const testsPage = {
     if (this.spark) { this.spark.destroy(); this.spark = null; }
     this.renderSpark();
   },
+  onLang() {
+    if (this.spark) { this.spark.destroy(); this.spark = null; }
+    this.loadServers();
+    this.renderLive();
+    this.renderList();
+    if (this.detail) this.renderDetail(this.detail);
+  },
 
   // ----- Formular -----
   async loadServers() {
     try {
-      this.servers = (await apiGet('/servers')).sort((a, b) => a.name.localeCompare(b.name, 'de'));
+      this.servers = (await apiGet('/servers')).sort((a, b) => a.name.localeCompare(b.name, LANG));
     } catch (e) {
       return;
     }
@@ -951,7 +969,7 @@ const testsPage = {
     const active = this.servers.filter(s => s.enabled);
     sel.innerHTML = active.length
       ? active.map(s => `<option value="${s.id}">${esc(s.name)} (${esc(s.host)})</option>`).join('')
-      : '<option value="">Keine aktiven Server – bitte unter „Server“ anlegen</option>';
+      : `<option value="">${t('tests.noActive')}</option>`;
     sel.disabled = !active.length;
     document.getElementById('tfStart').disabled = !active.length;
     if (active.some(s => String(s.id) === prev)) sel.value = prev;
@@ -959,7 +977,7 @@ const testsPage = {
 
     const filter = document.getElementById('tlServer');
     const prevFilter = filter.value;
-    filter.innerHTML = '<option value="">Alle Server</option>'
+    filter.innerHTML = `<option value="">${t('tests.allServers')}</option>`
       + this.servers.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('');
     filter.value = prevFilter;
   },
@@ -996,12 +1014,12 @@ const testsPage = {
     const btn = document.getElementById('tfStart');
     btn.disabled = true;
     try {
-      const t = await api('POST', '/tests/run', body);
-      notify('Test gestartet');
-      this.adopt(t.id);
+      const test = await api('POST', '/tests/run', body);
+      notify(t('tests.started'));
+      this.adopt(test.id);
       this.reloadList();
     } catch (e) {
-      notify('Test konnte nicht gestartet werden: ' + e.message, 'err');
+      notify(t('test.startFailed', { msg: e.message }), 'err');
     } finally {
       btn.disabled = false;
     }
@@ -1029,9 +1047,9 @@ const testsPage = {
           apiGet('/tests?status=running&limit=1'),
           apiGet('/tests?status=pending&limit=1'),
         ]);
-        const t = running[0] || pending[0];
-        if (!t) return;
-        this.liveId = t.id;
+        const next = running[0] || pending[0];
+        if (!next) return;
+        this.liveId = next.id;
         this.liveData = null;
         this.final = null;
         this.series = [];
@@ -1063,34 +1081,34 @@ const testsPage = {
     const l = this.liveData;
     const f = this.final;
     const metrics = (down, up) => `<div class="live-metrics">
-        <div class="live-metric down"><div class="lbl">Download</div><div class="num">${down == null ? '–' : fmt(down, 1)}<small>Mbit/s</small></div></div>
-        <div class="live-metric up"><div class="lbl">Upload</div><div class="num">${up == null ? '–' : fmt(up, 1)}<small>Mbit/s</small></div></div>
+        <div class="live-metric down"><div class="lbl">${t('dir.download')}</div><div class="num">${down == null ? '–' : fmt(down, 1)}<small>Mbit/s</small></div></div>
+        <div class="live-metric up"><div class="lbl">${t('dir.upload')}</div><div class="num">${up == null ? '–' : fmt(up, 1)}<small>Mbit/s</small></div></div>
       </div>`;
 
     if (f) {
       const sv = this.servers.find(s => s.id === f.server_id);
       const failed = f.status === 'failed';
       info.innerHTML = `
-        <div class="live-head"><span class="live-title">Ergebnis: ${esc(sv ? sv.name : 'Server ' + f.server_id)}</span>
-          <span class="live-badge ${failed ? 'failed' : 'done'}">${failed ? 'FEHLGESCHLAGEN' : 'ABGESCHLOSSEN'}</span></div>
+        <div class="live-head"><span class="live-title">${t('tests.result', { name: esc(sv ? sv.name : 'Server ' + f.server_id) })}</span>
+          <span class="live-badge ${failed ? 'failed' : 'done'}">${failed ? t('tests.badgeFailed') : t('tests.badgeDone')}</span></div>
         <div class="bar-bg"><div class="bar-fill ${failed ? 'failed' : ''}" style="width:100%"></div></div>
-        ${failed ? `<div class="error-box">${esc(f.error_message || 'Unbekannter Fehler')}</div>` : metrics(f.download_bandwidth_mbps, f.upload_bandwidth_mbps)}
+        ${failed ? `<div class="error-box">${esc(f.error_message || t('unknownError'))}</div>` : metrics(f.download_bandwidth_mbps, f.upload_bandwidth_mbps)}
         <div class="live-line"><span>${fmtDate(f.completed_at || f.created_at)}</span>
-          <a href="#" onclick="testsPage.openDetail(${f.id}); return false">Details</a></div>`;
+          <a href="#" onclick="testsPage.openDetail(${f.id}); return false">${t('tests.details')}</a></div>`;
     } else if (l) {
       const pending = l.status === 'pending';
       const remaining = Math.max(0, l.total_seconds - l.elapsed_seconds);
       info.innerHTML = `
-        <div class="live-head"><span class="live-title">${pending ? 'Wartet auf freien Testplatz' : 'Läuft gegen ' + esc(l.server_name)}</span>
-          <span class="live-badge ${pending ? 'idle' : ''}">${pending ? 'WARTET' : 'LIVE'}</span></div>
-        <div class="live-line"><span>${l.elapsed_seconds} s vergangen · ${remaining} s verbleibend</span><span>${l.progress} %</span></div>
+        <div class="live-head"><span class="live-title">${pending ? t('tests.waitingSlot') : t('tests.runningAgainst', { name: esc(l.server_name) })}</span>
+          <span class="live-badge ${pending ? 'idle' : ''}">${pending ? t('tests.badgeWaiting') : 'LIVE'}</span></div>
+        <div class="live-line"><span>${t('tests.elapsed', { e: l.elapsed_seconds, r: remaining })}</span><span>${l.progress} %</span></div>
         <div class="bar-bg"><div class="bar-fill" style="width:${l.progress}%"></div></div>
         ${metrics(pending ? null : l.current_download_mbps, pending ? null : l.current_upload_mbps)}`;
     } else {
       info.innerHTML = `
-        <div class="live-head"><span class="live-title">Live-Anzeige</span><span class="live-badge idle">BEREIT</span></div>
-        <div class="live-empty"><div>Kein Test aktiv.</div>
-          <div style="font-size:.85em">Starte links einen Test – laufende geplante Tests erscheinen hier automatisch.</div></div>`;
+        <div class="live-head"><span class="live-title">${t('tests.liveTitle')}</span><span class="live-badge idle">${t('tests.badgeReady')}</span></div>
+        <div class="live-empty"><div>${t('tests.noTest')}</div>
+          <div style="font-size:.85em">${t('tests.noTestHint')}</div></div>`;
     }
     this.renderSpark();
   },
@@ -1111,7 +1129,7 @@ const testsPage = {
     const line = (label, data, color) => ({ label, data, borderColor: color, backgroundColor: color, borderWidth: 2, pointRadius: 0, tension: 0.3 });
     this.spark = new Chart(document.getElementById('liveSpark'), {
       type: 'line',
-      data: { datasets: [line('Download', down, '#3b82f6'), line('Upload', up, '#10b981')] },
+      data: { datasets: [line(t('dir.download'), down, '#3b82f6'), line(t('dir.upload'), up, '#10b981')] },
       options: {
         responsive: true, maintainAspectRatio: false, animation: false,
         scales: {
@@ -1146,58 +1164,64 @@ const testsPage = {
       this.hasMore = page.length === this.pageSize;
       this.renderList();
     } catch (e) {
-      if (e.status !== 401) notify('Tests konnten nicht geladen werden: ' + e.message, 'err');
+      if (e.status !== 401) notify(t('tests.loadFailed', { msg: e.message }), 'err');
     }
   },
 
   renderList() {
     const name = id => { const s = this.servers.find(x => x.id === id); return s ? s.name : 'Server ' + id; };
     document.getElementById('testRows').innerHTML = this.tests.length
-      ? this.tests.map(t => `<tr onclick="testsPage.openDetail(${t.id})">
-          <td>${fmtDate(t.created_at)}</td><td>${esc(name(t.server_id))}</td><td>${protocolLabel(t.protocol)}</td>
-          <td>${directionLabel(t.direction)}</td><td>${t.parallel_streams}</td>
-          <td class="num">${fmtMbps(t.download_bandwidth_mbps)}</td><td class="num">${fmtMbps(t.upload_bandwidth_mbps)}</td>
-          <td>${statusBadge(t.status)}</td></tr>`).join('')
-      : '<tr><td colspan="8" class="muted" style="text-align:center;padding:24px">Keine Tests gefunden</td></tr>';
+      ? this.tests.map(x => `<tr onclick="testsPage.openDetail(${x.id})">
+          <td>${fmtDate(x.created_at)}</td><td>${esc(name(x.server_id))}</td><td>${protocolLabel(x.protocol)}</td>
+          <td>${directionLabel(x.direction)}</td><td>${x.parallel_streams}</td>
+          <td class="num">${fmtMbps(x.download_bandwidth_mbps)}</td><td class="num">${fmtMbps(x.upload_bandwidth_mbps)}</td>
+          <td>${statusBadge(x.status)}</td></tr>`).join('')
+      : `<tr><td colspan="8" class="muted" style="text-align:center;padding:24px">${t('tests.none')}</td></tr>`;
     document.getElementById('tlMore').hidden = !this.hasMore;
   },
 
   // ----- Details -----
   async openDetail(id) {
-    let t;
+    let test;
     try {
-      t = await apiGet('/tests/' + id);
+      test = await apiGet('/tests/' + id);
     } catch (e) {
       notify(e.message, 'err');
       return;
     }
-    const row = (label, val) => `<div class="stat"><span class="stat-label">${label}</span><span class="stat-val">${val}</span></div>`;
-    const runtime = t.started_at && t.completed_at
-      ? fmt((Date.parse(t.completed_at) - Date.parse(t.started_at)) / 1000, 1) + ' s' : '–';
-    document.getElementById('testModalTitle').textContent = `Test #${t.id} – ${t.server.name}`;
-    document.getElementById('testModalBody').innerHTML = `
-      <div class="ds-badges">${statusBadge(t.status)}<span class="badge-type">${protocolLabel(t.protocol)}</span>
-        <span class="sev-badge sev-info">${directionLabel(t.direction)}</span><span class="sev-badge sev-info">${streamsLabel(t.parallel_streams)}</span></div>
-      ${t.error_message ? `<div class="error-box">${esc(t.error_message)}</div>` : ''}
-      <div class="detail-grid">
-        ${row('Server', `${esc(t.server.host)}:${t.server.port}`)}
-        ${row('Angelegt', fmtDate(t.created_at))}
-        ${row('Gestartet', fmtDate(t.started_at))}
-        ${row('Laufzeit', runtime + ' (geplant ' + t.duration + ' s)')}
-        ${row('Download', fmtMbps(t.download_bandwidth_mbps))}
-        ${row('Upload', fmtMbps(t.upload_bandwidth_mbps))}
-        ${row('Datenmenge Download', fmtBytes(t.download_bytes))}
-        ${row('Datenmenge Upload', fmtBytes(t.upload_bytes))}
-        ${t.protocol === 'udp' ? row('UDP-Zielrate', t.udp_bandwidth_mbps ? fmtMbps(t.udp_bandwidth_mbps) : 'Standard (1 Mbit/s)') : ''}
-        ${t.protocol === 'udp' ? row('Jitter', [t.download_jitter_ms, t.upload_jitter_ms].filter(v => v != null).map(v => fmt(v, 2) + ' ms').join(' / ') || '–') : ''}
-        ${t.protocol === 'udp' ? row('Paketverlust', [t.download_packet_loss_percent, t.upload_packet_loss_percent].filter(v => v != null).map(v => fmt(v, 2) + ' %').join(' / ') || '–') : ''}
-        ${row('Retransmits', t.retransmits == null ? '–' : fmt(t.retransmits, 0))}
-        ${row('CPU-Last (lokal)', t.cpu_percent == null ? '–' : fmt(t.cpu_percent, 1) + ' %')}
-      </div>
-      ${t.raw_output ? `<details class="raw"><summary>Rohausgabe von iperf3</summary><pre>${esc(t.raw_output)}</pre></details>` : ''}`;
-    document.getElementById('testModalDelete').onclick = () => this.deleteTest(t);
+    this.renderDetail(test);
     document.getElementById('testModal').hidden = false;
     document.addEventListener('keydown', this.onKey);
+  },
+
+  renderDetail(x) {
+    this.detail = x;
+    const row = (label, val) => `<div class="stat"><span class="stat-label">${label}</span><span class="stat-val">${val}</span></div>`;
+    const runtime = x.started_at && x.completed_at
+      ? fmt((Date.parse(x.completed_at) - Date.parse(x.started_at)) / 1000, 1) + ' s' : '–';
+    const udp = x.protocol === 'udp';
+    document.getElementById('testModalTitle').textContent = `Test #${x.id} – ${x.server.name}`;
+    document.getElementById('testModalBody').innerHTML = `
+      <div class="ds-badges">${statusBadge(x.status)}<span class="badge-type">${protocolLabel(x.protocol)}</span>
+        <span class="sev-badge sev-info">${directionLabel(x.direction)}</span><span class="sev-badge sev-info">${streamsLabel(x.parallel_streams)}</span></div>
+      ${x.error_message ? `<div class="error-box">${esc(x.error_message)}</div>` : ''}
+      <div class="detail-grid">
+        ${row(t('f.server'), `${esc(x.server.host)}:${x.server.port}`)}
+        ${row(t('tests.created'), fmtDate(x.created_at))}
+        ${row(t('tests.startedAt'), fmtDate(x.started_at))}
+        ${row(t('tests.runtime'), t('tests.planned', { runtime, n: x.duration }))}
+        ${row(t('dir.download'), fmtMbps(x.download_bandwidth_mbps))}
+        ${row(t('dir.upload'), fmtMbps(x.upload_bandwidth_mbps))}
+        ${row(t('tests.bytesDown'), fmtBytes(x.download_bytes))}
+        ${row(t('tests.bytesUp'), fmtBytes(x.upload_bytes))}
+        ${udp ? row(t('udp.rate'), x.udp_bandwidth_mbps ? fmtMbps(x.udp_bandwidth_mbps) : t('udp.default')) : ''}
+        ${udp ? row(t('tests.jitter'), [x.download_jitter_ms, x.upload_jitter_ms].filter(v => v != null).map(v => fmt(v, 2) + ' ms').join(' / ') || '–') : ''}
+        ${udp ? row(t('tests.loss'), [x.download_packet_loss_percent, x.upload_packet_loss_percent].filter(v => v != null).map(v => fmt(v, 2) + ' %').join(' / ') || '–') : ''}
+        ${row(t('tests.retransmits'), x.retransmits == null ? '–' : fmt(x.retransmits, 0))}
+        ${row(t('tests.cpu'), x.cpu_percent == null ? '–' : fmt(x.cpu_percent, 1) + ' %')}
+      </div>
+      ${x.raw_output ? `<details class="raw"><summary>${t('tests.raw')}</summary><pre>${esc(x.raw_output)}</pre></details>` : ''}`;
+    document.getElementById('testModalDelete').onclick = () => this.deleteTest(x);
   },
 
   onKey(ev) {
@@ -1206,18 +1230,19 @@ const testsPage = {
   },
 
   closeDetail() {
+    this.detail = null;
     document.getElementById('testModal').hidden = true;
     document.removeEventListener('keydown', this.onKey);
   },
 
-  async deleteTest(t) {
-    const ok = await confirmDialog('Test löschen?', `Test #${t.id} gegen „${t.server.name}“ wird samt Traces endgültig gelöscht.`, 'Löschen');
+  async deleteTest(x) {
+    const ok = await confirmDialog(t('tests.deleteQ'), t('tests.deleteText', { id: x.id, name: x.server.name }), t('delete'));
     if (!ok) return;
     try {
-      await api('DELETE', '/tests/' + t.id);
+      await api('DELETE', '/tests/' + x.id);
       this.closeDetail();
-      if (this.final && this.final.id === t.id) { this.final = null; this.series = []; this.renderLive(); }
-      notify(`Test #${t.id} gelöscht`);
+      if (this.final && this.final.id === x.id) { this.final = null; this.series = []; this.renderLive(); }
+      notify(t('tests.deleted', { id: x.id }));
       this.reloadList();
     } catch (e) {
       notify(e.message, 'err');
@@ -1231,7 +1256,8 @@ pages.tests = testsPage;
 // OpenStreetMap-Standardkacheln (ohne API-Schlüssel; CARTO verlangt inzwischen
 // einen). Die dunkle Darstellung entsteht per CSS-Filter auf der Kachelebene.
 const TILE_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
-const TILE_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>-Mitwirkende';
+const tileAttribution = () => '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+  + (LANG === 'de' ? '-Mitwirkende' : ' contributors');
 const HOP_COLORS = { first: '#10b981', dest: '#ef4444', est: '#f59e0b', hop: '#3b82f6' };
 
 const peering = {
@@ -1257,7 +1283,7 @@ const peering = {
 
   initMap() {
     if (!window.L) {
-      this.mapMessage('Karte nicht verfügbar (Leaflet konnte nicht geladen werden). Der Pfad wird unten angezeigt.');
+      this.mapMessage(t('peering.noLeaflet'));
       return;
     }
     if (!this.map) {
@@ -1268,9 +1294,19 @@ const peering = {
     setTimeout(() => this.map.invalidateSize(), 0);
   },
 
+  onLang() {
+    this.setRunning(!!this.live);
+    // Die Kartenquelle steht in der Attribution; Kachelebene neu anlegen.
+    if (this.tiles) { this.tiles.remove(); this.tiles = null; }
+    this.setTiles();
+    if (!window.L) this.mapMessage(t('peering.noLeaflet'));
+    if (this.live) this.show();
+    this.load();
+  },
+
   setTiles() {
     if (!this.map || this.tiles) return;
-    this.tiles = L.tileLayer(TILE_URL, { attribution: TILE_ATTRIBUTION, maxZoom: 19 }).addTo(this.map);
+    this.tiles = L.tileLayer(TILE_URL, { attribution: tileAttribution(), maxZoom: 19 }).addTo(this.map);
   },
 
   mapMessage(text) {
@@ -1282,30 +1318,30 @@ const peering = {
   async load() {
     try {
       const [servers, traces] = await Promise.all([apiGet('/servers'), apiGet('/traces?limit=500')]);
-      this.servers = servers.sort((a, b) => a.name.localeCompare(b.name, 'de'));
+      this.servers = servers.sort((a, b) => a.name.localeCompare(b.name, LANG));
       this.traces = traces;
     } catch (e) {
-      if (e.status !== 401) notify('Traces konnten nicht geladen werden: ' + e.message, 'err');
+      if (e.status !== 401) notify(t('peering.loadFailed', { msg: e.message }), 'err');
       return;
     }
     const sel = document.getElementById('pmServer');
     sel.innerHTML = this.servers.length
-      ? this.servers.map(s => `<option value="${s.id}">${esc(s.name)} (${this.tracesFor(s).length} Traces)</option>`).join('')
-      : '<option value="">Keine Server angelegt</option>';
+      ? this.servers.map(s => `<option value="${s.id}">${t('peering.traceCount', { name: esc(s.name), n: this.tracesFor(s).length })}</option>`).join('')
+      : `<option value="">${t('peering.noServers')}</option>`;
     document.getElementById('pmStart').disabled = !this.servers.length && !this.live;
     if (!this.servers.some(s => s.id === this.serverId)) this.serverId = this.servers[0] ? this.servers[0].id : null;
     if (this.serverId != null) sel.value = this.serverId;
     if (!this.live) {
       const list = this.tracesFor(this.server());
-      if (!this.trace || !list.some(t => t.id === this.trace.id)) this.trace = list[0] || null;
-      else this.trace = list.find(t => t.id === this.trace.id);
+      if (!this.trace || !list.some(x => x.id === this.trace.id)) this.trace = list[0] || null;
+      else this.trace = list.find(x => x.id === this.trace.id);
       this.show();
     }
     this.renderList();
   },
 
   server() { return this.servers.find(s => s.id === this.serverId); },
-  tracesFor(sv) { return sv ? this.traces.filter(t => t.destination_host === sv.host) : []; },
+  tracesFor(sv) { return sv ? this.traces.filter(x => x.destination_host === sv.host) : []; },
 
   selectServer(id) {
     if (this.live) return;
@@ -1318,7 +1354,7 @@ const peering = {
 
   selectTrace(id) {
     if (this.live) return;
-    this.trace = this.traces.find(t => t.id === id) || null;
+    this.trace = this.traces.find(x => x.id === id) || null;
     this.renderList();
     this.show();
   },
@@ -1326,12 +1362,12 @@ const peering = {
   renderList() {
     const list = document.getElementById('pmTraceList');
     const traces = this.tracesFor(this.server());
-    if (!this.server()) { list.innerHTML = '<p class="muted">Zuerst unter „Server“ einen Server anlegen.</p>'; return; }
-    if (!traces.length) { list.innerHTML = '<p class="muted">Noch keine Traces. „Traceroute starten“ zeichnet den ersten auf.</p>'; return; }
-    list.innerHTML = traces.map(t => `
-      <button class="trace-item ${this.trace && this.trace.id === t.id && !this.live ? 'active' : ''}" onclick="peering.selectTrace(${t.id})" ${this.live ? 'disabled' : ''}>
-        <div class="t">${fmtDate(t.created_at)}</div>
-        <div class="m">${t.total_hops} Hops${t.total_rtt_ms != null ? ' · ' + fmt(t.total_rtt_ms, 1) + ' ms' : ''}${t.test_id ? ' · Test #' + t.test_id : ''}${t.completed ? '' : ' · <span style="color:var(--crit)">unvollständig</span>'}</div>
+    if (!this.server()) { list.innerHTML = `<p class="muted">${t('peering.addFirst')}</p>`; return; }
+    if (!traces.length) { list.innerHTML = `<p class="muted">${t('peering.noTraces')}</p>`; return; }
+    list.innerHTML = traces.map(tr => `
+      <button class="trace-item ${this.trace && this.trace.id === tr.id && !this.live ? 'active' : ''}" onclick="peering.selectTrace(${tr.id})" ${this.live ? 'disabled' : ''}>
+        <div class="t">${fmtDate(tr.created_at)}</div>
+        <div class="m">${t('peering.hops', { n: tr.total_hops })}${tr.total_rtt_ms != null ? ' · ' + fmt(tr.total_rtt_ms, 1) + ' ms' : ''}${tr.test_id ? ' · Test #' + tr.test_id : ''}${tr.completed ? '' : ` · <span style="color:var(--crit)">${t('peering.incomplete')}</span>`}</div>
       </button>`).join('');
   },
 
@@ -1359,9 +1395,7 @@ const peering = {
     this.layer.clearLayers();
     const geo = hops.map((h, i) => [h, i]).filter(([h]) => h.latitude != null && h.longitude != null);
     if (!geo.length) {
-      this.mapMessage(hops.length
-        ? 'Keine Standortdaten – vermutlich ein privates Netz. Der Pfad ist unten aufgeführt.'
-        : (this.live ? 'Warte auf die ersten Hops …' : 'Kein Trace ausgewählt.'));
+      this.mapMessage(hops.length ? t('peering.noGeo') : t(this.live ? 'peering.waiting' : 'peering.noTrace'));
       return;
     }
     this.mapMessage('');
@@ -1373,11 +1407,11 @@ const peering = {
         className: 'hop-icon', iconSize: [26, 26], iconAnchor: [13, 13],
         html: `<div class="hop-marker" style="background:${HOP_COLORS[kind] || HOP_COLORS.hop}">${h.hop_number}</div>`,
       });
-      const place = [h.city, h.country].filter(Boolean).join(', ') || 'unbekannt';
+      const place = [h.city, h.country].filter(Boolean).join(', ') || t('unknown');
       L.marker([h.latitude, h.longitude], { icon }).bindPopup(
-        `<strong>Hop ${h.hop_number}</strong>${h.geoip_interpolated ? ' <span style="color:#f59e0b">(Standort geschätzt)</span>' : ''}<br>`
+        `<strong>${t('peering.hop', { n: h.hop_number })}</strong>${h.geoip_interpolated ? ` <span style="color:#f59e0b">${t('peering.estimated')}</span>` : ''}<br>`
         + `${esc(h.ip_address)}${h.hostname ? '<br>' + esc(h.hostname) : ''}<br>`
-        + `RTT: ${h.rtt_ms != null ? fmt(h.rtt_ms, 1) + ' ms' : '–'}<br>Standort: ${esc(place)}`).addTo(this.layer);
+        + `RTT: ${h.rtt_ms != null ? fmt(h.rtt_ms, 1) + ' ms' : '–'}<br>${t('peering.locationRow', { place: esc(place) })}`).addTo(this.layer);
     }
     this.map.fitBounds(L.latLngBounds(coords), { padding: [50, 50], maxZoom: 9 });
   },
@@ -1388,48 +1422,48 @@ const peering = {
     const located = this.live.hops.filter(h => h.latitude != null).length;
     el.hidden = false;
     el.innerHTML = `<span class="live-badge">LIVE</span><span>${esc(this.live.host)}</span><span class="sep">|</span>`
-      + `<span>${this.live.hops.length} Hops</span><span class="sep">|</span><span>${located} verortet</span>`;
+      + `<span>${t('peering.hops', { n: this.live.hops.length })}</span><span class="sep">|</span><span>${t('peering.located', { n: located })}</span>`;
   },
 
   renderDetails(hops) {
     const box = document.getElementById('pmDetails');
-    const t = this.live ? null : this.trace;
-    box.hidden = !this.live && !t;
+    const tr = this.live ? null : this.trace;
+    box.hidden = !this.live && !tr;
     if (box.hidden) return;
 
     document.getElementById('pmDetailTitle').textContent = this.live
-      ? 'Live-Traceroute zu ' + this.live.host
-      : 'Trace vom ' + fmtDate(t.created_at);
-    document.getElementById('pmDetailActions').innerHTML = t
-      ? `<button class="btn btn-secondary" onclick="peering.deleteTrace(${t.id})">${ICON_TRASH} Trace löschen</button>` : '';
+      ? t('peering.liveTitle', { host: this.live.host })
+      : t('peering.traceFrom', { date: fmtDate(tr.created_at) });
+    document.getElementById('pmDetailActions').innerHTML = tr
+      ? `<button class="btn btn-secondary" onclick="peering.deleteTrace(${tr.id})">${ICON_TRASH} ${t('peering.deleteTrace')}</button>` : '';
 
     const stat = (label, val) => `<div class="stat"><span class="stat-label">${label}</span><span class="stat-val">${val}</span></div>`;
     const lastRtt = [...hops].reverse().find(h => h.rtt_ms != null);
     document.getElementById('pmSummary').innerHTML = [
-      stat('Ziel', esc(this.live ? this.live.host : t.destination_host) + (t && t.destination_ip && t.destination_ip !== t.destination_host ? ` (${esc(t.destination_ip)})` : '')),
-      t && t.source_ip ? stat('Quelle', esc(t.source_ip)) : '',
-      stat('Hops', hops.length),
-      stat('RTT zum Ziel', t && t.total_rtt_ms != null ? fmt(t.total_rtt_ms, 1) + ' ms' : (lastRtt ? fmt(lastRtt.rtt_ms, 1) + ' ms' : '–')),
-      stat('Status', this.live ? 'läuft …' : t.completed ? 'vollständig' : `<span style="color:var(--crit)">${esc(t.error_message || 'unvollständig')}</span>`),
-      t && t.test_id ? stat('Zu Test', '#' + t.test_id) : '',
+      stat(t('peering.dest'), esc(this.live ? this.live.host : tr.destination_host) + (tr && tr.destination_ip && tr.destination_ip !== tr.destination_host ? ` (${esc(tr.destination_ip)})` : '')),
+      tr && tr.source_ip ? stat(t('peering.source'), esc(tr.source_ip)) : '',
+      stat(t('peering.hopsLabel'), hops.length),
+      stat(t('peering.rttDest'), tr && tr.total_rtt_ms != null ? fmt(tr.total_rtt_ms, 1) + ' ms' : (lastRtt ? fmt(lastRtt.rtt_ms, 1) + ' ms' : '–')),
+      stat(t('peering.status'), this.live ? t('peering.running') : tr.completed ? t('peering.complete') : `<span style="color:var(--crit)">${esc(tr.error_message || t('peering.incomplete'))}</span>`),
+      tr && tr.test_id ? stat(t('peering.test'), '#' + tr.test_id) : '',
     ].join('');
 
-    const label = { first: 'Start', dest: 'Ziel', est: 'geschätzt', timeout: 'keine Antwort' };
+    const label = { first: t('peering.kindFirst'), dest: t('peering.kindDest'), est: t('peering.kindEst'), timeout: t('peering.kindTimeout') };
     document.getElementById('pmChain').innerHTML = hops.map((h, i) => {
       const kind = this.hopKind(h, i, hops);
       return `<span class="hop-chip ${kind}" title="${label[kind] || ''}"><span class="n">${h.hop_number}</span>${h.responded ? esc(h.ip_address) : '*'}</span>`;
-    }).join('<span class="path-arrow">→</span>') || '<span class="muted">Noch keine Hops.</span>';
+    }).join('<span class="path-arrow">→</span>') || `<span class="muted">${t('peering.noHopsYet')}</span>`;
 
     document.getElementById('pmHops').innerHTML = hops.map(h => {
       const place = [h.city, h.country_code || h.country].filter(Boolean).join(', ');
       return `<tr>
         <td>${h.hop_number}</td>
-        <td class="mono">${h.responded ? esc(h.ip_address) : '<span class="muted">* keine Antwort</span>'}</td>
+        <td class="mono">${h.responded ? esc(h.ip_address) : `<span class="muted">${t('peering.noReply')}</span>`}</td>
         <td>${h.hostname ? esc(h.hostname) : '–'}</td>
         <td class="num">${h.rtt_ms != null ? fmt(h.rtt_ms, 1) + ' ms' : '–'}</td>
-        <td>${place ? esc(place) : '–'}${h.geoip_interpolated ? ' <span class="sev-badge sev-warn">geschätzt</span>' : ''}</td>
+        <td>${place ? esc(place) : '–'}${h.geoip_interpolated ? ` <span class="sev-badge sev-warn">${t('peering.kindEst')}</span>` : ''}</td>
       </tr>`;
-    }).join('') || '<tr><td colspan="5" class="muted" style="text-align:center;padding:20px">Noch keine Hops</td></tr>';
+    }).join('') || `<tr><td colspan="5" class="muted" style="text-align:center;padding:20px">${t('peering.noHops')}</td></tr>`;
   },
 
   // ----- Live-Traceroute (Server-Sent Events) -----
@@ -1465,7 +1499,7 @@ const peering = {
           this.finishLive(msg.trace_id);
           break;
         case 'error':
-          notify('Traceroute fehlgeschlagen: ' + msg.message, 'err');
+          notify(t('peering.failed', { msg: msg.message }), 'err');
           this.stopLive(false);
           break;
       }
@@ -1474,7 +1508,7 @@ const peering = {
     // damit eine weitere Traceroute starten.
     source.onerror = () => {
       if (this.live && this.live.source === source) {
-        notify('Verbindung zur Live-Traceroute verloren', 'err');
+        notify(t('peering.lost'), 'err');
         this.stopLive(false);
       } else {
         source.close();
@@ -1486,7 +1520,7 @@ const peering = {
     this.live.source.close();
     this.live = null;
     this.setRunning(false);
-    notify('Traceroute abgeschlossen');
+    notify(t('peering.done'));
     await this.load();
     if (traceId) this.selectTrace(traceId);
   },
@@ -1496,24 +1530,24 @@ const peering = {
     this.live.source.close();
     this.live = null;
     this.setRunning(false);
-    if (byUser) notify('Traceroute abgebrochen');
+    if (byUser) notify(t('peering.aborted'));
     this.renderList();
     this.show();
   },
 
   setRunning(running) {
     const btn = document.getElementById('pmStart');
-    btn.textContent = running ? 'Abbrechen' : 'Traceroute starten';
+    btn.textContent = running ? t('peering.abort') : t('peering.start');
     btn.classList.toggle('btn-danger', running);
     document.getElementById('pmServer').disabled = running;
   },
 
   async deleteTrace(id) {
-    const ok = await confirmDialog('Trace löschen?', 'Der Trace wird mit allen Hops endgültig gelöscht.', 'Löschen');
+    const ok = await confirmDialog(t('peering.deleteQ'), t('peering.deleteText'), t('delete'));
     if (!ok) return;
     try {
       await api('DELETE', '/traces/' + id);
-      notify('Trace gelöscht');
+      notify(t('peering.deleted'));
       this.trace = null;
       await this.load();
     } catch (e) {
@@ -1549,14 +1583,14 @@ const passwordDialog = {
     ev.preventDefault();
     const current = this.el('pwCurrent').value;
     const next = this.el('pwNew').value;
-    if (next !== this.el('pwRepeat').value) { this.error('Die neuen Passwörter stimmen nicht überein.'); return; }
+    if (next !== this.el('pwRepeat').value) { this.error(t('pw.mismatch')); return; }
     const btn = this.el('passwordSave');
     btn.disabled = true;
     try {
       await api('POST', '/auth/change-password', { current_password: current, new_password: next });
       this.close();
-      document.querySelectorAll('.toast-warn').forEach(t => t.remove());
-      notify('Passwort geändert');
+      document.querySelectorAll('.toast-warn').forEach(el => el.remove());
+      notify(t('pw.changed'));
     } catch (e) {
       this.error(e.message);
     } finally {
@@ -1576,6 +1610,7 @@ const adminPage = {
     this.syncCleanup();
     this.load();
   },
+  onLang() { this.load(); },
 
   async load() {
     try {
@@ -1583,40 +1618,40 @@ const adminPage = {
         apiGet('/admin/stats/database'), apiGet('/auth/users'), apiGet('/servers'),
       ]);
       this.users = users;
-      this.servers = servers.sort((a, b) => a.name.localeCompare(b.name, 'de'));
+      this.servers = servers.sort((a, b) => a.name.localeCompare(b.name, LANG));
       this.renderSummary(stats);
       this.renderUsers();
       const sel = document.getElementById('ctServer');
       const prev = sel.value;
-      sel.innerHTML = '<option value="">alle Server</option>'
+      sel.innerHTML = `<option value="">${t('admin.allServers')}</option>`
         + this.servers.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('');
       sel.value = prev;
     } catch (e) {
-      if (e.status !== 401) notify('Administration konnte nicht geladen werden: ' + e.message, 'err');
+      if (e.status !== 401) notify(t('admin.loadFailed', { msg: e.message }), 'err');
     }
   },
 
   renderSummary(st) {
-    const day = iso => iso ? new Date(iso).toLocaleDateString('de-DE') : '–';
+    const day = iso => iso ? new Date(iso).toLocaleDateString(locale()) : '–';
     const card = (val, lbl, sub = '') =>
       `<div class="sum-card"><div class="val">${val}</div><div class="lbl">${esc(lbl)}</div>${sub ? `<div class="sub">${esc(sub)}</div>` : ''}</div>`;
     document.getElementById('adminSummary').innerHTML =
-      card(fmt(st.total_tests, 0), 'Tests', st.oldest_test ? `${day(st.oldest_test)} – ${day(st.newest_test)}` : 'noch keine') +
-      card(fmt(st.total_traces, 0), 'Traces', fmt(st.total_hops, 0) + ' Hops') +
-      card(fmt(st.total_servers, 0), 'Server') +
-      card(fmt(st.total_users, 0), 'Benutzer');
+      card(fmt(st.total_tests, 0), t('dash.tests'), st.oldest_test ? `${day(st.oldest_test)} – ${day(st.newest_test)}` : t('admin.none')) +
+      card(fmt(st.total_traces, 0), 'Traces', t('admin.hops', { n: fmt(st.total_hops, 0) })) +
+      card(fmt(st.total_servers, 0), t('admin.servers')) +
+      card(fmt(st.total_users, 0), t('admin.users'));
   },
 
   renderUsers() {
     document.getElementById('userRows').innerHTML = this.users.map(u => {
       const self = currentUser && u.id === currentUser.id;
       return `<tr>
-        <td><strong style="color:var(--heading)">${esc(u.username)}</strong>${self ? ' <span class="sev-badge sev-info">angemeldet</span>' : ''}</td>
+        <td><strong style="color:var(--heading)">${esc(u.username)}</strong>${self ? ` <span class="sev-badge sev-info">${t('admin.signedIn')}</span>` : ''}</td>
         <td>${esc(u.email)}</td>
-        <td>${u.is_admin ? '<span class="badge-type">Administrator</span>' : 'Benutzer'}${u.is_active ? '' : ' <span class="sev-badge sev-crit">gesperrt</span>'}</td>
+        <td>${u.is_admin ? `<span class="badge-type">${t('admin.administrator')}</span>` : t('admin.user')}${u.is_active ? '' : ` <span class="sev-badge sev-crit">${t('admin.locked')}</span>`}</td>
         <td>${fmtDate(u.created_at)}</td>
         <td>${u.last_login ? fmtDate(u.last_login) : '–'}</td>
-        <td style="text-align:right">${self ? '' : `<button class="icon-btn" title="Benutzer löschen" onclick="adminPage.deleteUser(${u.id})">${ICON_TRASH}</button>`}</td>
+        <td style="text-align:right">${self ? '' : `<button class="icon-btn" title="${t('admin.deleteUser')}" onclick="adminPage.deleteUser(${u.id})">${ICON_TRASH}</button>`}</td>
       </tr>`;
     }).join('');
   },
@@ -1654,7 +1689,7 @@ const adminPage = {
     try {
       await api('POST', '/auth/register', body);
       this.closeUserForm();
-      notify(`Benutzer „${body.username}“ angelegt`);
+      notify(t('admin.userCreated', { name: body.username }));
       this.load();
     } catch (e) {
       this.userError(e.message);
@@ -1666,10 +1701,10 @@ const adminPage = {
   async deleteUser(id) {
     const u = this.users.find(x => x.id === id);
     if (!u) return;
-    if (!await confirmDialog('Benutzer löschen?', `„${u.username}“ kann sich danach nicht mehr anmelden.`, 'Löschen')) return;
+    if (!await confirmDialog(t('admin.deleteUserQ'), t('admin.deleteUserText', { name: u.username }), t('delete'))) return;
     try {
       await api('DELETE', '/auth/users/' + id);
-      notify(`Benutzer „${u.username}“ gelöscht`);
+      notify(t('admin.userDeleted', { name: u.username }));
       this.load();
     } catch (e) {
       notify(e.message, 'err');
@@ -1692,20 +1727,20 @@ const adminPage = {
     const serverId = document.getElementById('ctServer').value;
     const sv = this.servers.find(s => String(s.id) === serverId);
     const params = new URLSearchParams();
-    let what = 'Alle Tests' + (sv ? ` von „${sv.name}“` : '');
+    let what = sv ? t('admin.allTestsOf', { name: sv.name }) : t('admin.allTests');
     if (scope === 'days') {
       const d = this.days('ctDays');
-      if (d == null) { notify('Bitte eine gültige Anzahl Tage angeben.', 'err'); return; }
+      if (d == null) { notify(t('admin.invalidDays'), 'err'); return; }
       params.set('days', d);
-      what += `, die älter als ${d} Tage sind,`;
+      what = t('admin.testsOlder', { what, n: d });
     } else if (!sv) {
       params.set('all', 'true');
     }
     if (sv) params.set('server_id', sv.id);
-    if (!await confirmDialog('Tests löschen?', `${what} werden samt ihrer Traces endgültig gelöscht.`, 'Löschen')) return;
+    if (!await confirmDialog(t('admin.deleteTestsQ'), t('admin.deleteTestsText', { what }), t('delete'))) return;
     try {
       const res = await api('DELETE', '/admin/cleanup/tests?' + params);
-      notify(`${fmt(res.deleted_count, 0)} Test(s) gelöscht`);
+      notify(t('admin.testsDeleted', { n: fmt(res.deleted_count, 0) }));
       this.load();
     } catch (e) {
       notify(e.message, 'err');
@@ -1717,17 +1752,17 @@ const adminPage = {
     let what;
     if (document.getElementById('crScope').value === 'days') {
       const d = this.days('crDays');
-      if (d == null) { notify('Bitte eine gültige Anzahl Tage angeben.', 'err'); return; }
+      if (d == null) { notify(t('admin.invalidDays'), 'err'); return; }
       params.set('days', d);
-      what = `Alle Traces, die älter als ${d} Tage sind,`;
+      what = t('admin.tracesOlder', { n: d });
     } else {
       params.set('all', 'true');
-      what = 'Alle Traces';
+      what = t('admin.allTraces');
     }
-    if (!await confirmDialog('Traces löschen?', `${what} werden mit ihren Hops endgültig gelöscht.`, 'Löschen')) return;
+    if (!await confirmDialog(t('admin.deleteTracesQ'), t('admin.deleteTracesText', { what }), t('delete'))) return;
     try {
       const res = await api('DELETE', '/admin/cleanup/traces?' + params);
-      notify(`${fmt(res.deleted_traces, 0)} Trace(s) und ${fmt(res.deleted_hops, 0)} Hop(s) gelöscht`);
+      notify(t('admin.tracesDeleted', { traces: fmt(res.deleted_traces, 0), hops: fmt(res.deleted_hops, 0) }));
       this.load();
     } catch (e) {
       notify(e.message, 'err');
@@ -1743,6 +1778,6 @@ pages.admin = adminPage;
   try {
     showApp(await apiGet('/auth/me'));
   } catch (e) {
-    showLogin(e.status === 401 ? '' : 'Dienst nicht erreichbar: ' + e.message);
+    showLogin(e.status === 401 ? '' : t('login.unreachable', { msg: e.message }));
   }
 })();

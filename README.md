@@ -20,7 +20,9 @@ the API and the web interface – no additional runtime or web server needed.
   path and hop table also for private networks
 - **Server profiles** – your own or public iperf3 servers (selection list)
 - **Administration** – users, cleanup of old data, database statistics
-- Light/dark theme, mobile friendly; the user interface is in German
+- German and English user interface (language switch with the globe icon in
+  the header and on the login page; defaults to the browser language), light/dark
+  theme, mobile friendly
 
 | Tests | Peering map | Servers (light theme) |
 |---|---|---|
@@ -51,7 +53,7 @@ opens http://localhost:8000. After code changes, rebuild with `start.cmd neu`
 or `build.cmd release`.
 
 First login: **`admin` / `admin123`** – then change the password via the user
-menu (person icon at the top right, "Passwort ändern").
+menu (person icon at the top right, "Change password").
 
 The binary can also be started directly by double-click. `config.yaml` and
 the database (`data\`) are created next to the binary on first start;
