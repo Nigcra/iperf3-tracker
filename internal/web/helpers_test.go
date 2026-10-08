@@ -13,6 +13,7 @@ import (
 	"iperf3-tracker/internal/db"
 	"iperf3-tracker/internal/iperf"
 	"iperf3-tracker/internal/store"
+	"iperf3-tracker/internal/trace"
 )
 
 // newTestServer startet die API auf einer frischen Datenbank mit Standard-Admin.
@@ -33,12 +34,13 @@ func newTestServer(t *testing.T) *httptest.Server {
 		t.Fatal(err)
 	}
 
-	// Nicht vorhandene Binary: Tests schlagen sofort und deterministisch fehl.
-	// Die eigentliche Ausführung testet das Paket iperf.
+	// Nicht vorhandene Binaries: Tests und Traces schlagen sofort und
+	// deterministisch fehl. Die eigentliche Ausführung testen die Pakete iperf
+	// und trace.
 	runner := iperf.NewRunner(st, filepath.Join(t.TempDir(), "kein-iperf3"))
 	t.Cleanup(runner.Stop)
 
-	srv := httptest.NewServer(NewServer(st, auth.NewTokens("test-secret"), runner).Handler())
+	srv := httptest.NewServer(NewServer(st, auth.NewTokens("test-secret"), runner, trace.NewTracer(nil, filepath.Join(t.TempDir(), "kein-traceroute"))).Handler())
 	t.Cleanup(srv.Close)
 	return srv
 }

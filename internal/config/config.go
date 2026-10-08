@@ -21,7 +21,11 @@ type Config struct {
 	Auth      AuthConfig      `yaml:"auth"`
 	Scheduler SchedulerConfig `yaml:"scheduler"`
 	Iperf     IperfConfig     `yaml:"iperf"`
+	GeoIP     GeoIPConfig     `yaml:"geoip"`
 	Log       LogConfig       `yaml:"log"`
+
+	// Dir ist das Verzeichnis der Config-Datei; relative Pfade beziehen sich darauf.
+	Dir string `yaml:"-"`
 }
 
 // WebConfig konfiguriert den HTTP-Server.
@@ -55,6 +59,11 @@ type IperfConfig struct {
 	Path string `yaml:"path"`
 }
 
+// GeoIPConfig konfiguriert die GeoLite2-City-Datenbank für Trace-Standorte.
+type GeoIPConfig struct {
+	Path string `yaml:"path"`
+}
+
 // LogConfig steuert die Protokollierung.
 type LogConfig struct {
 	Level string `yaml:"level"`
@@ -73,7 +82,7 @@ func (l LogConfig) SlogLevel() slog.Level {
 // zufällig erzeugte Token-Schlüssel.
 const defaultYAML = `# iperf3-Tracker – Konfiguration
 # Einzelne Werte lassen sich per Umgebungsvariable überschreiben:
-#   LISTEN_ADDR, DB_PATH, SECRET_KEY, SCHEDULER_ENABLED, IPERF3_PATH, LOG_LEVEL
+#   LISTEN_ADDR, DB_PATH, SECRET_KEY, SCHEDULER_ENABLED, IPERF3_PATH, GEOIP_PATH, LOG_LEVEL
 
 web:
   listen: "0.0.0.0:8000"
@@ -92,6 +101,10 @@ scheduler:
 iperf:
   # Pfad zur iperf3-Binary (mind. Version 3.17); leer = automatisch suchen.
   path: ""
+
+geoip:
+  # GeoLite2-City-Datenbank für die Standorte auf der Karte (relativ zu dieser Datei).
+  path: "geoip/GeoLite2-City.mmdb"
 
 log:
   level: "info"
@@ -124,8 +137,11 @@ func Load(path string) (*Config, error) {
 	}
 
 	// Relative Pfade relativ zum Verzeichnis der Config-Datei auflösen.
-	if !filepath.IsAbs(cfg.Storage.Path) {
-		cfg.Storage.Path = filepath.Join(filepath.Dir(filepath.Clean(path)), cfg.Storage.Path)
+	cfg.Dir = filepath.Dir(filepath.Clean(path))
+	for _, p := range []*string{&cfg.Storage.Path, &cfg.GeoIP.Path} {
+		if !filepath.IsAbs(*p) {
+			*p = filepath.Join(cfg.Dir, *p)
+		}
 	}
 
 	if cfg.Auth.SecretKey == "" {
@@ -143,6 +159,7 @@ func defaults() *Config {
 	return &Config{
 		Web:       WebConfig{Listen: "0.0.0.0:8000"},
 		Storage:   StorageConfig{Path: "data/iperf3-tracker.db"},
+		GeoIP:     GeoIPConfig{Path: "geoip/GeoLite2-City.mmdb"},
 		Scheduler: SchedulerConfig{Enabled: true},
 		Log:       LogConfig{Level: "info"},
 	}
@@ -167,6 +184,9 @@ func (c *Config) applyEnv() error {
 	}
 	if v := os.Getenv("IPERF3_PATH"); v != "" {
 		c.Iperf.Path = v
+	}
+	if v := os.Getenv("GEOIP_PATH"); v != "" {
+		c.GeoIP.Path = v
 	}
 	if v := os.Getenv("LOG_LEVEL"); v != "" {
 		c.Log.Level = v

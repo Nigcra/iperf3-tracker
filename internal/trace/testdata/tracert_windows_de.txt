@@ -1,0 +1,15 @@
+
+Routenverfolgung zu 8.8.8.8 Åber maximal 30 Hops
+
+  1    <1 ms    <1 ms    <1 ms  10.10.80.1 
+  2     *        *        *     ZeitÅberschreitung der Anforderung.
+  3     2 ms     2 ms     2 ms  92.79.253.252 
+  4     2 ms     2 ms     2 ms  88.79.26.24 
+  5     3 ms     2 ms     2 ms  188.111.129.216 
+  6     5 ms     5 ms     5 ms  145.254.2.215 
+  7     6 ms     6 ms     5 ms  72.14.194.138 
+  8     5 ms     6 ms     5 ms  192.178.110.233 
+  9     5 ms     5 ms     5 ms  142.251.244.107 
+ 10     4 ms     5 ms     4 ms  8.8.8.8 
+
+Ablaufverfolgung beendet.

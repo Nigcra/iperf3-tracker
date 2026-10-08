@@ -11,6 +11,7 @@ import (
 	"iperf3-tracker/internal/auth"
 	"iperf3-tracker/internal/iperf"
 	"iperf3-tracker/internal/store"
+	"iperf3-tracker/internal/trace"
 	"iperf3-tracker/internal/version"
 )
 
@@ -19,12 +20,22 @@ type Server struct {
 	store  *store.Store
 	tokens *auth.Tokens
 	runner *iperf.Runner
+	tracer *trace.Tracer
 	mux    *http.ServeMux
+
+	testTraces testTraces
 }
 
 // NewServer erstellt den HTTP-Server.
-func NewServer(st *store.Store, tokens *auth.Tokens, runner *iperf.Runner) *Server {
-	s := &Server{store: st, tokens: tokens, runner: runner, mux: http.NewServeMux()}
+func NewServer(st *store.Store, tokens *auth.Tokens, runner *iperf.Runner, tracer *trace.Tracer) *Server {
+	s := &Server{
+		store:      st,
+		tokens:     tokens,
+		runner:     runner,
+		tracer:     tracer,
+		mux:        http.NewServeMux(),
+		testTraces: testTraces{running: map[int64]bool{}},
+	}
 	s.routes()
 	return s
 }
@@ -62,6 +73,16 @@ func (s *Server) routes() {
 	s.mux.Handle("GET /api/stats/dashboard", s.requireUser(s.handleDashboardStats))
 	s.mux.Handle("GET /api/stats/servers", s.requireUser(s.handleServerStatsList))
 	s.mux.Handle("GET /api/stats/servers/{server_id}", s.requireUser(s.handleServerStats))
+
+	s.mux.Handle("POST /api/tests/{test_id}/trace", s.requireUser(s.handleStartTestTrace))
+	s.mux.Handle("GET /api/tests/{test_id}/trace", s.requireUser(s.handleGetTestTrace))
+	s.mux.Handle("DELETE /api/tests/{test_id}/trace", s.requireUser(s.handleDeleteTestTrace))
+	s.mux.Handle("POST /api/traces", s.requireUser(s.handleCreateTrace))
+	s.mux.Handle("GET /api/traces", s.requireUser(s.handleListTraces))
+	s.mux.Handle("GET /api/traces/recent", s.requireUser(s.handleRecentTraces))
+	s.mux.Handle("GET /api/traces/{trace_id}", s.requireUser(s.handleGetTrace))
+	s.mux.Handle("GET /api/traces/test/{test_id}", s.requireUser(s.handleTracesByTest))
+	s.mux.Handle("DELETE /api/traces/{trace_id}", s.requireUser(s.handleDeleteTrace))
 }
 
 func (s *Server) handleInfo(w http.ResponseWriter, r *http.Request) {

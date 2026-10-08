@@ -173,6 +173,47 @@ type TestDetail struct {
 	RawOutput *string `json:"raw_output"`
 }
 
+// TraceHop ist ein Hop einer Routenverfolgung inklusive Standortdaten.
+type TraceHop struct {
+	ID              int64    `json:"id"`
+	HopNumber       int      `json:"hop_number"`
+	IPAddress       *string  `json:"ip_address"`
+	Hostname        *string  `json:"hostname"`
+	Latitude        *float64 `json:"latitude"`
+	Longitude       *float64 `json:"longitude"`
+	City            *string  `json:"city"`
+	Country         *string  `json:"country"`
+	CountryCode     *string  `json:"country_code"`
+	ASN             *int64   `json:"asn"`
+	ASNOrganization *string  `json:"asn_organization"`
+	RTTMs           *float64 `json:"rtt_ms"`
+	PacketLoss      *float64 `json:"packet_loss"`
+	Responded       bool     `json:"responded"`
+	// GeoIPInterpolated ist true, wenn die Koordinaten von einem Nachbar-Hop
+	// übernommen wurden, weil die GeoIP-Datenbank die Adresse nicht kennt.
+	GeoIPInterpolated bool `json:"geoip_interpolated"`
+}
+
+// HasLocation meldet, ob der Hop Koordinaten hat.
+func (h TraceHop) HasLocation() bool { return h.Latitude != nil && h.Longitude != nil }
+
+// Trace ist eine Routenverfolgung, optional zu einem Test.
+type Trace struct {
+	ID              int64      `json:"id"`
+	TestID          *int64     `json:"test_id"`
+	SourceIP        *string    `json:"source_ip"`
+	DestinationIP   *string    `json:"destination_ip"`
+	DestinationHost string     `json:"destination_host"`
+	TotalHops       int        `json:"total_hops"`
+	TotalRTTMs      *float64   `json:"total_rtt_ms"`
+	Completed       bool       `json:"completed"`
+	ErrorMessage    *string    `json:"error_message"`
+	StartedAt       *time.Time `json:"started_at"`
+	CompletedAt     *time.Time `json:"completed_at"`
+	CreatedAt       time.Time  `json:"created_at"`
+	Hops            []TraceHop `json:"hops"`
+}
+
 // DashboardStats sind die Kennzahlen der Übersicht.
 type DashboardStats struct {
 	TotalServers    int        `json:"total_servers"`
