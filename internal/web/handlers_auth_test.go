@@ -51,3 +51,18 @@ func TestForeignTokenRejected(t *testing.T) {
 	}
 	expectStatus(t, srv, "GET", "/api/auth/me", foreign, "", http.StatusUnauthorized)
 }
+
+func TestChangePassword(t *testing.T) {
+	srv := newTestServer(t)
+	tok := login(t, srv, "admin", "admin123")
+
+	expectStatus(t, srv, "POST", "/api/auth/change-password", "", `{}`, http.StatusUnauthorized)
+	expectStatus(t, srv, "POST", "/api/auth/change-password", tok, `{"current_password":"falsch","new_password":"neuesPasswort"}`, http.StatusBadRequest)
+	expectStatus(t, srv, "POST", "/api/auth/change-password", tok, `{"current_password":"admin123","new_password":"kurz"}`, http.StatusUnprocessableEntity)
+	expectStatus(t, srv, "POST", "/api/auth/change-password", tok, `{"current_password":"admin123","new_password":"neuesPasswort"}`, http.StatusOK)
+
+	expectStatus(t, srv, "POST", "/api/auth/login", "", `{"username":"admin","password":"admin123"}`, http.StatusUnauthorized)
+	login(t, srv, "admin", "neuesPasswort")
+	// Bestehende Tokens bleiben bis zum Ablauf gültig.
+	expectStatus(t, srv, "GET", "/api/auth/me", tok, "", http.StatusOK)
+}

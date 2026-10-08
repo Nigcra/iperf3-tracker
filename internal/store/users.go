@@ -90,3 +90,8 @@ func (s *Store) SetLastLogin(ctx context.Context, id int64, t time.Time) error {
 	_, err := s.db.ExecContext(noCancel(ctx), `UPDATE users SET last_login = ? WHERE id = ?`, db.FormatTime(t), id)
 	return err
 }
+
+// SetPassword ersetzt den Passwort-Hash eines Benutzers.
+func (s *Store) SetPassword(ctx context.Context, id int64, hash string) error {
+	return affectedOne(s.db.ExecContext(noCancel(ctx), `UPDATE users SET hashed_password = ? WHERE id = ?`, hash, id))
+}

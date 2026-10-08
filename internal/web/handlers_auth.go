@@ -125,6 +125,13 @@ func validateNewUser(username, email, password string) string {
 		return "Benutzername muss 3–50 Zeichen lang sein"
 	case utf8.RuneCountInString(email) < 3 || utf8.RuneCountInString(email) > 100:
 		return "E-Mail-Adresse muss 3–100 Zeichen lang sein"
+	}
+	return validatePassword(password)
+}
+
+// validatePassword prüft die Passwortlänge; bcrypt verarbeitet höchstens 72 Byte.
+func validatePassword(password string) string {
+	switch {
 	case utf8.RuneCountInString(password) < 6:
 		return "Passwort muss mindestens 6 Zeichen lang sein"
 	case len(password) > 72:
@@ -176,4 +183,33 @@ func (s *Server) handleInitAdmin(w http.ResponseWriter, r *http.Request) {
 		"password": auth.DefaultAdminPassword,
 		"warning":  "Bitte das Passwort umgehend ändern!",
 	})
+}
+
+// handleChangePassword ändert das Passwort des angemeldeten Benutzers. Das
+// aktuelle Passwort muss angegeben werden.
+func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request, u *model.User) {
+	var req struct {
+		CurrentPassword string `json:"current_password"`
+		NewPassword     string `json:"new_password"`
+	}
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	if !auth.CheckPassword(u.HashedPassword, req.CurrentPassword) {
+		writeError(w, http.StatusBadRequest, "Aktuelles Passwort ist falsch")
+		return
+	}
+	if msg := validatePassword(req.NewPassword); msg != "" {
+		writeError(w, http.StatusUnprocessableEntity, msg)
+		return
+	}
+	hash, err := auth.HashPassword(req.NewPassword)
+	if err == nil {
+		err = s.store.SetPassword(r.Context(), u.ID, hash)
+	}
+	if err != nil {
+		writeInternal(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"message": "Passwort geändert"})
 }

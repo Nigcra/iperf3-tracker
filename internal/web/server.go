@@ -70,6 +70,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/auth/login", s.handleLogin)
 	s.mux.HandleFunc("POST /api/auth/init-admin", s.handleInitAdmin)
 	s.mux.Handle("GET /api/auth/me", s.requireUser(s.handleMe))
+	s.mux.Handle("POST /api/auth/change-password", s.requireUser(s.handleChangePassword))
 	s.mux.Handle("POST /api/auth/register", s.requireAdmin(s.handleRegister))
 	s.mux.Handle("GET /api/auth/users", s.requireAdmin(s.handleListUsers))
 	s.mux.Handle("DELETE /api/auth/users/{user_id}", s.requireAdmin(s.handleDeleteUser))

@@ -112,9 +112,11 @@ async function submitLogin(ev) {
       username: document.getElementById('loginUser').value.trim(),
       password: document.getElementById('loginPass').value,
     });
+    const usesDefault = res.user.username === 'admin' && document.getElementById('loginPass').value === 'admin123';
     storageSet('iperf-token', res.access_token);
     document.getElementById('loginPass').value = '';
     showApp(res.user);
+    if (usesDefault) notify('Das Standardpasswort ist noch aktiv – bitte über das Benutzermenü ändern.', 'warn');
   } catch (e) {
     showLogin(e.status === 401 ? 'Benutzername oder Passwort falsch.' : e.message);
   } finally {
@@ -230,7 +232,7 @@ async function loadInfo() {
 
 // ---------- Meldungen ----------
 
-// notify zeigt eine kurze Meldung unten rechts (kind: ok | err).
+// notify zeigt eine kurze Meldung unten rechts (kind: ok | warn | err).
 function notify(message, kind = 'ok') {
   let box = document.getElementById('toasts');
   if (!box) {
@@ -244,7 +246,7 @@ function notify(message, kind = 'ok') {
   box.appendChild(t);
   // Höchstens drei Meldungen gleichzeitig, damit sie keine Formulare verdecken.
   while (box.children.length > 3) box.firstChild.remove();
-  setTimeout(() => t.remove(), kind === 'err' ? 7000 : 3500);
+  setTimeout(() => t.remove(), { ok: 3500, err: 7000, warn: 12000 }[kind] || 3500);
 }
 
 // ---------- Icons ----------
@@ -1450,6 +1452,219 @@ const peering = {
   },
 };
 pages.peering = peering;
+
+// ---------- Passwort ändern ----------
+
+const passwordDialog = {
+  el: id => document.getElementById(id),
+
+  open() {
+    ['pwCurrent', 'pwNew', 'pwRepeat'].forEach(id => { this.el(id).value = ''; });
+    this.error('');
+    this.el('passwordModal').hidden = false;
+    this.el('pwCurrent').focus();
+    document.addEventListener('keydown', this.onKey);
+  },
+  onKey(ev) { if (ev.key === 'Escape') passwordDialog.close(); },
+  close() {
+    this.el('passwordModal').hidden = true;
+    document.removeEventListener('keydown', this.onKey);
+  },
+  error(msg) {
+    this.el('passwordError').textContent = msg;
+    this.el('passwordError').hidden = !msg;
+  },
+
+  async save(ev) {
+    ev.preventDefault();
+    const current = this.el('pwCurrent').value;
+    const next = this.el('pwNew').value;
+    if (next !== this.el('pwRepeat').value) { this.error('Die neuen Passwörter stimmen nicht überein.'); return; }
+    const btn = this.el('passwordSave');
+    btn.disabled = true;
+    try {
+      await api('POST', '/auth/change-password', { current_password: current, new_password: next });
+      this.close();
+      document.querySelectorAll('.toast-warn').forEach(t => t.remove());
+      notify('Passwort geändert');
+    } catch (e) {
+      this.error(e.message);
+    } finally {
+      btn.disabled = false;
+    }
+  },
+};
+
+// ---------- Administration ----------
+
+const adminPage = {
+  adminOnly: true,
+  users: [],
+  servers: [],
+
+  enter() {
+    this.syncCleanup();
+    this.load();
+  },
+
+  async load() {
+    try {
+      const [stats, users, servers] = await Promise.all([
+        apiGet('/admin/stats/database'), apiGet('/auth/users'), apiGet('/servers'),
+      ]);
+      this.users = users;
+      this.servers = servers.sort((a, b) => a.name.localeCompare(b.name, 'de'));
+      this.renderSummary(stats);
+      this.renderUsers();
+      const sel = document.getElementById('ctServer');
+      const prev = sel.value;
+      sel.innerHTML = '<option value="">alle Server</option>'
+        + this.servers.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('');
+      sel.value = prev;
+    } catch (e) {
+      if (e.status !== 401) notify('Administration konnte nicht geladen werden: ' + e.message, 'err');
+    }
+  },
+
+  renderSummary(st) {
+    const day = iso => iso ? new Date(iso).toLocaleDateString('de-DE') : '–';
+    const card = (val, lbl, sub = '') =>
+      `<div class="sum-card"><div class="val">${val}</div><div class="lbl">${esc(lbl)}</div>${sub ? `<div class="sub">${esc(sub)}</div>` : ''}</div>`;
+    document.getElementById('adminSummary').innerHTML =
+      card(fmt(st.total_tests, 0), 'Tests', st.oldest_test ? `${day(st.oldest_test)} – ${day(st.newest_test)}` : 'noch keine') +
+      card(fmt(st.total_traces, 0), 'Traces', fmt(st.total_hops, 0) + ' Hops') +
+      card(fmt(st.total_servers, 0), 'Server') +
+      card(fmt(st.total_users, 0), 'Benutzer');
+  },
+
+  renderUsers() {
+    document.getElementById('userRows').innerHTML = this.users.map(u => {
+      const self = currentUser && u.id === currentUser.id;
+      return `<tr>
+        <td><strong style="color:var(--heading)">${esc(u.username)}</strong>${self ? ' <span class="sev-badge sev-info">angemeldet</span>' : ''}</td>
+        <td>${esc(u.email)}</td>
+        <td>${u.is_admin ? '<span class="badge-type">Administrator</span>' : 'Benutzer'}${u.is_active ? '' : ' <span class="sev-badge sev-crit">gesperrt</span>'}</td>
+        <td>${fmtDate(u.created_at)}</td>
+        <td>${u.last_login ? fmtDate(u.last_login) : '–'}</td>
+        <td style="text-align:right">${self ? '' : `<button class="icon-btn" title="Benutzer löschen" onclick="adminPage.deleteUser(${u.id})">${ICON_TRASH}</button>`}</td>
+      </tr>`;
+    }).join('');
+  },
+
+  // ----- Benutzer anlegen -----
+  openUserForm() {
+    ['ufName', 'ufMail', 'ufPass'].forEach(id => { document.getElementById(id).value = ''; });
+    document.getElementById('ufAdmin').checked = false;
+    this.userError('');
+    document.getElementById('userModal').hidden = false;
+    document.getElementById('ufName').focus();
+    document.addEventListener('keydown', this.onKey);
+  },
+  onKey(ev) { if (ev.key === 'Escape') adminPage.closeUserForm(); },
+  closeUserForm() {
+    document.getElementById('userModal').hidden = true;
+    document.removeEventListener('keydown', this.onKey);
+  },
+  userError(msg) {
+    const el = document.getElementById('userFormError');
+    el.textContent = msg;
+    el.hidden = !msg;
+  },
+
+  async saveUser(ev) {
+    ev.preventDefault();
+    const body = {
+      username: document.getElementById('ufName').value.trim(),
+      email: document.getElementById('ufMail').value.trim(),
+      password: document.getElementById('ufPass').value,
+      is_admin: document.getElementById('ufAdmin').checked,
+    };
+    const btn = document.getElementById('userFormSave');
+    btn.disabled = true;
+    try {
+      await api('POST', '/auth/register', body);
+      this.closeUserForm();
+      notify(`Benutzer „${body.username}“ angelegt`);
+      this.load();
+    } catch (e) {
+      this.userError(e.message);
+    } finally {
+      btn.disabled = false;
+    }
+  },
+
+  async deleteUser(id) {
+    const u = this.users.find(x => x.id === id);
+    if (!u) return;
+    if (!await confirmDialog('Benutzer löschen?', `„${u.username}“ kann sich danach nicht mehr anmelden.`, 'Löschen')) return;
+    try {
+      await api('DELETE', '/auth/users/' + id);
+      notify(`Benutzer „${u.username}“ gelöscht`);
+      this.load();
+    } catch (e) {
+      notify(e.message, 'err');
+    }
+  },
+
+  // ----- Bereinigung -----
+  syncCleanup() {
+    document.getElementById('ctDaysField').hidden = document.getElementById('ctScope').value !== 'days';
+    document.getElementById('crDaysField').hidden = document.getElementById('crScope').value !== 'days';
+  },
+
+  days(id) {
+    const v = parseInt(document.getElementById(id).value, 10);
+    return isNaN(v) || v < 0 ? null : v;
+  },
+
+  async cleanupTests() {
+    const scope = document.getElementById('ctScope').value;
+    const serverId = document.getElementById('ctServer').value;
+    const sv = this.servers.find(s => String(s.id) === serverId);
+    const params = new URLSearchParams();
+    let what = 'Alle Tests' + (sv ? ` von „${sv.name}“` : '');
+    if (scope === 'days') {
+      const d = this.days('ctDays');
+      if (d == null) { notify('Bitte eine gültige Anzahl Tage angeben.', 'err'); return; }
+      params.set('days', d);
+      what += `, die älter als ${d} Tage sind,`;
+    } else if (!sv) {
+      params.set('all', 'true');
+    }
+    if (sv) params.set('server_id', sv.id);
+    if (!await confirmDialog('Tests löschen?', `${what} werden samt ihrer Traces endgültig gelöscht.`, 'Löschen')) return;
+    try {
+      const res = await api('DELETE', '/admin/cleanup/tests?' + params);
+      notify(`${fmt(res.deleted_count, 0)} Test(s) gelöscht`);
+      this.load();
+    } catch (e) {
+      notify(e.message, 'err');
+    }
+  },
+
+  async cleanupTraces() {
+    const params = new URLSearchParams();
+    let what;
+    if (document.getElementById('crScope').value === 'days') {
+      const d = this.days('crDays');
+      if (d == null) { notify('Bitte eine gültige Anzahl Tage angeben.', 'err'); return; }
+      params.set('days', d);
+      what = `Alle Traces, die älter als ${d} Tage sind,`;
+    } else {
+      params.set('all', 'true');
+      what = 'Alle Traces';
+    }
+    if (!await confirmDialog('Traces löschen?', `${what} werden mit ihren Hops endgültig gelöscht.`, 'Löschen')) return;
+    try {
+      const res = await api('DELETE', '/admin/cleanup/traces?' + params);
+      notify(`${fmt(res.deleted_traces, 0)} Trace(s) und ${fmt(res.deleted_hops, 0)} Hop(s) gelöscht`);
+      this.load();
+    } catch (e) {
+      notify(e.message, 'err');
+    }
+  },
+};
+pages.admin = adminPage;
 
 // ---------- Start ----------
 (async function init() {
