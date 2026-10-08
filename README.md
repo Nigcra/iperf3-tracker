@@ -22,7 +22,8 @@ the API and the web interface – no additional runtime or web server needed.
 - **Administration** – users, cleanup of old data, database statistics
 - German and English user interface (language switch with the globe icon in
   the header and on the login page; defaults to the browser language), light/dark
-  theme, mobile friendly
+  theme, mobile friendly. API messages follow the request's `Accept-Language`
+  header (German without one)
 
 ![Running a test](_screenshots/iperf-test.gif)
 *Running a test – live progress, throughput curve and result*

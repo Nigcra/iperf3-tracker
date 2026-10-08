@@ -117,7 +117,6 @@ log:
   level: "info"
 `
 
-
 // CreateDefault schreibt eine Standard-config.yaml mit frisch erzeugtem
 // Token-Schlüssel nach path und gibt die geparste Konfiguration zurück.
 func CreateDefault(path string) (*Config, error) {

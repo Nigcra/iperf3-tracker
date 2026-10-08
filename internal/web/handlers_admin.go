@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"iperf3-tracker/internal/i18n"
 	"iperf3-tracker/internal/iperf"
 	"iperf3-tracker/internal/model"
 )
@@ -36,16 +37,16 @@ func cleanupBefore(r *http.Request) (before *time.Time, all bool, err error) {
 func (s *Server) handleCleanupTests(w http.ResponseWriter, r *http.Request, _ *model.User) {
 	before, all, err := cleanupBefore(r)
 	if err != nil {
-		writeError(w, http.StatusUnprocessableEntity, err.Error())
+		writeError(w, r, http.StatusUnprocessableEntity, err.Error())
 		return
 	}
 	serverID, err := queryInt64(r, "server_id")
 	if err != nil {
-		writeError(w, http.StatusUnprocessableEntity, err.Error())
+		writeError(w, r, http.StatusUnprocessableEntity, err.Error())
 		return
 	}
 	if !all && before == nil && serverID == nil {
-		writeError(w, http.StatusBadRequest, "Bitte days, server_id oder all=true angeben")
+		writeError(w, r, http.StatusBadRequest, "Bitte days, server_id oder all=true angeben")
 		return
 	}
 	n, err := s.store.DeleteTests(r.Context(), before, serverID)
@@ -53,7 +54,7 @@ func (s *Server) handleCleanupTests(w http.ResponseWriter, r *http.Request, _ *m
 		writeInternal(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
+	writeJSON(w, r, http.StatusOK, map[string]any{
 		"message":       fmt.Sprintf("%d Test(s) gelöscht", n),
 		"deleted_count": n,
 	})
@@ -62,11 +63,11 @@ func (s *Server) handleCleanupTests(w http.ResponseWriter, r *http.Request, _ *m
 func (s *Server) handleCleanupTraces(w http.ResponseWriter, r *http.Request, _ *model.User) {
 	before, all, err := cleanupBefore(r)
 	if err != nil {
-		writeError(w, http.StatusUnprocessableEntity, err.Error())
+		writeError(w, r, http.StatusUnprocessableEntity, err.Error())
 		return
 	}
 	if !all && before == nil {
-		writeError(w, http.StatusBadRequest, "Bitte days oder all=true angeben")
+		writeError(w, r, http.StatusBadRequest, "Bitte days oder all=true angeben")
 		return
 	}
 	if all {
@@ -77,7 +78,7 @@ func (s *Server) handleCleanupTraces(w http.ResponseWriter, r *http.Request, _ *
 		writeInternal(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
+	writeJSON(w, r, http.StatusOK, map[string]any{
 		"message":        fmt.Sprintf("%d Trace(s) und %d Hop(s) gelöscht", traces, hops),
 		"deleted_traces": traces,
 		"deleted_hops":   hops,
@@ -90,7 +91,7 @@ func (s *Server) handleDatabaseStats(w http.ResponseWriter, r *http.Request, _ *
 		writeInternal(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, st)
+	writeJSON(w, r, http.StatusOK, st)
 }
 
 // publicServers ist eine kuratierte Liste öffentlicher iperf3-Server; ihre
@@ -110,15 +111,26 @@ var publicServers = []model.PublicServer{
 }
 
 func (s *Server) handlePublicServers(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, publicServers)
+	writeJSON(w, r, http.StatusOK, localizePublic(publicServers, i18n.FromRequest(r)))
+}
+
+// localizePublic übersetzt Ort und Beschreibung der öffentlichen Server.
+func localizePublic(list []model.PublicServer, lang string) []model.PublicServer {
+	out := make([]model.PublicServer, len(list))
+	for i, ps := range list {
+		ps.Location = i18n.Translate(ps.Location, lang)
+		ps.Description = i18n.Translate(ps.Description, lang)
+		out[i] = ps
+	}
+	return out
 }
 
 // handleSearchPublicServers sucht ohne Beachtung der Groß-/Kleinschreibung in
-// Name, Ort und Anbieter.
+// Name, Ort (deutsch und englisch) und Anbieter.
 func (s *Server) handleSearchPublicServers(w http.ResponseWriter, r *http.Request) {
 	q, ok := r.URL.Query()["query"]
 	if !ok {
-		writeError(w, http.StatusUnprocessableEntity, "Parameter \"query\" fehlt")
+		writeError(w, r, http.StatusUnprocessableEntity, "Parameter \"query\" fehlt")
 		return
 	}
 	needle := strings.ToLower(q[0])
@@ -126,11 +138,12 @@ func (s *Server) handleSearchPublicServers(w http.ResponseWriter, r *http.Reques
 	for _, ps := range publicServers {
 		if strings.Contains(strings.ToLower(ps.Name), needle) ||
 			strings.Contains(strings.ToLower(ps.Location), needle) ||
+			strings.Contains(strings.ToLower(i18n.Translate(ps.Location, i18n.EN)), needle) ||
 			strings.Contains(strings.ToLower(ps.Provider), needle) {
 			results = append(results, ps)
 		}
 	}
-	writeJSON(w, http.StatusOK, results)
+	writeJSON(w, r, http.StatusOK, localizePublic(results, i18n.FromRequest(r)))
 }
 
 // handleInstallIperf startet nach Bestätigung in der Oberfläche die
@@ -138,18 +151,18 @@ func (s *Server) handleSearchPublicServers(w http.ResponseWriter, r *http.Reques
 func (s *Server) handleInstallIperf(w http.ResponseWriter, r *http.Request, u *model.User) {
 	switch err := s.runner.InstallAsync(); {
 	case errors.Is(err, iperf.ErrInstallRunning):
-		writeError(w, http.StatusConflict, err.Error())
+		writeError(w, r, http.StatusConflict, err.Error())
 	case errors.Is(err, iperf.ErrNotInstallable):
 		st := s.runner.Status()
 		msg := err.Error()
 		if st.Error != "" {
 			msg += ": " + st.Error
 		}
-		writeError(w, http.StatusConflict, msg)
+		writeError(w, r, http.StatusConflict, msg)
 	case err != nil:
 		writeInternal(w, r, err)
 	default:
 		slog.Info("iperf3-Installation angefordert", "benutzer", u.Username)
-		writeJSON(w, http.StatusAccepted, s.runner.Status())
+		writeJSON(w, r, http.StatusAccepted, s.runner.Status())
 	}
 }

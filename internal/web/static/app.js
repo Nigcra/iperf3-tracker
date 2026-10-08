@@ -56,8 +56,9 @@ class ApiError extends Error {
 }
 
 // api ruft die JSON-API auf. Bei 401 (Sitzung abgelaufen) wird abgemeldet.
+// Accept-Language sorgt für Meldungen in der gewählten Sprache.
 async function api(method, path, body) {
-  const headers = {};
+  const headers = { 'Accept-Language': LANG };
   const token = storageGet('iperf-token');
   if (token) headers.Authorization = 'Bearer ' + token;
   const opts = { method, headers };
@@ -706,7 +707,13 @@ const serversPage = {
   editing: null, // Server-ID beim Bearbeiten, sonst null
 
   enter() { this.load(); },
-  onLang() { this.render(); },
+  onLang() {
+    this.render();
+    // Orte und Beschreibungen der öffentlichen Server neu laden.
+    this.publicServers = null;
+    const sel = this.val('sfPublic');
+    while (sel.options.length > 1) sel.remove(1);
+  },
 
   async load() {
     try {
@@ -953,8 +960,16 @@ const testsPage = {
     if (this.spark) { this.spark.destroy(); this.spark = null; }
     this.loadServers();
     this.renderLive();
-    this.renderList();
-    if (this.detail) this.renderDetail(this.detail);
+    this.reloadList();
+    // Fehlermeldungen kommen übersetzt vom Server, daher Ergebnis und Details neu laden.
+    if (this.final) {
+      const id = this.final.id;
+      apiGet('/tests/' + id).then(f => { if (this.final && this.final.id === id) { this.final = f; this.renderLive(); } }).catch(() => {});
+    }
+    if (this.detail) {
+      const id = this.detail.id;
+      apiGet('/tests/' + id).then(d => { if (this.detail && this.detail.id === id) this.renderDetail(d); }).catch(() => {});
+    }
   },
 
   // ----- Formular -----
@@ -1475,7 +1490,7 @@ const peering = {
   startLive() {
     const sv = this.server();
     if (!sv) return;
-    const url = `/api/live-trace/stream/${encodeURIComponent(sv.host)}?token=${encodeURIComponent(storageGet('iperf-token') || '')}`;
+    const url = `/api/live-trace/stream/${encodeURIComponent(sv.host)}?token=${encodeURIComponent(storageGet('iperf-token') || '')}&lang=${LANG}`;
     const source = new EventSource(url);
     this.live = { source, host: sv.host, hops: [], done: false };
     this.setRunning(true);

@@ -14,12 +14,12 @@ const msgServerDuplicate = "Ein Server mit diesem Namen existiert bereits"
 func (s *Server) handleListServers(w http.ResponseWriter, r *http.Request, _ *model.User) {
 	enabled, err := queryBool(r, "enabled")
 	if err != nil {
-		writeError(w, http.StatusUnprocessableEntity, err.Error())
+		writeError(w, r, http.StatusUnprocessableEntity, err.Error())
 		return
 	}
 	skip, limit, err := paging(r, 100, 1000)
 	if err != nil {
-		writeError(w, http.StatusUnprocessableEntity, err.Error())
+		writeError(w, r, http.StatusUnprocessableEntity, err.Error())
 		return
 	}
 	servers, err := s.store.ListServers(r.Context(), enabled, skip, limit)
@@ -27,7 +27,7 @@ func (s *Server) handleListServers(w http.ResponseWriter, r *http.Request, _ *mo
 		writeInternal(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, servers)
+	writeJSON(w, r, http.StatusOK, servers)
 }
 
 func (s *Server) handleGetServer(w http.ResponseWriter, r *http.Request, _ *model.User) {
@@ -35,7 +35,7 @@ func (s *Server) handleGetServer(w http.ResponseWriter, r *http.Request, _ *mode
 	if !ok {
 		return
 	}
-	writeJSON(w, http.StatusOK, sv)
+	writeJSON(w, r, http.StatusOK, sv)
 }
 
 func (s *Server) handleCreateServer(w http.ResponseWriter, r *http.Request, _ *model.User) {
@@ -44,18 +44,18 @@ func (s *Server) handleCreateServer(w http.ResponseWriter, r *http.Request, _ *m
 		return
 	}
 	if msg := sv.Validate(); msg != "" {
-		writeError(w, http.StatusUnprocessableEntity, msg)
+		writeError(w, r, http.StatusUnprocessableEntity, msg)
 		return
 	}
 	if err := s.store.CreateServer(r.Context(), sv); errors.Is(err, store.ErrDuplicate) {
-		writeError(w, http.StatusBadRequest, msgServerDuplicate)
+		writeError(w, r, http.StatusBadRequest, msgServerDuplicate)
 		return
 	} else if err != nil {
 		writeInternal(w, r, err)
 		return
 	}
 	s.scheduler.Update(sv)
-	writeJSON(w, http.StatusCreated, sv)
+	writeJSON(w, r, http.StatusCreated, sv)
 }
 
 // handleUpdateServer übernimmt nur die im Body enthaltenen Felder (partielles Update).
@@ -68,21 +68,21 @@ func (s *Server) handleUpdateServer(w http.ResponseWriter, r *http.Request, _ *m
 		return
 	}
 	if msg := sv.Validate(); msg != "" {
-		writeError(w, http.StatusUnprocessableEntity, msg)
+		writeError(w, r, http.StatusUnprocessableEntity, msg)
 		return
 	}
 	if err := s.store.UpdateServer(r.Context(), sv); errors.Is(err, store.ErrDuplicate) {
-		writeError(w, http.StatusBadRequest, msgServerDuplicate)
+		writeError(w, r, http.StatusBadRequest, msgServerDuplicate)
 		return
 	} else if errors.Is(err, store.ErrNotFound) {
-		writeError(w, http.StatusNotFound, msgServerNotFound)
+		writeError(w, r, http.StatusNotFound, msgServerNotFound)
 		return
 	} else if err != nil {
 		writeInternal(w, r, err)
 		return
 	}
 	s.scheduler.Update(sv)
-	writeJSON(w, http.StatusOK, sv)
+	writeJSON(w, r, http.StatusOK, sv)
 }
 
 func (s *Server) handleDeleteServer(w http.ResponseWriter, r *http.Request, _ *model.User) {
@@ -91,7 +91,7 @@ func (s *Server) handleDeleteServer(w http.ResponseWriter, r *http.Request, _ *m
 		return
 	}
 	if err := s.store.DeleteServer(r.Context(), id); errors.Is(err, store.ErrNotFound) {
-		writeError(w, http.StatusNotFound, msgServerNotFound)
+		writeError(w, r, http.StatusNotFound, msgServerNotFound)
 		return
 	} else if err != nil {
 		writeInternal(w, r, err)
@@ -110,7 +110,7 @@ func (s *Server) loadServer(w http.ResponseWriter, r *http.Request) (*model.Serv
 	}
 	sv, err := s.store.ServerByID(r.Context(), id)
 	if errors.Is(err, store.ErrNotFound) {
-		writeError(w, http.StatusNotFound, msgServerNotFound)
+		writeError(w, r, http.StatusNotFound, msgServerNotFound)
 		return nil, false
 	}
 	if err != nil {

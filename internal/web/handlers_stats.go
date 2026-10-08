@@ -19,7 +19,7 @@ func (s *Server) handleDashboardStats(w http.ResponseWriter, r *http.Request, _ 
 		writeInternal(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, st)
+	writeJSON(w, r, http.StatusOK, st)
 }
 
 func (s *Server) handleServerStatsList(w http.ResponseWriter, r *http.Request, _ *model.User) {
@@ -28,7 +28,7 @@ func (s *Server) handleServerStatsList(w http.ResponseWriter, r *http.Request, _
 		writeInternal(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, list)
+	writeJSON(w, r, http.StatusOK, list)
 }
 
 func (s *Server) handleServerStats(w http.ResponseWriter, r *http.Request, _ *model.User) {
@@ -38,12 +38,12 @@ func (s *Server) handleServerStats(w http.ResponseWriter, r *http.Request, _ *mo
 	}
 	st, err := s.store.ServerStatsByID(r.Context(), id)
 	if errors.Is(err, store.ErrNotFound) {
-		writeError(w, http.StatusNotFound, msgServerNotFound)
+		writeError(w, r, http.StatusNotFound, msgServerNotFound)
 		return
 	}
 	if err != nil {
 		writeInternal(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, st)
+	writeJSON(w, r, http.StatusOK, st)
 }

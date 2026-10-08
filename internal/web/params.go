@@ -13,7 +13,7 @@ import (
 func pathID(w http.ResponseWriter, r *http.Request, name string) (id int64, ok bool) {
 	id, err := strconv.ParseInt(r.PathValue(name), 10, 64)
 	if err != nil {
-		writeError(w, http.StatusUnprocessableEntity, fmt.Sprintf("Ungültiger Parameter %q", name))
+		writeError(w, r, http.StatusUnprocessableEntity, fmt.Sprintf("Ungültiger Parameter %q", name))
 		return 0, false
 	}
 	return id, true

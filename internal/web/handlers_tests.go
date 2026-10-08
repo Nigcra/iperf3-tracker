@@ -14,7 +14,7 @@ const msgTestNotFound = "Test nicht gefunden"
 func (s *Server) handleListTests(w http.ResponseWriter, r *http.Request, _ *model.User) {
 	var f store.TestFilter
 	var err error
-	fail := func(err error) { writeError(w, http.StatusUnprocessableEntity, err.Error()) }
+	fail := func(err error) { writeError(w, r, http.StatusUnprocessableEntity, err.Error()) }
 
 	if f.ServerID, err = queryInt64(r, "server_id"); err != nil {
 		fail(err)
@@ -46,7 +46,7 @@ func (s *Server) handleListTests(w http.ResponseWriter, r *http.Request, _ *mode
 		writeInternal(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, tests)
+	writeJSON(w, r, http.StatusOK, tests)
 }
 
 func (s *Server) handleGetTest(w http.ResponseWriter, r *http.Request, _ *model.User) {
@@ -56,14 +56,14 @@ func (s *Server) handleGetTest(w http.ResponseWriter, r *http.Request, _ *model.
 	}
 	t, err := s.store.TestDetailByID(r.Context(), id)
 	if errors.Is(err, store.ErrNotFound) {
-		writeError(w, http.StatusNotFound, msgTestNotFound)
+		writeError(w, r, http.StatusNotFound, msgTestNotFound)
 		return
 	}
 	if err != nil {
 		writeInternal(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, t)
+	writeJSON(w, r, http.StatusOK, t)
 }
 
 func (s *Server) handleRunTest(w http.ResponseWriter, r *http.Request, _ *model.User) {
@@ -82,26 +82,26 @@ func (s *Server) handleRunTest(w http.ResponseWriter, r *http.Request, _ *model.
 	}
 	switch {
 	case !req.Protocol.Valid():
-		writeError(w, http.StatusUnprocessableEntity, "Protokoll muss tcp oder udp sein")
+		writeError(w, r, http.StatusUnprocessableEntity, "Protokoll muss tcp oder udp sein")
 		return
 	case !req.Direction.Valid():
-		writeError(w, http.StatusUnprocessableEntity, "Richtung muss download, upload oder bidirectional sein")
+		writeError(w, r, http.StatusUnprocessableEntity, "Richtung muss download, upload oder bidirectional sein")
 		return
 	case req.Duration < 1 || req.Duration > 300:
-		writeError(w, http.StatusUnprocessableEntity, "Testdauer muss zwischen 1 und 300 Sekunden liegen")
+		writeError(w, r, http.StatusUnprocessableEntity, "Testdauer muss zwischen 1 und 300 Sekunden liegen")
 		return
 	case req.ParallelStreams < 1 || req.ParallelStreams > 128:
-		writeError(w, http.StatusUnprocessableEntity, "Parallele Streams müssen zwischen 1 und 128 liegen")
+		writeError(w, r, http.StatusUnprocessableEntity, "Parallele Streams müssen zwischen 1 und 128 liegen")
 		return
 	}
 	if msg := model.ValidateUDPBandwidth(req.UDPBandwidthMbps); msg != "" {
-		writeError(w, http.StatusUnprocessableEntity, msg)
+		writeError(w, r, http.StatusUnprocessableEntity, msg)
 		return
 	}
 
 	sv, err := s.store.ServerByID(r.Context(), req.ServerID)
 	if errors.Is(err, store.ErrNotFound) {
-		writeError(w, http.StatusBadRequest, fmt.Sprintf("Server %d nicht gefunden", req.ServerID))
+		writeError(w, r, http.StatusBadRequest, fmt.Sprintf("Server %d nicht gefunden", req.ServerID))
 		return
 	}
 	if err != nil {
@@ -109,7 +109,7 @@ func (s *Server) handleRunTest(w http.ResponseWriter, r *http.Request, _ *model.
 		return
 	}
 	if !sv.Enabled {
-		writeError(w, http.StatusBadRequest, fmt.Sprintf("Server %s ist deaktiviert", sv.Name))
+		writeError(w, r, http.StatusBadRequest, fmt.Sprintf("Server %s ist deaktiviert", sv.Name))
 		return
 	}
 
@@ -131,7 +131,7 @@ func (s *Server) handleRunTest(w http.ResponseWriter, r *http.Request, _ *model.
 		return
 	}
 	s.runner.Submit(t)
-	writeJSON(w, http.StatusCreated, t)
+	writeJSON(w, r, http.StatusCreated, t)
 }
 
 func (s *Server) handleDeleteTest(w http.ResponseWriter, r *http.Request, _ *model.User) {
@@ -140,7 +140,7 @@ func (s *Server) handleDeleteTest(w http.ResponseWriter, r *http.Request, _ *mod
 		return
 	}
 	if err := s.store.DeleteTest(r.Context(), id); errors.Is(err, store.ErrNotFound) {
-		writeError(w, http.StatusNotFound, msgTestNotFound)
+		writeError(w, r, http.StatusNotFound, msgTestNotFound)
 		return
 	} else if err != nil {
 		writeInternal(w, r, err)
@@ -157,14 +157,14 @@ func (s *Server) handleLatestTest(w http.ResponseWriter, r *http.Request, _ *mod
 	}
 	t, err := s.store.LatestCompletedTest(r.Context(), id)
 	if errors.Is(err, store.ErrNotFound) {
-		writeJSON(w, http.StatusOK, nil)
+		writeJSON(w, r, http.StatusOK, nil)
 		return
 	}
 	if err != nil {
 		writeInternal(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, t)
+	writeJSON(w, r, http.StatusOK, t)
 }
 
 // handleTestLive liefert den Live-Status für die Fortschrittsanzeige. Solange
@@ -177,7 +177,7 @@ func (s *Server) handleTestLive(w http.ResponseWriter, r *http.Request, _ *model
 	}
 	t, err := s.store.TestByID(r.Context(), id)
 	if errors.Is(err, store.ErrNotFound) {
-		writeError(w, http.StatusNotFound, msgTestNotFound)
+		writeError(w, r, http.StatusNotFound, msgTestNotFound)
 		return
 	}
 	if err != nil {
@@ -212,7 +212,7 @@ func (s *Server) handleTestLive(w http.ResponseWriter, r *http.Request, _ *model
 		resp["current_download_mbps"] = valueOrZero(t.DownloadBandwidthMbps)
 		resp["current_upload_mbps"] = valueOrZero(t.UploadBandwidthMbps)
 	}
-	writeJSON(w, http.StatusOK, resp)
+	writeJSON(w, r, http.StatusOK, resp)
 }
 
 func valueOrZero(v *float64) float64 {

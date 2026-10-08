@@ -11,6 +11,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"iperf3-tracker/internal/i18n"
 	"iperf3-tracker/internal/model"
 	"iperf3-tracker/internal/trace"
 )
@@ -63,7 +64,10 @@ func (s *sseStream) write(chunk string) {
 func (s *Server) handleLiveTrace(w http.ResponseWriter, r *http.Request) {
 	destination := r.PathValue("destination")
 	stream := newSSEStream(w)
-	fail := func(msg string) { stream.send(map[string]string{"type": "error", "message": msg}) }
+	lang := i18n.FromRequest(r)
+	fail := func(msg string) {
+		stream.send(map[string]string{"type": "error", "message": i18n.Translate(msg, lang)})
+	}
 
 	if _, err := s.userForToken(r.Context(), r.URL.Query().Get("token")); err != nil {
 		if !errors.Is(err, errUnauthorized) && !errors.Is(err, errInactive) {

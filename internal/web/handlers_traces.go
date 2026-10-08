@@ -45,7 +45,7 @@ func (s *Server) handleStartTestTrace(w http.ResponseWriter, r *http.Request, _ 
 	}
 	t, err := s.store.TestByID(r.Context(), id)
 	if errors.Is(err, store.ErrNotFound) {
-		writeError(w, http.StatusNotFound, msgTestNotFound)
+		writeError(w, r, http.StatusNotFound, msgTestNotFound)
 		return
 	}
 	if err != nil {
@@ -58,14 +58,14 @@ func (s *Server) handleStartTestTrace(w http.ResponseWriter, r *http.Request, _ 
 		return
 	}
 	if _, err := s.store.TraceByTestID(r.Context(), id); err == nil {
-		writeError(w, http.StatusBadRequest, "Für diesen Test existiert bereits ein Trace")
+		writeError(w, r, http.StatusBadRequest, "Für diesen Test existiert bereits ein Trace")
 		return
 	} else if !errors.Is(err, store.ErrNotFound) {
 		writeInternal(w, r, err)
 		return
 	}
 	if !s.testTraces.start(id) {
-		writeError(w, http.StatusBadRequest, "Für diesen Test läuft bereits ein Trace")
+		writeError(w, r, http.StatusBadRequest, "Für diesen Test läuft bereits ein Trace")
 		return
 	}
 
@@ -79,7 +79,7 @@ func (s *Server) handleStartTestTrace(w http.ResponseWriter, r *http.Request, _ 
 		}
 		slog.Info("Trace abgeschlossen", "test", id, "hops", tr.TotalHops, "vollständig", tr.Completed)
 	}()
-	writeJSON(w, http.StatusAccepted, map[string]any{"message": "Trace gestartet", "test_id": id})
+	writeJSON(w, r, http.StatusAccepted, map[string]any{"message": "Trace gestartet", "test_id": id})
 }
 
 func (s *Server) handleGetTestTrace(w http.ResponseWriter, r *http.Request, _ *model.User) {
@@ -122,7 +122,7 @@ func (s *Server) handleCreateTrace(w http.ResponseWriter, r *http.Request, _ *mo
 		msg = "count muss zwischen 1 und 10 liegen"
 	}
 	if msg != "" {
-		writeError(w, http.StatusUnprocessableEntity, msg)
+		writeError(w, r, http.StatusUnprocessableEntity, msg)
 		return
 	}
 
@@ -131,7 +131,7 @@ func (s *Server) handleCreateTrace(w http.ResponseWriter, r *http.Request, _ *mo
 		writeInternal(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, tr)
+	writeJSON(w, r, http.StatusCreated, tr)
 }
 
 func (s *Server) handleGetTrace(w http.ResponseWriter, r *http.Request, _ *model.User) {
@@ -145,7 +145,7 @@ func (s *Server) handleGetTrace(w http.ResponseWriter, r *http.Request, _ *model
 func (s *Server) handleListTraces(w http.ResponseWriter, r *http.Request, _ *model.User) {
 	limit, err := queryInt(r, "limit", 10, 1, 1000)
 	if err != nil {
-		writeError(w, http.StatusUnprocessableEntity, err.Error())
+		writeError(w, r, http.StatusUnprocessableEntity, err.Error())
 		return
 	}
 	traces, err := s.store.ListTraces(r.Context(), limit)
@@ -153,7 +153,7 @@ func (s *Server) handleListTraces(w http.ResponseWriter, r *http.Request, _ *mod
 		writeInternal(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, traces)
+	writeJSON(w, r, http.StatusOK, traces)
 }
 
 func (s *Server) handleTracesByTest(w http.ResponseWriter, r *http.Request, _ *model.User) {
@@ -166,7 +166,7 @@ func (s *Server) handleTracesByTest(w http.ResponseWriter, r *http.Request, _ *m
 		writeInternal(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, traces)
+	writeJSON(w, r, http.StatusOK, traces)
 }
 
 func (s *Server) handleDeleteTrace(w http.ResponseWriter, r *http.Request, _ *model.User) {
@@ -180,24 +180,24 @@ func (s *Server) handleDeleteTrace(w http.ResponseWriter, r *http.Request, _ *mo
 func (s *Server) writeTrace(w http.ResponseWriter, r *http.Request, load func(context.Context) (*model.Trace, error)) {
 	tr, err := load(r.Context())
 	if errors.Is(err, store.ErrNotFound) {
-		writeError(w, http.StatusNotFound, msgTraceNotFound)
+		writeError(w, r, http.StatusNotFound, msgTraceNotFound)
 		return
 	}
 	if err != nil {
 		writeInternal(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, tr)
+	writeJSON(w, r, http.StatusOK, tr)
 }
 
 func (s *Server) deleteTrace(w http.ResponseWriter, r *http.Request, err error) {
 	if errors.Is(err, store.ErrNotFound) {
-		writeError(w, http.StatusNotFound, msgTraceNotFound)
+		writeError(w, r, http.StatusNotFound, msgTraceNotFound)
 		return
 	}
 	if err != nil {
 		writeInternal(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"message": "Trace gelöscht"})
+	writeJSON(w, r, http.StatusOK, map[string]string{"message": "Trace gelöscht"})
 }

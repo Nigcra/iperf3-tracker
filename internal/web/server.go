@@ -2,6 +2,7 @@
 package web
 
 import (
+	"bytes"
 	"embed"
 	"encoding/json"
 	"io"
@@ -11,6 +12,7 @@ import (
 	"unicode/utf8"
 
 	"iperf3-tracker/internal/auth"
+	"iperf3-tracker/internal/i18n"
 	"iperf3-tracker/internal/iperf"
 	"iperf3-tracker/internal/model"
 	"iperf3-tracker/internal/scheduler"
@@ -117,7 +119,7 @@ func (s *Server) routes() {
 }
 
 func (s *Server) handleInfo(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]any{
+	writeJSON(w, r, http.StatusOK, map[string]any{
 		"name":       version.Name,
 		"version":    version.Version,
 		"build_date": version.BuildDate,
@@ -127,34 +129,80 @@ func (s *Server) handleInfo(w http.ResponseWriter, r *http.Request) {
 // handleStatus liefert den Betriebszustand für den Statuspunkt der Oberfläche.
 // Anders als /health nur für angemeldete Benutzer, da er lokale Pfade enthält.
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request, _ *model.User) {
-	writeJSON(w, http.StatusOK, map[string]any{
+	writeJSON(w, r, http.StatusOK, map[string]any{
 		"scheduler_running": s.scheduler.Running(),
 		"iperf3":            s.runner.Status(),
 	})
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]any{
+	writeJSON(w, r, http.StatusOK, map[string]any{
 		"status":            "healthy",
 		"scheduler_running": s.scheduler.Running(),
 	})
 }
 
-func writeJSON(w http.ResponseWriter, status int, v any) {
+// writeJSON schreibt v als JSON. Meldungstexte werden dabei in die Sprache
+// der Anfrage übersetzt (siehe localizeJSON).
+func writeJSON(w http.ResponseWriter, r *http.Request, status int, v any) {
+	lang := i18n.FromRequest(r)
+	if lang != i18n.DE {
+		v = localizeJSON(v, lang)
+	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.Header().Set("Content-Language", lang)
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(v)
 }
 
+// messageKeys sind die JSON-Felder mit Meldungstexten. Nutzerdaten wie Namen
+// oder Beschreibungen werden nie übersetzt.
+var messageKeys = map[string]bool{"detail": true, "message": true, "warning": true, "error": true, "error_message": true}
+
+// localizeJSON übersetzt die Meldungsfelder in v (auch verschachtelt). Dazu
+// wird v einmal in eine generische Struktur umgewandelt; scheitert das,
+// bleibt v unverändert.
+func localizeJSON(v any, lang string) any {
+	data, err := json.Marshal(v)
+	if err != nil {
+		return v
+	}
+	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.UseNumber()
+	var generic any
+	if err := dec.Decode(&generic); err != nil {
+		return v
+	}
+	var walk func(any)
+	walk = func(node any) {
+		switch n := node.(type) {
+		case map[string]any:
+			for k, val := range n {
+				if s, ok := val.(string); ok && messageKeys[k] {
+					n[k] = i18n.Translate(s, lang)
+				} else {
+					walk(val)
+				}
+			}
+		case []any:
+			for _, e := range n {
+				walk(e)
+			}
+		}
+	}
+	walk(generic)
+	return generic
+}
+
 // writeError schreibt eine Fehlerantwort als {"detail": "..."}.
-func writeError(w http.ResponseWriter, status int, detail string) {
-	writeJSON(w, status, map[string]string{"detail": detail})
+func writeError(w http.ResponseWriter, r *http.Request, status int, detail string) {
+	writeJSON(w, r, status, map[string]string{"detail": detail})
 }
 
 // writeInternal protokolliert err und antwortet mit 500, ohne Interna preiszugeben.
 func writeInternal(w http.ResponseWriter, r *http.Request, err error) {
 	slog.Error("Interner Fehler", "methode", r.Method, "pfad", r.URL.Path, "fehler", err)
-	writeError(w, http.StatusInternalServerError, "Interner Serverfehler")
+	writeError(w, r, http.StatusInternalServerError, "Interner Serverfehler")
 }
 
 // decodeJSON liest den Request-Body nach dst; bei Fehlern wird mit 422
@@ -162,17 +210,17 @@ func writeInternal(w http.ResponseWriter, r *http.Request, err error) {
 func decodeJSON(w http.ResponseWriter, r *http.Request, dst any) bool {
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 1<<20))
 	if err != nil {
-		writeError(w, http.StatusUnprocessableEntity, "Ungültiger Request-Body: "+err.Error())
+		writeError(w, r, http.StatusUnprocessableEntity, "Ungültiger Request-Body: "+err.Error())
 		return false
 	}
 	// encoding/json ersetzt ungültige Bytes stillschweigend durch U+FFFD; so
 	// würden falsch kodierte Umlaute unbemerkt verfälscht gespeichert.
 	if !utf8.Valid(body) {
-		writeError(w, http.StatusUnprocessableEntity, "Ungültige Zeichenkodierung – erwartet wird UTF-8")
+		writeError(w, r, http.StatusUnprocessableEntity, "Ungültige Zeichenkodierung – erwartet wird UTF-8")
 		return false
 	}
 	if err := json.Unmarshal(body, dst); err != nil {
-		writeError(w, http.StatusUnprocessableEntity, "Ungültiger Request-Body: "+err.Error())
+		writeError(w, r, http.StatusUnprocessableEntity, "Ungültiger Request-Body: "+err.Error())
 		return false
 	}
 	return true

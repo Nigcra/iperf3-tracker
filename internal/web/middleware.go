@@ -28,7 +28,7 @@ func (s *Server) requireUser(h userHandler) http.Handler {
 func (s *Server) requireAdmin(h userHandler) http.Handler {
 	return s.requireUser(func(w http.ResponseWriter, r *http.Request, u *model.User) {
 		if !u.IsAdmin {
-			writeError(w, http.StatusForbidden, "Keine ausreichende Berechtigung")
+			writeError(w, r, http.StatusForbidden, "Keine ausreichende Berechtigung")
 			return
 		}
 		h(w, r, u)
@@ -47,9 +47,9 @@ func (s *Server) authenticate(w http.ResponseWriter, r *http.Request, token stri
 	switch {
 	case errors.Is(err, errUnauthorized):
 		w.Header().Set("WWW-Authenticate", "Bearer")
-		writeError(w, http.StatusUnauthorized, err.Error())
+		writeError(w, r, http.StatusUnauthorized, err.Error())
 	case errors.Is(err, errInactive):
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeError(w, r, http.StatusBadRequest, err.Error())
 	case err != nil:
 		writeInternal(w, r, err)
 	default:

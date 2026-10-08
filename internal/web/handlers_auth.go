@@ -27,11 +27,11 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	if u == nil || !auth.CheckPassword(u.HashedPassword, req.Password) {
 		w.Header().Set("WWW-Authenticate", "Bearer")
-		writeError(w, http.StatusUnauthorized, "Benutzername oder Passwort falsch")
+		writeError(w, r, http.StatusUnauthorized, "Benutzername oder Passwort falsch")
 		return
 	}
 	if !u.IsActive {
-		writeError(w, http.StatusBadRequest, "Benutzer ist deaktiviert")
+		writeError(w, r, http.StatusBadRequest, "Benutzer ist deaktiviert")
 		return
 	}
 
@@ -47,7 +47,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		writeInternal(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
+	writeJSON(w, r, http.StatusOK, map[string]any{
 		"access_token": token,
 		"token_type":   "bearer",
 		"user":         u,
@@ -55,7 +55,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleMe(w http.ResponseWriter, r *http.Request, u *model.User) {
-	writeJSON(w, http.StatusOK, u)
+	writeJSON(w, r, http.StatusOK, u)
 }
 
 func (s *Server) handleListUsers(w http.ResponseWriter, r *http.Request, _ *model.User) {
@@ -64,7 +64,7 @@ func (s *Server) handleListUsers(w http.ResponseWriter, r *http.Request, _ *mode
 		writeInternal(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, users)
+	writeJSON(w, r, http.StatusOK, users)
 }
 
 func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request, _ *model.User) {
@@ -78,20 +78,20 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request, _ *model
 		return
 	}
 	if msg := validateNewUser(req.Username, req.Email, req.Password); msg != "" {
-		writeError(w, http.StatusUnprocessableEntity, msg)
+		writeError(w, r, http.StatusUnprocessableEntity, msg)
 		return
 	}
 
 	ctx := r.Context()
 	if _, err := s.store.UserByUsername(ctx, req.Username); err == nil {
-		writeError(w, http.StatusBadRequest, "Benutzername ist bereits vergeben")
+		writeError(w, r, http.StatusBadRequest, "Benutzername ist bereits vergeben")
 		return
 	} else if !errors.Is(err, store.ErrNotFound) {
 		writeInternal(w, r, err)
 		return
 	}
 	if _, err := s.store.UserByEmail(ctx, req.Email); err == nil {
-		writeError(w, http.StatusBadRequest, "E-Mail-Adresse ist bereits registriert")
+		writeError(w, r, http.StatusBadRequest, "E-Mail-Adresse ist bereits registriert")
 		return
 	} else if !errors.Is(err, store.ErrNotFound) {
 		writeInternal(w, r, err)
@@ -114,7 +114,7 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request, _ *model
 		writeInternal(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, u)
+	writeJSON(w, r, http.StatusOK, u)
 }
 
 // validateNewUser prüft die Feldlängen; bcrypt begrenzt das Passwort zusätzlich auf 72 Byte.
@@ -145,17 +145,17 @@ func (s *Server) handleDeleteUser(w http.ResponseWriter, r *http.Request, curren
 		return
 	}
 	if id == current.ID {
-		writeError(w, http.StatusBadRequest, "Das eigene Konto kann nicht gelöscht werden")
+		writeError(w, r, http.StatusBadRequest, "Das eigene Konto kann nicht gelöscht werden")
 		return
 	}
 	if err := s.store.DeleteUser(r.Context(), id); errors.Is(err, store.ErrNotFound) {
-		writeError(w, http.StatusNotFound, "Benutzer nicht gefunden")
+		writeError(w, r, http.StatusNotFound, "Benutzer nicht gefunden")
 		return
 	} else if err != nil {
 		writeInternal(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"message": "Benutzer gelöscht"})
+	writeJSON(w, r, http.StatusOK, map[string]string{"message": "Benutzer gelöscht"})
 }
 
 func (s *Server) handleInitAdmin(w http.ResponseWriter, r *http.Request) {
@@ -165,7 +165,7 @@ func (s *Server) handleInitAdmin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if n > 0 {
-		writeError(w, http.StatusBadRequest, "Es existieren bereits Benutzer. Neue Benutzer über /auth/register anlegen.")
+		writeError(w, r, http.StatusBadRequest, "Es existieren bereits Benutzer. Neue Benutzer über /auth/register anlegen.")
 		return
 	}
 	admin, err := auth.DefaultAdmin()
@@ -176,7 +176,7 @@ func (s *Server) handleInitAdmin(w http.ResponseWriter, r *http.Request) {
 		writeInternal(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{
+	writeJSON(w, r, http.StatusOK, map[string]string{
 		"message":  "Standard-Admin angelegt",
 		"username": auth.DefaultAdminUsername,
 		"password": auth.DefaultAdminPassword,
@@ -195,11 +195,11 @@ func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request, u 
 		return
 	}
 	if !auth.CheckPassword(u.HashedPassword, req.CurrentPassword) {
-		writeError(w, http.StatusBadRequest, "Aktuelles Passwort ist falsch")
+		writeError(w, r, http.StatusBadRequest, "Aktuelles Passwort ist falsch")
 		return
 	}
 	if msg := validatePassword(req.NewPassword); msg != "" {
-		writeError(w, http.StatusUnprocessableEntity, msg)
+		writeError(w, r, http.StatusUnprocessableEntity, msg)
 		return
 	}
 	hash, err := auth.HashPassword(req.NewPassword)
@@ -210,5 +210,5 @@ func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request, u 
 		writeInternal(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"message": "Passwort geändert"})
+	writeJSON(w, r, http.StatusOK, map[string]string{"message": "Passwort geändert"})
 }
