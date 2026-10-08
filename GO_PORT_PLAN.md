@@ -18,7 +18,8 @@ Ziel: Das bestehende Python/FastAPI-Backend **und** das React-Frontend werden du
 > | 9a – Oberfläche: Grundgerüst | ✅ erledigt: `internal/web/static/` (per `go:embed`, `/` liefert die Oberfläche), Spherifyer-Tokens und -Bausteine, Login, Navigation mit Hash-Routing, Status- und Benutzermenü, Hell/Dunkel, mobil zweizeilige Kopfzeile; per Headless-Chrome geprüft |
 > | 9b – Dashboard | ✅ erledigt: Kennzahlen, Download-/Upload-Verlauf je Server (Chart.js, Schwellwertlinie, Unterschreitungen rot), Zeitraum 1 h/24 h/7/30 Tage, Server-Karten mit Mittelwerten, Schnelltest, Traceroute-Sprung und Live-Fortschritt; mit echten Tests per Headless-Chrome geprüft (hell/dunkel/mobil) |
 > | 9d – Server-Seite | ✅ erledigt: Karten je Server-Profil, Dialog zum Anlegen/Bearbeiten mit Übernahme öffentlicher Server, UDP-Zielbandbreite, Zeitplan und Auto-Trace, Aktivieren/Deaktivieren, Löschen mit Bestätigungsdialog; per Headless-Chrome geprüft |
-> | 9c, 9e, 9f, 10 | offen |
+> | 9c – Test-Seite | ✅ erledigt: Formular mit Server-Vorgaben (UDP-Rate, Hinweis ab 5 Streams), Live-Panel mit Fortschritt, aktuellen Werten und Verlaufskurve (übernimmt auch geplante Tests, Ergebnis bleibt stehen), Testverlauf mit Filtern und „Mehr laden“, Detaildialog mit allen Messwerten, Fehler, Rohausgabe und Löschen; mit echtem iperf3 per Headless-Chrome geprüft |
+> | 9e, 9f, 10 | offen |
 >
 > Abweichungen bei der Umsetzung:
 > - Das Schema stammt aus den **SQLAlchemy-Modellen** (`models.py`) und nicht aus den Migrationen. Eine frische Python-DB entsteht per `create_all` aus den Modellen. Unterschied zur Migration 002: `traces.test_id` ist nullable und nicht `UNIQUE`.

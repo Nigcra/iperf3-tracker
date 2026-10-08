@@ -814,6 +814,346 @@ const serversPage = {
 };
 pages.servers = serversPage;
 
+// ---------- Tests ----------
+
+const STATUS_LABEL = { pending: 'Wartet', running: 'Läuft', completed: 'Abgeschlossen', failed: 'Fehlgeschlagen' };
+const STATUS_CLASS = { pending: 'sev-info', running: 'sev-warn', completed: 'sev-ok', failed: 'sev-crit' };
+
+function statusBadge(status) {
+  return `<span class="sev-badge ${STATUS_CLASS[status] || 'sev-info'}">${STATUS_LABEL[status] || esc(status)}</span>`;
+}
+function fmtMbps(v) { return v == null ? '–' : fmt(v, 1) + ' Mbit/s'; }
+function fmtBytes(b) {
+  if (b == null) return '–';
+  const units = [['GB', 1e9], ['MB', 1e6], ['KB', 1e3]];
+  for (const [u, f] of units) if (b >= f) return fmt(b / f, 2) + ' ' + u;
+  return fmt(b, 0) + ' B';
+}
+
+const testsPage = {
+  servers: [],
+  tests: [],
+  pageSize: 50,
+  skip: 0,
+  hasMore: false,
+  // Live-Panel: verfolgter Test, sein Verlauf und das Ergebnis des letzten Tests.
+  liveId: null,
+  liveData: null,
+  liveStart: 0,
+  series: [],
+  final: null,
+  spark: null,
+  timer: null,
+  busy: false,
+
+  async enter() {
+    const panel = document.getElementById('livePanel');
+    if (!panel.firstChild) {
+      panel.innerHTML = '<div id="liveInfo" style="display:flex;flex-direction:column;flex:1"></div>'
+        + '<div class="live-spark" id="liveSparkWrap" hidden><canvas id="liveSpark"></canvas></div>';
+    }
+    this.renderLive();
+    await this.loadServers();
+    this.reloadList();
+    this.tick();
+    this.timer = setInterval(() => this.tick(), 700);
+  },
+  leave() {
+    clearInterval(this.timer);
+    this.timer = null;
+  },
+  onTheme() {
+    if (this.spark) { this.spark.destroy(); this.spark = null; }
+    this.renderSpark();
+  },
+
+  // ----- Formular -----
+  async loadServers() {
+    try {
+      this.servers = (await apiGet('/servers')).sort((a, b) => a.name.localeCompare(b.name, 'de'));
+    } catch (e) {
+      return;
+    }
+    const sel = document.getElementById('tfServer');
+    const prev = sel.value;
+    const active = this.servers.filter(s => s.enabled);
+    sel.innerHTML = active.length
+      ? active.map(s => `<option value="${s.id}">${esc(s.name)} (${esc(s.host)})</option>`).join('')
+      : '<option value="">Keine aktiven Server – bitte unter „Server“ anlegen</option>';
+    sel.disabled = !active.length;
+    document.getElementById('tfStart').disabled = !active.length;
+    if (active.some(s => String(s.id) === prev)) sel.value = prev;
+    else this.applyServerDefaults();
+
+    const filter = document.getElementById('tlServer');
+    const prevFilter = filter.value;
+    filter.innerHTML = '<option value="">Alle Server</option>'
+      + this.servers.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('');
+    filter.value = prevFilter;
+  },
+
+  // applyServerDefaults belegt das Formular mit den Vorgaben des gewählten Servers.
+  applyServerDefaults() {
+    const sv = this.servers.find(s => String(s.id) === document.getElementById('tfServer').value);
+    if (!sv) return;
+    document.getElementById('tfProto').value = sv.default_protocol;
+    document.getElementById('tfDir').value = sv.default_direction;
+    document.getElementById('tfDuration').value = sv.default_duration;
+    document.getElementById('tfParallel').value = sv.default_parallel;
+    document.getElementById('tfUdp').value = sv.default_udp_bandwidth_mbps ?? '';
+    this.syncForm();
+  },
+
+  syncForm() {
+    document.getElementById('tfUdpField').hidden = document.getElementById('tfProto').value !== 'udp';
+    document.getElementById('tfParallelHint').hidden = !(Number(document.getElementById('tfParallel').value) > 4);
+  },
+
+  async start(ev) {
+    ev.preventDefault();
+    const num = id => { const v = document.getElementById(id).value.trim(); return v === '' ? null : Number(v); };
+    const proto = document.getElementById('tfProto').value;
+    const body = {
+      server_id: Number(document.getElementById('tfServer').value),
+      protocol: proto,
+      direction: document.getElementById('tfDir').value,
+      duration: num('tfDuration') ?? 10,
+      parallel_streams: num('tfParallel') ?? 1,
+    };
+    if (proto === 'udp' && num('tfUdp') != null) body.udp_bandwidth_mbps = num('tfUdp');
+    const btn = document.getElementById('tfStart');
+    btn.disabled = true;
+    try {
+      const t = await api('POST', '/tests/run', body);
+      notify('Test gestartet');
+      this.adopt(t.id);
+      this.reloadList();
+    } catch (e) {
+      notify('Test konnte nicht gestartet werden: ' + e.message, 'err');
+    } finally {
+      btn.disabled = false;
+    }
+  },
+
+  // ----- Live-Panel -----
+  adopt(id) {
+    this.liveId = id;
+    this.liveData = null;
+    this.final = null;
+    this.series = [];
+    this.liveStart = Date.now();
+    if (this.spark) { this.spark.destroy(); this.spark = null; }
+    this.tick();
+  },
+
+  // tick verfolgt den aktuellen Test. Ohne eigenen Test wird ein laufender
+  // oder wartender Test übernommen (z. B. vom Scheduler gestartet).
+  async tick() {
+    if (this.busy) return;
+    this.busy = true;
+    try {
+      if (!this.liveId) {
+        const [running, pending] = await Promise.all([
+          apiGet('/tests?status=running&limit=1'),
+          apiGet('/tests?status=pending&limit=1'),
+        ]);
+        const t = running[0] || pending[0];
+        if (!t) return;
+        this.liveId = t.id;
+        this.liveData = null;
+        this.final = null;
+        this.series = [];
+        this.liveStart = Date.now();
+        if (this.spark) { this.spark.destroy(); this.spark = null; }
+      }
+      const id = this.liveId;
+      const l = await apiGet(`/tests/${id}/live`);
+      this.liveData = l;
+      if (l.status === 'running') {
+        this.series.push({ x: (Date.now() - this.liveStart) / 1000, down: l.current_download_mbps, up: l.current_upload_mbps });
+      }
+      if (l.status === 'completed' || l.status === 'failed') {
+        this.final = await apiGet('/tests/' + id);
+        this.liveId = null;
+        this.reloadList();
+      }
+      this.renderLive();
+    } catch (e) {
+      if (e.status === 404) this.liveId = null;
+    } finally {
+      this.busy = false;
+    }
+  },
+
+  renderLive() {
+    const info = document.getElementById('liveInfo');
+    if (!info) return;
+    const l = this.liveData;
+    const f = this.final;
+    const metrics = (down, up) => `<div class="live-metrics">
+        <div class="live-metric down"><div class="lbl">Download</div><div class="num">${down == null ? '–' : fmt(down, 1)}<small>Mbit/s</small></div></div>
+        <div class="live-metric up"><div class="lbl">Upload</div><div class="num">${up == null ? '–' : fmt(up, 1)}<small>Mbit/s</small></div></div>
+      </div>`;
+
+    if (f) {
+      const sv = this.servers.find(s => s.id === f.server_id);
+      const failed = f.status === 'failed';
+      info.innerHTML = `
+        <div class="live-head"><span class="live-title">Ergebnis: ${esc(sv ? sv.name : 'Server ' + f.server_id)}</span>
+          <span class="live-badge ${failed ? 'failed' : 'done'}">${failed ? 'FEHLGESCHLAGEN' : 'ABGESCHLOSSEN'}</span></div>
+        <div class="bar-bg"><div class="bar-fill ${failed ? 'failed' : ''}" style="width:100%"></div></div>
+        ${failed ? `<div class="error-box">${esc(f.error_message || 'Unbekannter Fehler')}</div>` : metrics(f.download_bandwidth_mbps, f.upload_bandwidth_mbps)}
+        <div class="live-line"><span>${fmtDate(f.completed_at || f.created_at)}</span>
+          <a href="#" onclick="testsPage.openDetail(${f.id}); return false">Details</a></div>`;
+    } else if (l) {
+      const pending = l.status === 'pending';
+      const remaining = Math.max(0, l.total_seconds - l.elapsed_seconds);
+      info.innerHTML = `
+        <div class="live-head"><span class="live-title">${pending ? 'Wartet auf freien Testplatz' : 'Läuft gegen ' + esc(l.server_name)}</span>
+          <span class="live-badge ${pending ? 'idle' : ''}">${pending ? 'WARTET' : 'LIVE'}</span></div>
+        <div class="live-line"><span>${l.elapsed_seconds} s vergangen · ${remaining} s verbleibend</span><span>${l.progress} %</span></div>
+        <div class="bar-bg"><div class="bar-fill" style="width:${l.progress}%"></div></div>
+        ${metrics(pending ? null : l.current_download_mbps, pending ? null : l.current_upload_mbps)}`;
+    } else {
+      info.innerHTML = `
+        <div class="live-head"><span class="live-title">Live-Anzeige</span><span class="live-badge idle">BEREIT</span></div>
+        <div class="live-empty"><div>Kein Test aktiv.</div>
+          <div style="font-size:.85em">Starte links einen Test – laufende geplante Tests erscheinen hier automatisch.</div></div>`;
+    }
+    this.renderSpark();
+  },
+
+  renderSpark() {
+    const wrap = document.getElementById('liveSparkWrap');
+    if (!wrap) return;
+    wrap.hidden = this.series.length < 2 || !window.Chart;
+    if (wrap.hidden) return;
+    const down = this.series.map(p => ({ x: p.x, y: p.down }));
+    const up = this.series.map(p => ({ x: p.x, y: p.up }));
+    if (this.spark) {
+      this.spark.data.datasets[0].data = down;
+      this.spark.data.datasets[1].data = up;
+      this.spark.update('none');
+      return;
+    }
+    const line = (label, data, color) => ({ label, data, borderColor: color, backgroundColor: color, borderWidth: 2, pointRadius: 0, tension: 0.3 });
+    this.spark = new Chart(document.getElementById('liveSpark'), {
+      type: 'line',
+      data: { datasets: [line('Download', down, '#3b82f6'), line('Upload', up, '#10b981')] },
+      options: {
+        responsive: true, maintainAspectRatio: false, animation: false,
+        scales: {
+          x: { type: 'linear', ticks: { callback: v => fmt(v, 0) + ' s', maxTicksLimit: 6 }, grid: { color: GRID } },
+          y: { beginAtZero: true, ticks: { callback: v => fmt(v, 0), maxTicksLimit: 4 }, grid: { color: GRID } },
+        },
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { title: () => '', label: i => `${i.dataset.label}: ${fmt(i.raw.y, 1)} Mbit/s` } },
+        },
+      },
+    });
+  },
+
+  // ----- Verlauf -----
+  reloadList() {
+    this.skip = 0;
+    this.tests = [];
+    this.loadMore();
+  },
+
+  async loadMore() {
+    const params = new URLSearchParams({ limit: this.pageSize, skip: this.skip });
+    const server = document.getElementById('tlServer').value;
+    const status = document.getElementById('tlStatus').value;
+    if (server) params.set('server_id', server);
+    if (status) params.set('status', status);
+    try {
+      const page = await apiGet('/tests?' + params);
+      this.tests = this.skip === 0 ? page : this.tests.concat(page);
+      this.skip += page.length;
+      this.hasMore = page.length === this.pageSize;
+      this.renderList();
+    } catch (e) {
+      if (e.status !== 401) notify('Tests konnten nicht geladen werden: ' + e.message, 'err');
+    }
+  },
+
+  renderList() {
+    const name = id => { const s = this.servers.find(x => x.id === id); return s ? s.name : 'Server ' + id; };
+    document.getElementById('testRows').innerHTML = this.tests.length
+      ? this.tests.map(t => `<tr onclick="testsPage.openDetail(${t.id})">
+          <td>${fmtDate(t.created_at)}</td><td>${esc(name(t.server_id))}</td><td>${protocolLabel(t.protocol)}</td>
+          <td>${directionLabel(t.direction)}</td><td>${t.parallel_streams}</td>
+          <td class="num">${fmtMbps(t.download_bandwidth_mbps)}</td><td class="num">${fmtMbps(t.upload_bandwidth_mbps)}</td>
+          <td>${statusBadge(t.status)}</td></tr>`).join('')
+      : '<tr><td colspan="8" class="muted" style="text-align:center;padding:24px">Keine Tests gefunden</td></tr>';
+    document.getElementById('tlMore').hidden = !this.hasMore;
+  },
+
+  // ----- Details -----
+  async openDetail(id) {
+    let t;
+    try {
+      t = await apiGet('/tests/' + id);
+    } catch (e) {
+      notify(e.message, 'err');
+      return;
+    }
+    const row = (label, val) => `<div class="stat"><span class="stat-label">${label}</span><span class="stat-val">${val}</span></div>`;
+    const runtime = t.started_at && t.completed_at
+      ? fmt((Date.parse(t.completed_at) - Date.parse(t.started_at)) / 1000, 1) + ' s' : '–';
+    document.getElementById('testModalTitle').textContent = `Test #${t.id} – ${t.server.name}`;
+    document.getElementById('testModalBody').innerHTML = `
+      <div class="ds-badges">${statusBadge(t.status)}<span class="badge-type">${protocolLabel(t.protocol)}</span>
+        <span class="sev-badge sev-info">${directionLabel(t.direction)}</span><span class="sev-badge sev-info">${streamsLabel(t.parallel_streams)}</span></div>
+      ${t.error_message ? `<div class="error-box">${esc(t.error_message)}</div>` : ''}
+      <div class="detail-grid">
+        ${row('Server', `${esc(t.server.host)}:${t.server.port}`)}
+        ${row('Angelegt', fmtDate(t.created_at))}
+        ${row('Gestartet', fmtDate(t.started_at))}
+        ${row('Laufzeit', runtime + ' (geplant ' + t.duration + ' s)')}
+        ${row('Download', fmtMbps(t.download_bandwidth_mbps))}
+        ${row('Upload', fmtMbps(t.upload_bandwidth_mbps))}
+        ${row('Datenmenge Download', fmtBytes(t.download_bytes))}
+        ${row('Datenmenge Upload', fmtBytes(t.upload_bytes))}
+        ${t.protocol === 'udp' ? row('UDP-Zielrate', t.udp_bandwidth_mbps ? fmtMbps(t.udp_bandwidth_mbps) : 'Standard (1 Mbit/s)') : ''}
+        ${t.protocol === 'udp' ? row('Jitter', [t.download_jitter_ms, t.upload_jitter_ms].filter(v => v != null).map(v => fmt(v, 2) + ' ms').join(' / ') || '–') : ''}
+        ${t.protocol === 'udp' ? row('Paketverlust', [t.download_packet_loss_percent, t.upload_packet_loss_percent].filter(v => v != null).map(v => fmt(v, 2) + ' %').join(' / ') || '–') : ''}
+        ${row('Retransmits', t.retransmits == null ? '–' : fmt(t.retransmits, 0))}
+        ${row('CPU-Last (lokal)', t.cpu_percent == null ? '–' : fmt(t.cpu_percent, 1) + ' %')}
+      </div>
+      ${t.raw_output ? `<details class="raw"><summary>Rohausgabe von iperf3</summary><pre>${esc(t.raw_output)}</pre></details>` : ''}`;
+    document.getElementById('testModalDelete').onclick = () => this.deleteTest(t);
+    document.getElementById('testModal').hidden = false;
+    document.addEventListener('keydown', this.onKey);
+  },
+
+  onKey(ev) {
+    // Escape im Bestätigungsdialog schließt nur diesen.
+    if (ev.key === 'Escape' && document.getElementById('confirmModal').hidden) testsPage.closeDetail();
+  },
+
+  closeDetail() {
+    document.getElementById('testModal').hidden = true;
+    document.removeEventListener('keydown', this.onKey);
+  },
+
+  async deleteTest(t) {
+    const ok = await confirmDialog('Test löschen?', `Test #${t.id} gegen „${t.server.name}“ wird samt Traces endgültig gelöscht.`, 'Löschen');
+    if (!ok) return;
+    try {
+      await api('DELETE', '/tests/' + t.id);
+      this.closeDetail();
+      if (this.final && this.final.id === t.id) { this.final = null; this.series = []; this.renderLive(); }
+      notify(`Test #${t.id} gelöscht`);
+      this.reloadList();
+    } catch (e) {
+      notify(e.message, 'err');
+    }
+  },
+};
+pages.tests = testsPage;
+
 // ---------- Start ----------
 (async function init() {
   loadInfo();

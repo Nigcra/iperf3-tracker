@@ -56,6 +56,8 @@
   }
   body::before { content: ""; position: fixed; inset: 0; z-index: -1; background: var(--bg-grad); }
   * { scrollbar-width: thin; scrollbar-color: rgb(148 163 184 / .25) transparent; }
+  a { color: var(--accent-light); text-underline-offset: 2px; }
+  :root[data-theme="light"] a { color: var(--accent); }
   code, .mono { font-family: ui-monospace, 'Cascadia Code', Consolas, monospace; }
   [hidden] { display: none !important; }
 
@@ -229,12 +231,43 @@
   .check-row input { width: 16px; height: 16px; accent-color: var(--accent); }
   .check-row.disabled { opacity: .5; cursor: default; }
   .hint { font-size: 0.76em; color: var(--faint); margin-top: -8px; margin-bottom: 12px; }
-  .section-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
+  .section-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
   .section-head .section-title { margin-bottom: 0; }
   .host { font-family: ui-monospace, 'Cascadia Code', Consolas, monospace; font-size: 0.84em; color: var(--muted); margin: -6px 0 10px; word-break: break-all; }
   .desc { font-size: 0.84em; color: var(--text); margin-bottom: 12px; }
   .ds-card.inactive { opacity: .62; }
   @media (max-width: 560px) { .form-grid { grid-template-columns: 1fr; } }
+
+  /* ---------- Tests ---------- */
+  .live-panel { display: flex; flex-direction: column; min-height: 100%; }
+  .live-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 14px; }
+  .live-title { font-weight: 700; color: var(--heading); }
+  .live-badge { display: inline-flex; align-items: center; gap: 6px; font-size: 0.72em; font-weight: 700; letter-spacing: .06em;
+                padding: 3px 10px; border-radius: 999px; background: rgb(248 113 113 / .16); color: var(--crit); }
+  .live-badge::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; animation: pulse 1.2s infinite; }
+  .live-badge.done { background: rgb(52 211 153 / .16); color: var(--ok); } .live-badge.done::before { animation: none; }
+  .live-badge.failed { background: rgb(248 113 113 / .16); color: var(--crit); } .live-badge.failed::before { animation: none; }
+  .live-badge.idle { background: rgb(148 163 184 / .16); color: var(--muted); } .live-badge.idle::before { animation: none; }
+  .live-panel .bar-bg { height: 12px; }
+  .live-metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 6px 0 12px; }
+  .live-metric { border-radius: 12px; padding: 12px 14px; background: var(--surface-2); border: 1px solid var(--border); min-width: 0; }
+  .live-metric .lbl { font-size: 0.75em; color: var(--muted); }
+  .live-metric .num { font-size: clamp(1.15em, 4.6vw, 1.7em); white-space: nowrap; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .live-metric .num small { font-size: 0.5em; font-weight: 500; color: var(--muted); margin-left: 4px; }
+  .live-metric.down .num { color: var(--accent-light); } .live-metric.up .num { color: var(--ok); }
+  :root[data-theme="light"] .live-metric.down .num { color: var(--accent); } :root[data-theme="light"] .live-metric.up .num { color: #059669; }
+  .live-spark { position: relative; height: 120px; margin-top: auto; }
+  .live-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; color: var(--faint); text-align: center; padding: 30px 10px; }
+  table.clickable tbody tr { cursor: pointer; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 18px; margin-bottom: 16px; }
+  .detail-grid .stat-val { font-size: 0.9em; }
+  .error-box { border-radius: 10px; padding: 10px 12px; margin-bottom: 14px; font-size: 0.85em; word-break: break-word;
+               background: rgb(248 113 113 / .10); border: 1px solid rgb(248 113 113 / .35); color: #fca5a5; }
+  :root[data-theme="light"] .error-box { color: #b91c1c; }
+  details.raw summary { cursor: pointer; font-size: 0.82em; color: var(--muted); margin-bottom: 8px; }
+  details.raw pre { max-height: 260px; overflow: auto; font-size: 0.72em; padding: 10px 12px; border-radius: 10px;
+                    background: var(--surface-2); border: 1px solid var(--border); color: var(--text); white-space: pre-wrap; word-break: break-all; }
 
   #toasts { position: fixed; right: 20px; bottom: 20px; z-index: 100; display: flex; flex-direction: column; gap: 8px; max-width: min(420px, calc(100vw - 40px)); }
   .toast { padding: 11px 16px; border-radius: 10px; font-size: 0.86em; color: var(--heading);
@@ -317,7 +350,7 @@
           </button>
         </div>
       </div>
-      <button class="btn" onclick="showTab('tests')" title="Neuen Test starten">
+      <button class="btn" onclick="showTab('tests'); document.getElementById('tfServer').focus()" title="Neuen Test starten">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="6 3 20 12 6 21 6 3"/></svg>
         <span class="btn-label">Test starten</span>
       </button>
@@ -360,8 +393,47 @@
   <!-- Tests -->
   <div class="page" id="page-tests">
     <div class="section">
-      <div class="section-title">Tests</div>
-      <p class="muted">Test starten, Live-Anzeige und Verlauf folgen in Phase 9c.</p>
+      <div class="section-title">Test starten</div>
+      <div class="grid-2">
+        <form class="ds-card" id="testForm" onsubmit="testsPage.start(event)">
+          <div class="form-grid">
+            <div class="field full"><label for="tfServer">Server</label>
+              <select id="tfServer" onchange="testsPage.applyServerDefaults()"></select></div>
+            <div class="field"><label for="tfProto">Protokoll</label>
+              <select id="tfProto" onchange="testsPage.syncForm()"><option value="tcp">TCP</option><option value="udp">UDP</option></select></div>
+            <div class="field"><label for="tfDir">Richtung</label>
+              <select id="tfDir"><option value="download">Download</option><option value="upload">Upload</option><option value="bidirectional">Bidirektional</option></select></div>
+            <div class="field"><label for="tfDuration">Testdauer (s)</label><input id="tfDuration" type="number" min="1" max="300"></div>
+            <div class="field"><label for="tfParallel">Parallele Streams</label><input id="tfParallel" type="number" min="1" max="128" oninput="testsPage.syncForm()"></div>
+            <div class="hint full" id="tfParallelHint" hidden>⚠ Viele öffentliche Server erlauben höchstens 4 parallele Streams.</div>
+            <div class="field full" id="tfUdpField"><label for="tfUdp">UDP-Zielbandbreite (Mbit/s)</label>
+              <input id="tfUdp" type="number" min="0.1" max="100000" step="any" placeholder="leer = iperf3-Standard (1 Mbit/s)"></div>
+          </div>
+          <button class="btn" id="tfStart" type="submit" style="width:100%">Test starten</button>
+        </form>
+
+        <div class="ds-card live-panel" id="livePanel"></div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-head">
+        <div class="section-title">Testverlauf</div>
+        <div class="hist-controls" style="margin:0">
+          <select id="tlServer" onchange="testsPage.reloadList()"><option value="">Alle Server</option></select>
+          <select id="tlStatus" onchange="testsPage.reloadList()">
+            <option value="">Alle Status</option><option value="completed">Abgeschlossen</option><option value="failed">Fehlgeschlagen</option>
+            <option value="running">Läuft</option><option value="pending">Wartet</option>
+          </select>
+        </div>
+      </div>
+      <div class="tbl-wrap">
+        <table class="clickable">
+          <thead><tr><th>Zeitpunkt</th><th>Server</th><th>Protokoll</th><th>Richtung</th><th>Streams</th><th style="text-align:right">Download</th><th style="text-align:right">Upload</th><th>Status</th></tr></thead>
+          <tbody id="testRows"></tbody>
+        </table>
+      </div>
+      <div style="text-align:center;margin-top:14px"><button class="btn btn-secondary" id="tlMore" onclick="testsPage.loadMore()" hidden>Mehr laden</button></div>
     </div>
   </div>
 
@@ -434,6 +506,21 @@
       <button type="submit" class="btn" id="serverFormSave">Speichern</button>
     </div>
   </form>
+</div>
+
+<!-- Dialog: Testdetails -->
+<div class="modal-backdrop" id="testModal" hidden onclick="if (event.target === this) testsPage.closeDetail()">
+  <div class="modal">
+    <div class="modal-head">
+      <h2 id="testModalTitle">Test</h2>
+      <button type="button" class="icon-btn" aria-label="Schließen" onclick="testsPage.closeDetail()">✕</button>
+    </div>
+    <div class="modal-body" id="testModalBody"></div>
+    <div class="modal-foot">
+      <button type="button" class="btn btn-danger" id="testModalDelete">Test löschen</button>
+      <button type="button" class="btn btn-secondary" onclick="testsPage.closeDetail()">Schließen</button>
+    </div>
+  </div>
 </div>
 
 <!-- Dialog: Bestätigung -->
