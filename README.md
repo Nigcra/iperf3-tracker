@@ -24,9 +24,14 @@ the API and the web interface – no additional runtime or web server needed.
   the header and on the login page; defaults to the browser language), light/dark
   theme, mobile friendly
 
-| Tests | Peering map | Servers (light theme) |
-|---|---|---|
-| ![Tests](_screenshots/tests.png) | ![Peering map](_screenshots/peering-map.png) | ![Servers](_screenshots/server-light.png) |
+![Running a test](_screenshots/iperf-test.gif)
+*Running a test – live progress, throughput curve and result*
+
+![Live traceroute](_screenshots/peering-map.gif)
+*Live traceroute on the peering map*
+
+![Servers](_screenshots/server-light.png)
+*Server profiles (light theme)*
 
 ## Requirements
 
