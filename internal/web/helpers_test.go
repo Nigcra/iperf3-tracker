@@ -19,6 +19,12 @@ import (
 // newTestServer startet die API auf einer frischen Datenbank mit Standard-Admin.
 func newTestServer(t *testing.T) *httptest.Server {
 	t.Helper()
+	return newTestServerWithTracer(t, nil)
+}
+
+// newTestServerWithTracer erlaubt einen eigenen Tracer; nil = ohne traceroute-Binary.
+func newTestServerWithTracer(t *testing.T, tracer *trace.Tracer) *httptest.Server {
+	t.Helper()
 	conn, err := db.Open(filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
 		t.Fatal(err)
@@ -40,7 +46,10 @@ func newTestServer(t *testing.T) *httptest.Server {
 	runner := iperf.NewRunner(st, filepath.Join(t.TempDir(), "kein-iperf3"))
 	t.Cleanup(runner.Stop)
 
-	srv := httptest.NewServer(NewServer(st, auth.NewTokens("test-secret"), runner, trace.NewTracer(nil, filepath.Join(t.TempDir(), "kein-traceroute"))).Handler())
+	if tracer == nil {
+		tracer = trace.NewTracer(nil, filepath.Join(t.TempDir(), "kein-traceroute"))
+	}
+	srv := httptest.NewServer(NewServer(st, auth.NewTokens("test-secret"), runner, tracer).Handler())
 	t.Cleanup(srv.Close)
 	return srv
 }

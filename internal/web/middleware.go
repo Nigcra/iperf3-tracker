@@ -1,6 +1,7 @@
 package web
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strings"
@@ -34,37 +35,50 @@ func (s *Server) requireAdmin(h userHandler) http.Handler {
 	})
 }
 
+var (
+	errUnauthorized = errors.New("Anmeldedaten konnten nicht geprüft werden")
+	errInactive     = errors.New("Benutzer ist deaktiviert")
+)
+
 // authenticate prüft token und lädt den zugehörigen Benutzer. Schlägt das
 // fehl, ist die Fehlerantwort bereits geschrieben und ok ist false.
-// Wird auch für die SSE-Route genutzt, die das Token als Query-Parameter erhält.
 func (s *Server) authenticate(w http.ResponseWriter, r *http.Request, token string) (u *model.User, ok bool) {
-	unauthorized := func() {
+	u, err := s.userForToken(r.Context(), token)
+	switch {
+	case errors.Is(err, errUnauthorized):
 		w.Header().Set("WWW-Authenticate", "Bearer")
-		writeError(w, http.StatusUnauthorized, "Anmeldedaten konnten nicht geprüft werden")
+		writeError(w, http.StatusUnauthorized, err.Error())
+	case errors.Is(err, errInactive):
+		writeError(w, http.StatusBadRequest, err.Error())
+	case err != nil:
+		writeInternal(w, r, err)
+	default:
+		return u, true
 	}
+	return nil, false
+}
+
+// userForToken prüft token und lädt den zugehörigen, aktiven Benutzer.
+// Fehler sind errUnauthorized, errInactive oder Datenbankfehler.
+func (s *Server) userForToken(ctx context.Context, token string) (*model.User, error) {
 	if token == "" {
-		unauthorized()
-		return nil, false
+		return nil, errUnauthorized
 	}
 	username, err := s.tokens.Parse(token)
 	if err != nil {
-		unauthorized()
-		return nil, false
+		return nil, errUnauthorized
 	}
-	u, err = s.store.UserByUsername(r.Context(), username)
+	u, err := s.store.UserByUsername(ctx, username)
 	if errors.Is(err, store.ErrNotFound) {
-		unauthorized()
-		return nil, false
+		return nil, errUnauthorized
 	}
 	if err != nil {
-		writeInternal(w, r, err)
-		return nil, false
+		return nil, err
 	}
 	if !u.IsActive {
-		writeError(w, http.StatusBadRequest, "Benutzer ist deaktiviert")
-		return nil, false
+		return nil, errInactive
 	}
-	return u, true
+	return u, nil
 }
 
 func bearerToken(r *http.Request) string {

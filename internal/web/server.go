@@ -83,6 +83,9 @@ func (s *Server) routes() {
 	s.mux.Handle("GET /api/traces/{trace_id}", s.requireUser(s.handleGetTrace))
 	s.mux.Handle("GET /api/traces/test/{test_id}", s.requireUser(s.handleTracesByTest))
 	s.mux.Handle("DELETE /api/traces/{trace_id}", s.requireUser(s.handleDeleteTrace))
+
+	// Anmeldung über ?token=, da EventSource keine Header setzen kann.
+	s.mux.HandleFunc("GET /api/live-trace/stream/{destination}", s.handleLiveTrace)
 }
 
 func (s *Server) handleInfo(w http.ResponseWriter, r *http.Request) {
