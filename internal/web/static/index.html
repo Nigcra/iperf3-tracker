@@ -70,23 +70,39 @@
   .header-inner { max-width: 1152px; margin: 0 auto; width: 100%; padding: 0 24px;
                   display: flex; align-items: center; gap: 20px; flex-wrap: nowrap; min-width: 0; }
   .brand { display: flex; align-items: center; gap: 12px; flex: none; }
-  /* Logo: Tacho mit Zeiger, der beim Einblenden hochschnellt und kurz nachfedert. */
-  .logo { width: 36px; height: 36px; flex: none; overflow: visible; filter: drop-shadow(0 4px 12px rgb(0 0 0 / .15)); }
-  .logo-ring { fill: none; stroke: #4b5563; stroke-width: 10; }
-  .logo-arc { fill: none; stroke-width: 10; filter: drop-shadow(0 0 4px rgb(249 115 22 / .45)); }
-  .logo-needle { stroke: url(#logoNeedle); stroke-width: 7; stroke-linecap: round;
-                 transform-box: view-box; transform-origin: 50px 50px; transform: rotate(-55deg);
-                 animation: needleSweep 2s ease-out both; }
-  .logo-hub { fill: url(#logoHub); stroke: #1e293b; stroke-width: 2.5; }
-  .login-card .logo { width: 108px; height: 108px; }
-  .login-card .logo-needle { stroke-width: 3.5; }
+  /* Logo des früheren React-Frontends (Logo.tsx), unverändert portiert: Tacho
+     aus Rahmen-Ringen, Zeiger schnellt beim Einblenden hoch und federt nach.
+     --s ist die Kantenlänge (size im Original). */
+  .logo { --s: 40px; display: flex; flex-direction: column; align-items: center; gap: 0; flex: none; }
+  .logo-gauge { width: var(--s); height: var(--s); position: relative; display: flex; align-items: center; justify-content: center;
+                filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.15)); }
+  .logo-ring { width: 100%; height: 100%; border-radius: 50%; border: calc(var(--s) * 0.1) solid #4B5563; position: absolute;
+               box-sizing: border-box; box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.1); }
+  .logo-arc { width: 100%; height: 100%; border-radius: 50%; border: calc(var(--s) * 0.1) solid transparent;
+              border-top-color: #F97316; border-left-color: #FB923C; position: absolute; transform: rotate(-45deg);
+              box-sizing: border-box; filter: drop-shadow(0 0 8px rgba(249, 115, 22, 0.4)); }
+  .logo-needle { width: calc(var(--s) * 0.45); height: 2.5px; background: linear-gradient(90deg, rgba(249, 115, 22, 0.3), #F97316);
+                 position: absolute; transform-origin: left center; transform: rotate(-55deg); left: 50%; top: 50%;
+                 border-radius: 2px; box-shadow: 0 2px 6px rgba(249, 115, 22, 0.3); animation: needleSweep 2s ease-out forwards; }
+  .logo-hub { width: calc(var(--s) * 0.16); height: calc(var(--s) * 0.16); background: linear-gradient(135deg, #FB923C 0%, #F97316 100%);
+              border-radius: 50%; position: absolute; border: calc(var(--s) * 0.02) solid #1e293b; box-sizing: border-box; z-index: 10;
+              box-shadow: 0 2px 8px rgba(249, 115, 22, 0.4), inset 0 1px 2px rgba(255, 255, 255, 0.3); }
+  .logo-text { text-align: center; font-family: "Inter", "SF Pro Display", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  .logo-t1 { font-size: calc(var(--s) * 0.22); font-weight: 600; color: white; letter-spacing: 1px; line-height: 1.1;
+             text-shadow: 0 2px 8px rgba(0,0,0,0.3), 0 4px 16px rgba(0,0,0,0.2); text-transform: uppercase; }
+  .logo-t2 { font-size: calc(var(--s) * 0.16); font-weight: 500; color: rgba(255,255,255,0.85); letter-spacing: 1.5px; margin-top: 2px;
+             text-shadow: 0 2px 8px rgba(0,0,0,0.3), 0 4px 16px rgba(0,0,0,0.2); text-transform: uppercase; }
+  /* Weiße Schrift wäre auf der hellen Karte unsichtbar. */
+  :root[data-theme="light"] .logo-t1 { color: var(--heading); text-shadow: none; }
+  :root[data-theme="light"] .logo-t2 { color: var(--muted); text-shadow: none; }
+  .logo-lg { --s: 126px; gap: 12px; }
   @keyframes needleSweep {
-    0%   { transform: rotate(-135deg); }
-    60%  { transform: rotate(-55deg); }
-    70%  { transform: rotate(-60deg); }
-    80%, 100% { transform: rotate(-55deg); }
+    0% { transform: rotate(-135deg); }
+    60% { transform: rotate(-55deg); }
+    70% { transform: rotate(-60deg); }
+    80% { transform: rotate(-55deg); }
+    100% { transform: rotate(-55deg); }
   }
-  @media (prefers-reduced-motion: reduce) { .logo-needle { animation: none; } }
   .brand-title { font-size: 1.15em; font-weight: 600; letter-spacing: .2px; color: var(--heading); white-space: nowrap; }
   .nav-ico { width: 16px; height: 16px; flex: none; }
   .header .actions { display: flex; align-items: center; gap: 10px; margin-left: auto; flex-wrap: nowrap; }
@@ -375,17 +391,6 @@
 </head>
 <body>
 
-<!-- Gemeinsame Verläufe des Logos -->
-<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
-  <defs>
-    <linearGradient id="logoNeedle" gradientUnits="userSpaceOnUse" x1="50" y1="50" x2="92" y2="50">
-      <stop offset="0" stop-color="#f97316" stop-opacity=".3"/><stop offset="1" stop-color="#f97316"/>
-    </linearGradient>
-    <linearGradient id="logoHub" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#fb923c"/><stop offset="1" stop-color="#f97316"/>
-    </linearGradient>
-  </defs>
-</svg>
 
 <!-- Anmeldung -->
 <div class="login-wrap" id="loginView" hidden>
@@ -395,7 +400,7 @@
       <button type="button" data-lang="de" lang="de" title="Deutsch" onclick="setLang('de')">DE</button>
       <button type="button" data-lang="en" lang="en" title="English" onclick="setLang('en')">EN</button>
     </div>
-    <div class="brand"><svg class="logo" viewBox="0 0 100 100" aria-hidden="true"><circle class="logo-ring" cx="50" cy="50" r="45"/><path class="logo-arc" stroke="#fb923c" d="M50 95A45 45 0 0 1 5 50"/><path class="logo-arc" stroke="#f97316" d="M5 50A45 45 0 0 1 50 5"/><line class="logo-needle" x1="50" y1="50" x2="92" y2="50"/><circle class="logo-hub" cx="50" cy="50" r="8"/></svg><span class="brand-title">iperf3-Tracker</span></div>
+    <div class="brand"><div class="logo logo-lg" role="img" aria-label="iperf3-Tracker"><div class="logo-gauge"><div class="logo-ring"></div><div class="logo-arc"></div><div class="logo-needle"></div><div class="logo-hub"></div></div><div class="logo-text"><div class="logo-t1">iPerf3</div><div class="logo-t2">Tracker</div></div></div></div>
     <div class="form-error" id="loginError" hidden></div>
     <div class="field"><label for="loginUser" data-i18n="login.user">Benutzername</label><input id="loginUser" autocomplete="username" required autofocus></div>
     <div class="field"><label for="loginPass" data-i18n="login.pass">Passwort</label><input id="loginPass" type="password" autocomplete="current-password" required></div>
@@ -406,7 +411,7 @@
 <!-- Anwendung -->
 <header class="header" id="appHeader" hidden>
   <div class="header-inner">
-    <div class="brand"><svg class="logo" viewBox="0 0 100 100" aria-hidden="true"><circle class="logo-ring" cx="50" cy="50" r="45"/><path class="logo-arc" stroke="#fb923c" d="M50 95A45 45 0 0 1 5 50"/><path class="logo-arc" stroke="#f97316" d="M5 50A45 45 0 0 1 50 5"/><line class="logo-needle" x1="50" y1="50" x2="92" y2="50"/><circle class="logo-hub" cx="50" cy="50" r="8"/></svg><span class="brand-title">iperf3-Tracker</span></div>
+    <div class="brand"><div class="logo" aria-hidden="true"><div class="logo-gauge"><div class="logo-ring"></div><div class="logo-arc"></div><div class="logo-needle"></div><div class="logo-hub"></div></div></div><span class="brand-title">iperf3-Tracker</span></div>
     <nav class="nav" id="nav">
       <button data-tab="dashboard" onclick="showTab('dashboard')">
         <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>
