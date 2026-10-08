@@ -256,6 +256,27 @@ type ServerStats struct {
 	LastTestAt           *time.Time `json:"last_test_at"`
 }
 
+// DatabaseStats sind die Datenbank-Kennzahlen der Administration.
+type DatabaseStats struct {
+	TotalTests   int        `json:"total_tests"`
+	TotalServers int        `json:"total_servers"`
+	TotalUsers   int        `json:"total_users"`
+	TotalTraces  int        `json:"total_traces"`
+	TotalHops    int        `json:"total_hops"`
+	OldestTest   *time.Time `json:"oldest_test"`
+	NewestTest   *time.Time `json:"newest_test"`
+}
+
+// PublicServer ist ein bekannter öffentlicher iperf3-Server.
+type PublicServer struct {
+	Name        string `json:"name"`
+	Host        string `json:"host"`
+	Port        int    `json:"port"`
+	Location    string `json:"location"`
+	Provider    string `json:"provider"`
+	Description string `json:"description"`
+}
+
 // Server ist ein iperf3-Server-Profil.
 type Server struct {
 	ID int64 `json:"id"`

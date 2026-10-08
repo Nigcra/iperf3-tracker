@@ -98,6 +98,14 @@ func (s *Server) routes() {
 
 	// Anmeldung über ?token=, da EventSource keine Header setzen kann.
 	s.mux.HandleFunc("GET /api/live-trace/stream/{destination}", s.handleLiveTrace)
+
+	s.mux.Handle("DELETE /api/admin/cleanup/tests", s.requireAdmin(s.handleCleanupTests))
+	s.mux.Handle("DELETE /api/admin/cleanup/traces", s.requireAdmin(s.handleCleanupTraces))
+	s.mux.Handle("GET /api/admin/stats/database", s.requireAdmin(s.handleDatabaseStats))
+
+	// Öffentlich wie bisher: statische Liste ohne Benutzerdaten.
+	s.mux.HandleFunc("GET /api/public-servers", s.handlePublicServers)
+	s.mux.HandleFunc("GET /api/public-servers/search", s.handleSearchPublicServers)
 }
 
 func (s *Server) handleInfo(w http.ResponseWriter, r *http.Request) {

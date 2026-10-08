@@ -118,7 +118,8 @@ func TestSchedulerRunsDueServers(t *testing.T) {
 			t.Fatalf("kein Auto-Trace für Test %d", got.ID)
 		}
 		time.Sleep(10 * time.Millisecond)
-	}}
+	}
+}
 
 func TestSchedulerUpdateAndRemove(t *testing.T) {
 	e := newEnv(t)
