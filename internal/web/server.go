@@ -42,6 +42,13 @@ func (s *Server) routes() {
 	s.mux.Handle("POST /api/auth/register", s.requireAdmin(s.handleRegister))
 	s.mux.Handle("GET /api/auth/users", s.requireAdmin(s.handleListUsers))
 	s.mux.Handle("DELETE /api/auth/users/{user_id}", s.requireAdmin(s.handleDeleteUser))
+
+	// Im Python-Backend waren diese Routen ohne Anmeldung erreichbar.
+	s.mux.Handle("GET /api/servers", s.requireUser(s.handleListServers))
+	s.mux.Handle("POST /api/servers", s.requireUser(s.handleCreateServer))
+	s.mux.Handle("GET /api/servers/{server_id}", s.requireUser(s.handleGetServer))
+	s.mux.Handle("PUT /api/servers/{server_id}", s.requireUser(s.handleUpdateServer))
+	s.mux.Handle("DELETE /api/servers/{server_id}", s.requireUser(s.handleDeleteServer))
 }
 
 func (s *Server) handleInfo(w http.ResponseWriter, r *http.Request) {

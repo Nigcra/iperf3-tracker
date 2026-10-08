@@ -82,16 +82,7 @@ func (s *Store) CreateUser(ctx context.Context, u *model.User) error {
 
 // DeleteUser löscht den Benutzer mit der angegebenen ID.
 func (s *Store) DeleteUser(ctx context.Context, id int64) error {
-	res, err := s.db.ExecContext(ctx, `DELETE FROM users WHERE id = ?`, id)
-	if err != nil {
-		return err
-	}
-	if n, err := res.RowsAffected(); err != nil {
-		return err
-	} else if n == 0 {
-		return ErrNotFound
-	}
-	return nil
+	return affectedOne(s.db.ExecContext(ctx, `DELETE FROM users WHERE id = ?`, id))
 }
 
 // SetLastLogin setzt den Zeitpunkt der letzten Anmeldung.

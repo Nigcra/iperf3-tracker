@@ -3,7 +3,6 @@ package web
 import (
 	"errors"
 	"net/http"
-	"strconv"
 	"unicode/utf8"
 
 	"iperf3-tracker/internal/auth"
@@ -135,9 +134,8 @@ func validateNewUser(username, email, password string) string {
 }
 
 func (s *Server) handleDeleteUser(w http.ResponseWriter, r *http.Request, current *model.User) {
-	id, err := strconv.ParseInt(r.PathValue("user_id"), 10, 64)
-	if err != nil {
-		writeError(w, http.StatusUnprocessableEntity, "Ungültige Benutzer-ID")
+	id, ok := pathID(w, r, "user_id")
+	if !ok {
 		return
 	}
 	if id == current.ID {

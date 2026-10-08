@@ -8,7 +8,8 @@ Ziel: Das bestehende Python/FastAPI-Backend **und** das React-Frontend werden du
 > |---|---|
 > | 0 – Setup | ✅ erledigt: `go.mod`, `build.cmd`, Config (YAML + Env), Schema, `/health`, `/api/info`, CORS |
 > | 1 – Auth | ✅ erledigt: bcrypt, JWT, Middleware, alle `/auth/*`-Endpunkte, Standard-Admin, Go-Tests (`internal/web/handlers_auth_test.go`) |
-> | 2–10 | offen |
+> | 2 – Server-CRUD | ✅ erledigt: `/api/servers` (Liste mit `enabled`/`skip`/`limit`, Detail, Anlegen, partielles Update, Löschen per Cascade), Go-Tests. Scheduler-Aufrufe folgen in Phase 7 |
+> | 3–10 | offen |
 >
 > Abweichungen bei der Umsetzung:
 > - Das Schema stammt aus den **SQLAlchemy-Modellen** (`models.py`) und nicht aus den Migrationen. Eine frische Python-DB entsteht per `create_all` aus den Modellen. Unterschied zur Migration 002: `traces.test_id` ist nullable und nicht `UNIQUE`.
@@ -16,6 +17,7 @@ Ziel: Das bestehende Python/FastAPI-Backend **und** das React-Frontend werden du
 > - Das Python-Backend legt den Start-Admin mit dem Passwort `admin` an, `init-admin` dagegen mit `admin123`. Go verwendet einheitlich `admin123`.
 > - Zeitstempel werden als TEXT im festen Format `2006-01-02T15:04:05.000000Z` gespeichert. Das Format ist sortierbar, sodass Datumsfilter direkt per Stringvergleich funktionieren.
 > - `detail`-Fehlermeldungen sind deutsch. Das React-Frontend wertet nur die Statuscodes aus, und die sind unverändert.
+> - `servers`, `tests` und `stats` waren in Python **ohne Anmeldung** erreichbar. In Go verlangen sie ein gültiges Token. Das React-Frontend sendet es immer mit, der Ablauf bleibt also unverändert.
 > - Noch offen: Smoke-Test von Phase 1 mit dem React-Frontend im Browser. Die API ist per curl und Go-Tests geprüft.
 >
 > **Änderungen gegenüber der Fassung vom 3. Aug.:**
