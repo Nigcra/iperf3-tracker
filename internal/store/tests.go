@@ -11,7 +11,7 @@ import (
 )
 
 // testColumns enthält alle Spalten außer raw_output, das nur die Detailansicht braucht.
-const testColumns = `id, server_id, protocol, direction, duration, parallel_streams, status,
+const testColumns = `id, server_id, protocol, direction, duration, parallel_streams, udp_bandwidth_mbps, status,
 	started_at, completed_at,
 	download_bandwidth_mbps, download_bytes, download_jitter_ms, download_packet_loss_percent,
 	upload_bandwidth_mbps, upload_bytes, upload_jitter_ms, upload_packet_loss_percent,
@@ -20,7 +20,7 @@ const testColumns = `id, server_id, protocol, direction, duration, parallel_stre
 func scanTest(row rowScanner, extra ...any) (*model.Test, error) {
 	var t model.Test
 	r := &t.TestResult
-	dest := append([]any{&t.ID, &t.ServerID, &t.Protocol, &t.Direction, &t.Duration, &t.ParallelStreams, &t.Status,
+	dest := append([]any{&t.ID, &t.ServerID, &t.Protocol, &t.Direction, &t.Duration, &t.ParallelStreams, &t.UDPBandwidthMbps, &t.Status,
 		db.NullTime(&t.StartedAt), db.NullTime(&t.CompletedAt),
 		&r.DownloadBandwidthMbps, &r.DownloadBytes, &r.DownloadJitterMs, &r.DownloadPacketLossPercent,
 		&r.UploadBandwidthMbps, &r.UploadBytes, &r.UploadJitterMs, &r.UploadPacketLossPercent,
@@ -118,9 +118,9 @@ func (s *Store) CreateTest(ctx context.Context, t *model.Test) error {
 	t.Status = model.StatusPending
 	t.CreatedAt = db.Now()
 	res, err := s.db.ExecContext(ctx,
-		`INSERT INTO tests (server_id, protocol, direction, duration, parallel_streams, status, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		t.ServerID, t.Protocol, t.Direction, t.Duration, t.ParallelStreams, t.Status, db.FormatTime(t.CreatedAt))
+		`INSERT INTO tests (server_id, protocol, direction, duration, parallel_streams, udp_bandwidth_mbps, status, created_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		t.ServerID, t.Protocol, t.Direction, t.Duration, t.ParallelStreams, t.UDPBandwidthMbps, t.Status, db.FormatTime(t.CreatedAt))
 	if err != nil {
 		return err
 	}

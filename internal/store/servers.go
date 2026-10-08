@@ -11,13 +11,13 @@ import (
 
 const serverColumns = `id, name, host, port, description, enabled,
 	default_duration, default_parallel, default_num_streams, default_protocol, default_direction,
-	schedule_enabled, schedule_interval_minutes, auto_trace_enabled, created_at, updated_at`
+	default_udp_bandwidth_mbps, schedule_enabled, schedule_interval_minutes, auto_trace_enabled, created_at, updated_at`
 
 func scanServer(row rowScanner) (*model.Server, error) {
 	var sv model.Server
 	err := row.Scan(&sv.ID, &sv.Name, &sv.Host, &sv.Port, &sv.Description, &sv.Enabled,
 		&sv.DefaultDuration, &sv.DefaultParallel, &sv.DefaultNumStreams, &sv.DefaultProtocol, &sv.DefaultDirection,
-		&sv.ScheduleEnabled, &sv.ScheduleIntervalMinutes, &sv.AutoTraceEnabled,
+		&sv.DefaultUDPBandwidthMbps, &sv.ScheduleEnabled, &sv.ScheduleIntervalMinutes, &sv.AutoTraceEnabled,
 		db.Time(&sv.CreatedAt), db.Time(&sv.UpdatedAt))
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
@@ -69,11 +69,11 @@ func (s *Store) CreateServer(ctx context.Context, sv *model.Server) error {
 	res, err := s.db.ExecContext(ctx,
 		`INSERT INTO servers (name, host, port, description, enabled,
 			default_duration, default_parallel, default_num_streams, default_protocol, default_direction,
-			schedule_enabled, schedule_interval_minutes, auto_trace_enabled, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			default_udp_bandwidth_mbps, schedule_enabled, schedule_interval_minutes, auto_trace_enabled, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		sv.Name, sv.Host, sv.Port, sv.Description, sv.Enabled,
 		sv.DefaultDuration, sv.DefaultParallel, sv.DefaultNumStreams, sv.DefaultProtocol, sv.DefaultDirection,
-		sv.ScheduleEnabled, sv.ScheduleIntervalMinutes, sv.AutoTraceEnabled,
+		sv.DefaultUDPBandwidthMbps, sv.ScheduleEnabled, sv.ScheduleIntervalMinutes, sv.AutoTraceEnabled,
 		db.FormatTime(sv.CreatedAt), db.FormatTime(sv.UpdatedAt))
 	if err != nil {
 		return mapUnique(err)
@@ -88,12 +88,12 @@ func (s *Store) UpdateServer(ctx context.Context, sv *model.Server) error {
 	err := affectedOne(s.db.ExecContext(ctx,
 		`UPDATE servers SET name = ?, host = ?, port = ?, description = ?, enabled = ?,
 			default_duration = ?, default_parallel = ?, default_num_streams = ?,
-			default_protocol = ?, default_direction = ?,
+			default_protocol = ?, default_direction = ?, default_udp_bandwidth_mbps = ?,
 			schedule_enabled = ?, schedule_interval_minutes = ?, auto_trace_enabled = ?, updated_at = ?
 		 WHERE id = ?`,
 		sv.Name, sv.Host, sv.Port, sv.Description, sv.Enabled,
 		sv.DefaultDuration, sv.DefaultParallel, sv.DefaultNumStreams,
-		sv.DefaultProtocol, sv.DefaultDirection,
+		sv.DefaultProtocol, sv.DefaultDirection, sv.DefaultUDPBandwidthMbps,
 		sv.ScheduleEnabled, sv.ScheduleIntervalMinutes, sv.AutoTraceEnabled, db.FormatTime(sv.UpdatedAt),
 		sv.ID))
 	return mapUnique(err)

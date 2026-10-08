@@ -170,9 +170,9 @@ func TestIntervalRates(t *testing.T) {
 }
 
 func TestArgs(t *testing.T) {
-	test := &model.Test{Duration: 5, ParallelStreams: 2, Protocol: model.ProtocolUDP, Direction: model.DirectionDownload}
+	test := &model.Test{Duration: 5, ParallelStreams: 2, Protocol: model.ProtocolUDP, Direction: model.DirectionDownload, UDPBandwidthMbps: f64(250.5)}
 	got := Args("srv.example.org", 5201, test)
-	want := []string{"-c", "srv.example.org", "-p", "5201", "-t", "5", "-P", "2", "-i", "1", "--json-stream", "--forceflush", "-u", "-R"}
+	want := []string{"-c", "srv.example.org", "-p", "5201", "-t", "5", "-P", "2", "-i", "1", "--json-stream", "--forceflush", "-u", "-b", "250.5M", "-R"}
 	if len(got) != len(want) {
 		t.Fatalf("Args = %v", got)
 	}
@@ -183,8 +183,9 @@ func TestArgs(t *testing.T) {
 	}
 
 	test.Protocol, test.Direction = model.ProtocolTCP, model.DirectionUpload
+	// Bei TCP wird keine Zielbandbreite übergeben, auch wenn eine gesetzt ist.
 	for _, a := range Args("h", 1, test) {
-		if a == "-R" || a == "--bidir" || a == "-u" {
+		if a == "-R" || a == "--bidir" || a == "-u" || a == "-b" {
 			t.Errorf("Upload/TCP darf %s nicht enthalten", a)
 		}
 	}

@@ -315,6 +315,9 @@ func Args(host string, port int, t *model.Test) []string {
 	}
 	if t.Protocol == model.ProtocolUDP {
 		args = append(args, "-u")
+		if t.UDPBandwidthMbps != nil {
+			args = append(args, "-b", strconv.FormatFloat(*t.UDPBandwidthMbps, 'f', -1, 64)+"M")
+		}
 	}
 	switch t.Direction {
 	case model.DirectionDownload:

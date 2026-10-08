@@ -74,6 +74,8 @@ func (s *Server) handleRunTest(w http.ResponseWriter, r *http.Request, _ *model.
 		Direction       model.Direction `json:"direction"`
 		Duration        int             `json:"duration"`
 		ParallelStreams int             `json:"parallel_streams"`
+		// Optional; ohne Angabe gilt bei UDP die Vorgabe des Servers.
+		UDPBandwidthMbps *float64 `json:"udp_bandwidth_mbps"`
 	}{Protocol: model.ProtocolTCP, Direction: model.DirectionDownload, Duration: 10, ParallelStreams: 1}
 	if !decodeJSON(w, r, &req) {
 		return
@@ -90,6 +92,10 @@ func (s *Server) handleRunTest(w http.ResponseWriter, r *http.Request, _ *model.
 		return
 	case req.ParallelStreams < 1 || req.ParallelStreams > 128:
 		writeError(w, http.StatusUnprocessableEntity, "Parallele Streams müssen zwischen 1 und 128 liegen")
+		return
+	}
+	if msg := model.ValidateUDPBandwidth(req.UDPBandwidthMbps); msg != "" {
+		writeError(w, http.StatusUnprocessableEntity, msg)
 		return
 	}
 
@@ -113,6 +119,12 @@ func (s *Server) handleRunTest(w http.ResponseWriter, r *http.Request, _ *model.
 		Direction:       req.Direction,
 		Duration:        req.Duration,
 		ParallelStreams: req.ParallelStreams,
+	}
+	if t.Protocol == model.ProtocolUDP {
+		t.UDPBandwidthMbps = req.UDPBandwidthMbps
+		if t.UDPBandwidthMbps == nil {
+			t.UDPBandwidthMbps = sv.DefaultUDPBandwidthMbps
+		}
 	}
 	if err := s.store.CreateTest(r.Context(), t); err != nil {
 		writeInternal(w, r, err)

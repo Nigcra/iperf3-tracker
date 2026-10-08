@@ -28,6 +28,8 @@ CREATE TABLE IF NOT EXISTS servers (
                               CHECK (default_protocol IN ('tcp', 'udp')),
     default_direction         TEXT    NOT NULL DEFAULT 'download'
                               CHECK (default_direction IN ('download', 'upload', 'bidirectional')),
+    -- Zielbandbreite für UDP-Tests in Mbit/s; NULL = iperf3-Standard (1 Mbit/s).
+    default_udp_bandwidth_mbps REAL,
     schedule_enabled          BOOLEAN NOT NULL DEFAULT 0,
     schedule_interval_minutes INTEGER NOT NULL DEFAULT 30,
     auto_trace_enabled        BOOLEAN NOT NULL DEFAULT 0,
@@ -42,6 +44,7 @@ CREATE TABLE IF NOT EXISTS tests (
     direction                    TEXT    NOT NULL CHECK (direction IN ('download', 'upload', 'bidirectional')),
     duration                     INTEGER NOT NULL,
     parallel_streams             INTEGER NOT NULL DEFAULT 1,
+    udp_bandwidth_mbps           REAL,
     status                       TEXT    NOT NULL DEFAULT 'pending'
                                  CHECK (status IN ('pending', 'running', 'completed', 'failed')),
     started_at                   TEXT,

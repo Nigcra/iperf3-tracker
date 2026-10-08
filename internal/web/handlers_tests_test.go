@@ -113,3 +113,50 @@ func TestRunAndQueryTests(t *testing.T) {
 	expectStatus(t, srv, "DELETE", "/api/servers/"+itoa(sv.ID), tok, "", http.StatusNoContent)
 	expectStatus(t, srv, "GET", "/api/tests/"+itoa(test.ID), tok, "", http.StatusNotFound)
 }
+
+func TestUDPBandwidth(t *testing.T) {
+	srv := newTestServer(t)
+	tok := login(t, srv, "admin", "admin123")
+
+	var plain model.Server
+	call(t, srv, "POST", "/api/servers", tok, `{"name":"ohne","host":"a"}`, &plain)
+	if plain.DefaultUDPBandwidthMbps != nil {
+		t.Errorf("Vorgabe ohne Angabe: %v", *plain.DefaultUDPBandwidthMbps)
+	}
+	expectStatus(t, srv, "POST", "/api/servers", tok, `{"name":"x","host":"x","default_udp_bandwidth_mbps":0}`, http.StatusUnprocessableEntity)
+	expectStatus(t, srv, "POST", "/api/servers", tok, `{"name":"x","host":"x","default_udp_bandwidth_mbps":100001}`, http.StatusUnprocessableEntity)
+
+	var sv model.Server
+	if code := call(t, srv, "POST", "/api/servers", tok, `{"name":"udp","host":"b","default_udp_bandwidth_mbps":500}`, &sv); code != http.StatusCreated ||
+		sv.DefaultUDPBandwidthMbps == nil || *sv.DefaultUDPBandwidthMbps != 500 {
+		t.Fatalf("Server mit UDP-Vorgabe: %d, %+v", code, sv)
+	}
+
+	start := func(body string) model.Test {
+		t.Helper()
+		var test model.Test
+		if code := call(t, srv, "POST", "/api/tests/run", tok, body, &test); code != http.StatusCreated {
+			t.Fatalf("Test starten (%s): %d", body, code)
+		}
+		waitTestDone(t, srv, tok, test.ID)
+		return test
+	}
+	id := itoa(sv.ID)
+	if test := start(`{"server_id":` + id + `,"protocol":"udp"}`); test.UDPBandwidthMbps == nil || *test.UDPBandwidthMbps != 500 {
+		t.Errorf("UDP ohne Angabe übernimmt Server-Vorgabe nicht: %v", test.UDPBandwidthMbps)
+	}
+	if test := start(`{"server_id":` + id + `,"protocol":"udp","udp_bandwidth_mbps":42.5}`); test.UDPBandwidthMbps == nil || *test.UDPBandwidthMbps != 42.5 {
+		t.Errorf("UDP mit Angabe: %v", test.UDPBandwidthMbps)
+	}
+	if test := start(`{"server_id":` + id + `,"protocol":"tcp","udp_bandwidth_mbps":42.5}`); test.UDPBandwidthMbps != nil {
+		t.Errorf("TCP darf keine UDP-Bandbreite speichern: %v", *test.UDPBandwidthMbps)
+	}
+	expectStatus(t, srv, "POST", "/api/tests/run", tok, `{"server_id":`+id+`,"protocol":"udp","udp_bandwidth_mbps":-1}`, http.StatusUnprocessableEntity)
+
+	// Partielles Update kann die Vorgabe wieder entfernen.
+	var upd model.Server
+	call(t, srv, "PUT", "/api/servers/"+id, tok, `{"default_udp_bandwidth_mbps":null}`, &upd)
+	if upd.DefaultUDPBandwidthMbps != nil {
+		t.Errorf("Vorgabe nach null: %v", *upd.DefaultUDPBandwidthMbps)
+	}
+}

@@ -46,19 +46,22 @@ func (d Direction) Valid() bool {
 // Requests werden nur in diesen Teil dekodiert, sodass ID und Zeitstempel
 // nicht von außen überschrieben werden können.
 type ServerSettings struct {
-	Name                    string    `json:"name"`
-	Host                    string    `json:"host"`
-	Port                    int       `json:"port"`
-	Description             *string   `json:"description"`
-	Enabled                 bool      `json:"enabled"`
-	DefaultDuration         int       `json:"default_duration"`
-	DefaultParallel         int       `json:"default_parallel"`
-	DefaultNumStreams       int       `json:"default_num_streams"`
-	DefaultProtocol         Protocol  `json:"default_protocol"`
-	DefaultDirection        Direction `json:"default_direction"`
-	ScheduleEnabled         bool      `json:"schedule_enabled"`
-	ScheduleIntervalMinutes int       `json:"schedule_interval_minutes"`
-	AutoTraceEnabled        bool      `json:"auto_trace_enabled"`
+	Name              string    `json:"name"`
+	Host              string    `json:"host"`
+	Port              int       `json:"port"`
+	Description       *string   `json:"description"`
+	Enabled           bool      `json:"enabled"`
+	DefaultDuration   int       `json:"default_duration"`
+	DefaultParallel   int       `json:"default_parallel"`
+	DefaultNumStreams int       `json:"default_num_streams"`
+	DefaultProtocol   Protocol  `json:"default_protocol"`
+	DefaultDirection  Direction `json:"default_direction"`
+	// DefaultUDPBandwidthMbps ist die Zielbandbreite für UDP-Tests (iperf3 -b);
+	// nil = iperf3-Standard von 1 Mbit/s.
+	DefaultUDPBandwidthMbps *float64 `json:"default_udp_bandwidth_mbps"`
+	ScheduleEnabled         bool     `json:"schedule_enabled"`
+	ScheduleIntervalMinutes int      `json:"schedule_interval_minutes"`
+	AutoTraceEnabled        bool     `json:"auto_trace_enabled"`
 }
 
 // DefaultServerSettings liefert die Vorgabewerte für ein neues Server-Profil.
@@ -99,6 +102,18 @@ func (s ServerSettings) Validate() string {
 	case s.ScheduleIntervalMinutes < 1:
 		return "Intervall muss mindestens 1 Minute betragen"
 	}
+	return ValidateUDPBandwidth(s.DefaultUDPBandwidthMbps)
+}
+
+// MaxUDPBandwidthMbps ist die höchste zulässige UDP-Zielbandbreite (100 Gbit/s).
+const MaxUDPBandwidthMbps = 100000
+
+// ValidateUDPBandwidth prüft eine optionale UDP-Zielbandbreite. 0 ist nicht
+// erlaubt, da iperf3 das als „unbegrenzt“ auslegt und die Leitung flutet.
+func ValidateUDPBandwidth(v *float64) string {
+	if v != nil && (*v <= 0 || *v > MaxUDPBandwidthMbps) {
+		return "UDP-Bandbreite muss größer als 0 und höchstens 100000 Mbit/s sein"
+	}
 	return ""
 }
 
@@ -134,15 +149,18 @@ type TestResult struct {
 // Test ist ein iperf3-Testlauf. Die Rohausgabe wird nur in der Detailansicht
 // geliefert (siehe TestDetail).
 type Test struct {
-	ID              int64      `json:"id"`
-	ServerID        int64      `json:"server_id"`
-	Protocol        Protocol   `json:"protocol"`
-	Direction       Direction  `json:"direction"`
-	Duration        int        `json:"duration"`
-	ParallelStreams int        `json:"parallel_streams"`
-	Status          TestStatus `json:"status"`
-	StartedAt       *time.Time `json:"started_at"`
-	CompletedAt     *time.Time `json:"completed_at"`
+	ID              int64     `json:"id"`
+	ServerID        int64     `json:"server_id"`
+	Protocol        Protocol  `json:"protocol"`
+	Direction       Direction `json:"direction"`
+	Duration        int       `json:"duration"`
+	ParallelStreams int       `json:"parallel_streams"`
+	// UDPBandwidthMbps ist die Zielbandbreite, mit der ein UDP-Test lief;
+	// nil bei TCP oder iperf3-Standard.
+	UDPBandwidthMbps *float64   `json:"udp_bandwidth_mbps"`
+	Status           TestStatus `json:"status"`
+	StartedAt        *time.Time `json:"started_at"`
+	CompletedAt      *time.Time `json:"completed_at"`
 	TestResult
 	ErrorMessage *string   `json:"error_message"`
 	CreatedAt    time.Time `json:"created_at"`
