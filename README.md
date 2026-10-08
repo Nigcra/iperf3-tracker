@@ -1,62 +1,61 @@
 # iperf3-Tracker
 
-Misst regelmäßig die Bandbreite zu iperf3-Servern, speichert die Ergebnisse
-historisch und zeigt den Netzwerkpfad auf einer Karte. Eine einzelne
-Go-Binary liefert API und Oberfläche aus – ohne weitere Laufzeitumgebung oder
-Webserver.
+Measures bandwidth to iperf3 servers on a schedule, keeps the results as
+history and shows the network path on a map. A single Go binary serves both
+the API and the web interface – no additional runtime or web server needed.
 
 ![Dashboard](_screenshots/dashboard.png)
 
-## Funktionen
+## Features
 
-- **Dashboard** – Kennzahlen, Download-/Upload-Verlauf je Server mit
-  Schwellwerten, Live-Fortschritt laufender Tests
-- **Tests** – Test mit beliebigen Parametern starten (TCP/UDP, Download,
-  Upload, bidirektional, parallele Streams, UDP-Zielbandbreite), Live-Anzeige,
-  Testverlauf mit Details und iperf3-Rohausgabe
-- **Zeitplan** – Tests je Server im eingestellten Intervall, optional mit
-  anschließender Traceroute (Auto-Trace)
-- **Peering-Map** – Traceroute live auf der Karte, Standorte aus der
-  GeoLite2-Datenbank (fehlende Standorte werden aus Nachbar-Hops geschätzt),
-  Pfad- und Hop-Tabelle auch für private Netze
-- **Server-Profile** – eigene oder öffentliche iperf3-Server (Auswahlliste)
-- **Administration** – Benutzer, Bereinigung alter Daten, Datenbank-Statistik
-- Hell/Dunkel, mobil nutzbar, Oberfläche auf Deutsch
+- **Dashboard** – key figures, download/upload history per server with
+  thresholds, live progress of running tests
+- **Tests** – run tests with any parameters (TCP/UDP, download, upload,
+  bidirectional, parallel streams, UDP target bandwidth), live view, test
+  history with details and raw iperf3 output
+- **Scheduling** – tests per server at a configurable interval, optionally
+  followed by a traceroute (auto-trace)
+- **Peering map** – live traceroute on a map with locations from the
+  GeoLite2 database (missing locations are estimated from neighbouring hops),
+  path and hop table also for private networks
+- **Server profiles** – your own or public iperf3 servers (selection list)
+- **Administration** – users, cleanup of old data, database statistics
+- Light/dark theme, mobile friendly; the user interface is in German
 
-| Tests | Peering-Map | Server (hell) |
+| Tests | Peering map | Servers (light theme) |
 |---|---|---|
-| ![Tests](_screenshots/tests.png) | ![Peering-Map](_screenshots/peering-map.png) | ![Server](_screenshots/server-hell.png) |
+| ![Tests](_screenshots/tests.png) | ![Peering map](_screenshots/peering-map.png) | ![Servers](_screenshots/server-light.png) |
 
-## Voraussetzungen
+## Requirements
 
-- **iperf3 ab Version 3.17** (wegen `--json-stream`). Fehlt iperf3, bietet die
-  Oberfläche Administratoren nach der Anmeldung die Installation an – unter
-  Windows per winget, unter Linux über den vorhandenen Paketmanager (apt-get,
-  dnf, yum, zypper, apk, pacman; ohne Root über `sudo -n`). Ohne Nachfrage beim
-  Start installieren: `iperf.auto_install: true` (z. B. für Server ohne
-  Oberfläche). Manuell:
+- **iperf3 version 3.17 or newer** (for `--json-stream`). If iperf3 is
+  missing, the web interface offers administrators to install it after login –
+  via winget on Windows, via the available package manager on Linux (apt-get,
+  dnf, yum, zypper, apk, pacman; `sudo -n` when not running as root). To
+  install without asking on startup, set `iperf.auto_install: true` (e.g. for
+  servers where nobody uses the web interface). Manual installation:
   - Windows: `winget install ar51an.iPerf3`
-  - Linux: Paket `iperf3` der Distribution, sofern mindestens 3.17
-    (z. B. Debian 13: `apt install iperf3`)
-- **tracert** (Windows, vorinstalliert) bzw. **traceroute** (Linux)
-- Zum Bauen: **Go 1.24** oder neuer
+  - Linux: the distribution's `iperf3` package, if it is at least 3.17
+    (e.g. Debian 13: `apt install iperf3`)
+- **tracert** (Windows, built in) or **traceroute** (Linux)
+- To build: **Go 1.24** or newer
 
-## Schnellstart (Windows)
+## Quick start (Windows)
 
 ```cmd
 start.cmd
 ```
 
-Baut `_release\iperf3-tracker.exe` beim ersten Aufruf, startet den Dienst und
-öffnet http://localhost:8000. Nach Code-Änderungen neu bauen mit
-`start.cmd neu` oder `build.cmd release`.
+Builds `_release\iperf3-tracker.exe` on the first run, starts the service and
+opens http://localhost:8000. After code changes, rebuild with `start.cmd neu`
+or `build.cmd release`.
 
-Erste Anmeldung: **`admin` / `admin123`** – danach über das Benutzermenü
-(Personen-Symbol oben rechts) **„Passwort ändern“**.
+First login: **`admin` / `admin123`** – then change the password via the user
+menu (person icon at the top right, "Passwort ändern").
 
-Die Binary lässt sich auch direkt per Doppelklick starten. `config.yaml` und
-die Datenbank (`data\`) werden beim ersten Start neben der Binary angelegt;
-`build.cmd` legt die GeoIP-Datenbank in `_release\geoip\` ab.
+The binary can also be started directly by double-click. `config.yaml` and
+the database (`data\`) are created next to the binary on first start;
+`build.cmd` places the GeoIP database in `_release\geoip\`.
 
 ## Docker
 
@@ -64,51 +63,51 @@ die Datenbank (`data\`) werden beim ersten Start neben der Binary angelegt;
 docker compose up -d --build
 ```
 
-Ein Container mit iperf3 3.18 und traceroute (Debian trixie); Konfiguration
-und Datenbank liegen im Volume `iperf-data`. Oberfläche unter
+One container with iperf3 3.18 and traceroute (Debian trixie); configuration
+and database live in the `iperf-data` volume. The interface is available at
 `http://<host>:8000`.
 
-> Die Docker-Variante ist vorbereitet, aber noch nicht getestet.
+> The Docker setup is prepared but not tested yet.
 
-## Konfiguration
+## Configuration
 
-`config.yaml` (siehe [config.example.yaml](config.example.yaml)); einzelne
-Werte lassen sich per Umgebungsvariable überschreiben:
+`config.yaml` (see [config.example.yaml](config.example.yaml)); individual
+values can be overridden with environment variables:
 
-| Einstellung | Umgebungsvariable | Standard |
+| Setting | Environment variable | Default |
 |---|---|---|
 | `web.listen` | `LISTEN_ADDR` | `0.0.0.0:8000` |
 | `storage.path` | `DB_PATH` | `data/iperf3-tracker.db` |
-| `auth.secret_key` | `SECRET_KEY` | beim ersten Start zufällig erzeugt |
+| `auth.secret_key` | `SECRET_KEY` | randomly generated on first start |
 | `scheduler.enabled` | `SCHEDULER_ENABLED` | `true` |
-| `iperf.path` | `IPERF3_PATH` | automatisch (PATH, winget-Pfad) |
-| `iperf.auto_install` | `IPERF3_AUTO_INSTALL` | `false` (Oberfläche fragt nach) |
+| `iperf.path` | `IPERF3_PATH` | auto-detected (PATH, winget location) |
+| `iperf.auto_install` | `IPERF3_AUTO_INSTALL` | `false` (the web interface asks first) |
 | `geoip.path` | `GEOIP_PATH` | `geoip/GeoLite2-City.mmdb` |
 | `log.level` | `LOG_LEVEL` | `info` |
 
-Relative Pfade beziehen sich auf das Verzeichnis der `config.yaml`.
+Relative paths are resolved against the directory of `config.yaml`.
 
-## Entwicklung
+## Development
 
 ```cmd
 go test ./...
 go run ./cmd/iperf3-tracker
 ```
 
-| Verzeichnis | Inhalt |
+| Directory | Contents |
 |---|---|
-| `cmd/iperf3-tracker` | Einstiegspunkt |
-| `internal/web` | HTTP-API, Live-Trace (SSE), eingebettete Oberfläche (`static/`) |
-| `internal/iperf` | iperf3-Ausführung und Auswertung von `--json-stream` |
-| `internal/trace` | tracert/traceroute, GeoIP, Standort-Interpolation |
-| `internal/scheduler` | Zeitplan je Server, Auto-Trace |
-| `internal/store`, `internal/db` | SQLite (reiner Go-Treiber, kein CGO) |
-| `geoip/` | GeoLite2-City-Datenbank |
+| `cmd/iperf3-tracker` | entry point |
+| `internal/web` | HTTP API, live trace (server-sent events), embedded web interface (`static/`) |
+| `internal/iperf` | running iperf3, evaluating `--json-stream`, installation |
+| `internal/trace` | tracert/traceroute, GeoIP, location interpolation |
+| `internal/scheduler` | per-server schedule, auto-trace |
+| `internal/store`, `internal/db` | SQLite (pure Go driver, no CGO) |
+| `geoip/` | GeoLite2-City database |
 
-Die Oberfläche folgt der Designsprache des Spherifyer und lädt Chart.js und
-Leaflet per CDN; die Karte nutzt OpenStreetMap-Kacheln.
+The web interface follows the Spherifyer design language and loads Chart.js
+and Leaflet from a CDN; the map uses OpenStreetMap tiles.
 
-## GeoIP-Hinweis
+## GeoIP notice
 
-Enthält GeoLite2-Daten von MaxMind, verfügbar unter
+This product includes GeoLite2 data created by MaxMind, available from
 https://www.maxmind.com.

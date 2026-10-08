@@ -2,14 +2,14 @@
 /_release/
 *.exe
 
-# Lokale Konfiguration und Daten (config.yaml enthält den Token-Schlüssel)
+# Local configuration and data (config.yaml contains the token key)
 /config.yaml
 /data/
 *.db
 *.db-wal
 *.db-shm
 
-# Editor / Betriebssystem
+# Editor / operating system
 .vscode/
 .idea/
 .DS_Store

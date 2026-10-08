@@ -84,8 +84,8 @@ func (l LogConfig) SlogLevel() slog.Level {
 
 // defaultYAML ist der Inhalt einer neu erzeugten config.yaml; %s ist der
 // zufällig erzeugte Token-Schlüssel.
-const defaultYAML = `# iperf3-Tracker – Konfiguration
-# Einzelne Werte lassen sich per Umgebungsvariable überschreiben:
+const defaultYAML = `# iperf3-Tracker – configuration
+# Individual values can be overridden with environment variables:
 #   LISTEN_ADDR, DB_PATH, SECRET_KEY, SCHEDULER_ENABLED, IPERF3_PATH, IPERF3_AUTO_INSTALL, GEOIP_PATH, LOG_LEVEL
 
 web:
@@ -95,27 +95,28 @@ storage:
   path: "data/iperf3-tracker.db"
 
 auth:
-  # Schlüssel zum Signieren der Login-Tokens. Beim ersten Start zufällig
-  # erzeugt; eine Änderung macht alle bestehenden Anmeldungen ungültig.
+  # Key used to sign login tokens. Generated randomly on first start;
+  # changing it invalidates all existing logins.
   secret_key: "%s"
 
 scheduler:
   enabled: true
 
 iperf:
-  # Pfad zur iperf3-Binary (mind. Version 3.17); leer = automatisch suchen.
+  # Path to the iperf3 binary (version 3.17 or newer); empty = auto-detect.
   path: ""
-  # Fehlt iperf3, beim Start ohne Nachfrage installieren (winget bzw. Paketmanager).
-  # Standard: aus – die Oberfläche fragt einen Admin vor der Installation.
+  # Install iperf3 on startup without asking if it is missing (winget or package manager).
+  # Default: off – the web interface asks an administrator before installing.
   auto_install: false
 
 geoip:
-  # GeoLite2-City-Datenbank für die Standorte auf der Karte (relativ zu dieser Datei).
+  # GeoLite2-City database for the locations on the map (relative to this file).
   path: "geoip/GeoLite2-City.mmdb"
 
 log:
   level: "info"
 `
+
 
 // CreateDefault schreibt eine Standard-config.yaml mit frisch erzeugtem
 // Token-Schlüssel nach path und gibt die geparste Konfiguration zurück.

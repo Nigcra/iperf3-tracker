@@ -1,34 +1,34 @@
-# iperf3-Tracker – Beispielkonfiguration
-# Beim ersten Start ohne config.yaml wird automatisch eine Konfiguration
-# mit zufälligem secret_key erzeugt. Diese Datei dient nur als Referenz.
+# iperf3-Tracker – example configuration
+# On first start without a config.yaml, a configuration with a random
+# secret_key is created automatically. This file is for reference only.
 #
-# Einzelne Werte lassen sich per Umgebungsvariable überschreiben:
+# Individual values can be overridden with environment variables:
 #   LISTEN_ADDR, DB_PATH, SECRET_KEY, SCHEDULER_ENABLED, IPERF3_PATH, IPERF3_AUTO_INSTALL, GEOIP_PATH, LOG_LEVEL
 
 web:
   listen: "0.0.0.0:8000"
 
 storage:
-  # Relativ zum Verzeichnis dieser Datei.
+  # Relative to the directory of this file.
   path: "data/iperf3-tracker.db"
 
 auth:
-  # Schlüssel zum Signieren der Login-Tokens. Leer = bei jedem Start zufällig
-  # (Anmeldungen werden dann beim Neustart ungültig).
+  # Key used to sign login tokens. Empty = random on every start
+  # (logins then become invalid after a restart).
   secret_key: ""
 
 scheduler:
   enabled: true
 
 iperf:
-  # Pfad zur iperf3-Binary (mind. Version 3.17); leer = automatisch suchen.
+  # Path to the iperf3 binary (version 3.17 or newer); empty = auto-detect.
   path: ""
-  # Fehlt iperf3, beim Start ohne Nachfrage installieren (winget bzw. Paketmanager).
-  # Standard: aus – die Oberfläche fragt einen Admin vor der Installation.
+  # Install iperf3 on startup without asking if it is missing (winget or package manager).
+  # Default: off – the web interface asks an administrator before installing.
   auto_install: false
 
 geoip:
-  # GeoLite2-City-Datenbank für die Standorte auf der Karte (relativ zu dieser Datei).
+  # GeoLite2-City database for the locations on the map (relative to this file).
   path: "geoip/GeoLite2-City.mmdb"
 
 log:

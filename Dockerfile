@@ -1,5 +1,5 @@
-# iperf3-Tracker als Container: eine Go-Binary mit eingebetteter Oberfläche.
-# Bauen und starten: docker compose up -d --build
+# iperf3-Tracker as a container: one Go binary with an embedded web interface.
+# Build and start: docker compose up -d --build
 
 # ---------- Build ----------
 FROM golang:1.24-bookworm AS build
@@ -13,9 +13,9 @@ RUN CGO_ENABLED=0 go build -trimpath \
       -ldflags "-s -w -X 'iperf3-tracker/internal/version.BuildDate=${BUILD_DATE}'" \
       -o /out/iperf3-tracker ./cmd/iperf3-tracker
 
-# ---------- Laufzeit ----------
-# trixie liefert iperf3 3.18; benötigt wird mindestens 3.17 (--json-stream).
-# bookworm hat nur 3.12 und scheidet deshalb aus.
+# ---------- Runtime ----------
+# trixie ships iperf3 3.18; at least 3.17 is required (--json-stream).
+# bookworm only has 3.12 and is therefore not an option.
 FROM debian:trixie-slim
 RUN apt-get update \
  && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
@@ -26,8 +26,8 @@ WORKDIR /app
 COPY --from=build /out/iperf3-tracker /app/iperf3-tracker
 COPY geoip/GeoLite2-City.mmdb /app/geoip/GeoLite2-City.mmdb
 
-# Konfiguration und Datenbank liegen im Volume /data; config.yaml wird beim
-# ersten Start mit zufälligem Token-Schlüssel angelegt.
+# Configuration and database live in the /data volume; config.yaml is created
+# with a random token key on first start.
 ENV LISTEN_ADDR=0.0.0.0:8000 \
     DB_PATH=/data/iperf3-tracker.db \
     GEOIP_PATH=/app/geoip/GeoLite2-City.mmdb \

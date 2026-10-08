@@ -1,4 +1,4 @@
-# Nur Quellcode und GeoIP-Datenbank gehören in den Build-Kontext.
+# Only source code and the GeoIP database belong in the build context.
 .git
 _release
 _screenshots

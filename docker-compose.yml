@@ -1,6 +1,6 @@
-# iperf3-Tracker: ein Container mit API und Oberfläche unter http://<host>:8000
+# iperf3-Tracker: one container with API and web interface at http://<host>:8000
 # Start: docker compose up -d --build
-# Noch nicht unter Docker getestet.
+# Not tested with Docker yet.
 
 services:
   iperf3-tracker:
@@ -12,7 +12,7 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      # config.yaml (inkl. Token-Schlüssel) und Datenbank
+      # config.yaml (including the token key) and database
       - iperf-data:/data
     environment:
       - TZ=Europe/Berlin
