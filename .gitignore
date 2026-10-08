@@ -40,3 +40,14 @@ dist/
 
 # Data directory
 data/
+
+# Go-Build
+/_release/
+*.exe
+
+# Lokale Konfiguration (enthält secret_key)
+/config.yaml
+
+# SQLite-Begleitdateien
+*.db-wal
+*.db-shm

@@ -1,0 +1,119 @@
+// Command iperf3-tracker führt zeit- und benutzergesteuerte iperf3-Tests aus,
+// speichert die Ergebnisse in SQLite und stellt API und Oberfläche über HTTP bereit.
+package main
+
+import (
+	"context"
+	"errors"
+	"flag"
+	"fmt"
+	"log/slog"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
+	"iperf3-tracker/internal/auth"
+	"iperf3-tracker/internal/config"
+	"iperf3-tracker/internal/db"
+	"iperf3-tracker/internal/store"
+	"iperf3-tracker/internal/version"
+	"iperf3-tracker/internal/web"
+)
+
+func main() {
+	cfgPath := flag.String("config", "config.yaml", "Pfad zur Konfigurationsdatei")
+	flag.Parse()
+
+	if err := run(*cfgPath); err != nil {
+		fmt.Fprintln(os.Stderr, "Fehler:", err)
+		os.Exit(1)
+	}
+}
+
+func run(cfgPath string) error {
+	// --- Konfiguration laden oder beim ersten Start anlegen ---
+	var (
+		cfg     *config.Config
+		created bool
+		err     error
+	)
+	if _, statErr := os.Stat(cfgPath); os.IsNotExist(statErr) {
+		created = true
+		cfg, err = config.CreateDefault(cfgPath)
+	} else {
+		cfg, err = config.Load(cfgPath)
+	}
+	if err != nil {
+		return err
+	}
+
+	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: cfg.Log.SlogLevel()})))
+	if created {
+		slog.Info("Neue Konfiguration erstellt", "pfad", cfgPath)
+	}
+	if cfg.Auth.SecretGenerated {
+		slog.Warn("auth.secret_key nicht gesetzt – temporärer Schlüssel erzeugt, Anmeldungen werden beim Neustart ungültig")
+	}
+
+	// --- Datenbank ---
+	conn, err := db.Open(cfg.Storage.Path)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	st := store.New(conn)
+	slog.Info("Datenbank geöffnet", "pfad", cfg.Storage.Path)
+
+	if err := ensureDefaultAdmin(st); err != nil {
+		return err
+	}
+
+	// --- HTTP-Server ---
+	srv := &http.Server{
+		Addr:              cfg.Web.Listen,
+		Handler:           web.NewServer(st, auth.NewTokens(cfg.Auth.SecretKey)).Handler(),
+		ReadHeaderTimeout: 10 * time.Second,
+	}
+	errCh := make(chan error, 1)
+	go func() { errCh <- srv.ListenAndServe() }()
+	slog.Info(version.Name+" läuft", "adresse", cfg.Web.Listen, "version", version.Version, "build", version.BuildDate)
+
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
+	select {
+	case err := <-errCh:
+		if !errors.Is(err, http.ErrServerClosed) {
+			return fmt.Errorf("HTTP-Server: %w", err)
+		}
+	case <-sig:
+		slog.Info("Beende …")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	return srv.Shutdown(ctx)
+}
+
+// ensureDefaultAdmin legt den Standard-Admin an, solange kein Benutzer existiert.
+func ensureDefaultAdmin(st *store.Store) error {
+	ctx := context.Background()
+	n, err := st.CountUsers(ctx)
+	if err != nil {
+		return fmt.Errorf("Benutzer konnten nicht gezählt werden: %w", err)
+	}
+	if n > 0 {
+		return nil
+	}
+	admin, err := auth.DefaultAdmin()
+	if err != nil {
+		return err
+	}
+	if err := st.CreateUser(ctx, admin); err != nil {
+		return fmt.Errorf("Standard-Admin konnte nicht angelegt werden: %w", err)
+	}
+	slog.Warn("Standard-Admin angelegt – Passwort bitte umgehend ändern",
+		"benutzer", auth.DefaultAdminUsername, "passwort", auth.DefaultAdminPassword)
+	return nil
+}

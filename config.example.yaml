@@ -1,0 +1,25 @@
+# iperf3-Tracker – Beispielkonfiguration
+# Beim ersten Start ohne config.yaml wird automatisch eine Konfiguration
+# mit zufälligem secret_key erzeugt. Diese Datei dient nur als Referenz.
+#
+# Einzelne Werte lassen sich per Umgebungsvariable überschreiben:
+#   LISTEN_ADDR, DB_PATH, SECRET_KEY, SCHEDULER_ENABLED, LOG_LEVEL
+
+web:
+  listen: "0.0.0.0:8000"
+
+storage:
+  # Relativ zum Verzeichnis dieser Datei.
+  path: "data/iperf3-tracker.db"
+
+auth:
+  # Schlüssel zum Signieren der Login-Tokens. Leer = bei jedem Start zufällig
+  # (Anmeldungen werden dann beim Neustart ungültig).
+  secret_key: ""
+
+scheduler:
+  enabled: true
+
+log:
+  # debug | info | warn | error
+  level: "info"

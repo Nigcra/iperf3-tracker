@@ -2,7 +2,21 @@
 
 Ziel: Das bestehende Python/FastAPI-Backend **und** das React-Frontend werden durch **eine** schlanke Go-Anwendung ersetzt. Die Oberfläche wird neu als Vanilla-HTML/JS geschrieben und per `//go:embed` in die Binary eingebettet. Aufbau, Technik und Design folgen dem **Spherifyer** (`..\Spherifyer`): obere Navigationsleiste, Navy-Design mit semantischen CSS-Tokens, Hell/Dunkel-Umschaltung und Chart.js.
 
-> **Stand 2026-10-08:** Plan überarbeitet. **Umsetzung noch nicht begonnen.** Es gibt noch keinen Go-Code, kein `go.mod` und keinen Branch. Das Repo läuft weiterhin vollständig auf Python/FastAPI und React.
+> **Stand 2026-10-08 (Branch `go-port`):**
+>
+> | Phase | Stand |
+> |---|---|
+> | 0 – Setup | ✅ erledigt: `go.mod`, `build.cmd`, Config (YAML + Env), Schema, `/health`, `/api/info`, CORS |
+> | 1 – Auth | ✅ erledigt: bcrypt, JWT, Middleware, alle `/auth/*`-Endpunkte, Standard-Admin, Go-Tests (`internal/web/handlers_auth_test.go`) |
+> | 2–10 | offen |
+>
+> Abweichungen bei der Umsetzung:
+> - Das Schema stammt aus den **SQLAlchemy-Modellen** (`models.py`) und nicht aus den Migrationen. Eine frische Python-DB entsteht per `create_all` aus den Modellen. Unterschied zur Migration 002: `traces.test_id` ist nullable und nicht `UNIQUE`.
+> - Die Auth-Middleware liegt in `internal/web/middleware.go` statt in `internal/auth/`, weil sie den Store braucht. `auth` bleibt frei von DB-Abhängigkeiten.
+> - Das Python-Backend legt den Start-Admin mit dem Passwort `admin` an, `init-admin` dagegen mit `admin123`. Go verwendet einheitlich `admin123`.
+> - Zeitstempel werden als TEXT im festen Format `2006-01-02T15:04:05.000000Z` gespeichert. Das Format ist sortierbar, sodass Datumsfilter direkt per Stringvergleich funktionieren.
+> - `detail`-Fehlermeldungen sind deutsch. Das React-Frontend wertet nur die Statuscodes aus, und die sind unverändert.
+> - Noch offen: Smoke-Test von Phase 1 mit dem React-Frontend im Browser. Die API ist per curl und Go-Tests geprüft.
 >
 > **Änderungen gegenüber der Fassung vom 3. Aug.:**
 > - Das Frontend wird **nicht** mehr 1:1 übernommen, sondern im Spherifyer-Stil neu gebaut (Abschnitt 8).
@@ -62,11 +76,11 @@ internal/
   config/config.go             # YAML + Env-Override
   db/
     db.go                      # Öffnen, PRAGMAs, Schema-Init
-    schema.sql                 # konsolidiert aus migrations 001–004 (embed)
+    schema.sql                 # aus den SQLAlchemy-Modellen (embed)
   model/model.go               # Structs + Enums mit json-Tags (snake_case)
   auth/
     auth.go                    # bcrypt, JWT erstellen/prüfen
-    middleware.go              # Bearer-Auth, Admin-Guard, ?token= für SSE
+    (Middleware: siehe web/middleware.go)
   store/                       # users.go, servers.go, tests.go, traces.go
   iperf/
     runner.go                  # iperf3 ausführen, Text-Parser, Live-Status-Map
@@ -79,6 +93,7 @@ internal/
   scheduler/scheduler.go       # Ticker je Server, Auto-Trace
   web/
     server.go                  # Routen, writeJSON, Static-Embed, Index
+    middleware.go              # Bearer-Auth, Admin-Guard, Token-Prüfung für SSE
     handlers_*.go              # auth, servers, tests, stats, traces, livetrace, admin, public
     static/
       index.html               # Layout, CSS-Tokens, Seiten-Container
@@ -91,7 +106,7 @@ Dockerfile
 
 ## 4. Datenbank-Schema (1:1)
 
-Das Schema wird aus `migrations/001`–`004` konsolidiert und beim Start per `CREATE TABLE IF NOT EXISTS` in einer **neuen** DB-Datei angelegt (Standard `data/iperf3-tracker.db`). Die alte `backend/iperf_tracker.db` wird nicht angefasst.
+Das Schema entspricht den SQLAlchemy-Modellen (inkl. `migrations/001`–`004`) und wird beim Start per `CREATE TABLE IF NOT EXISTS` in einer **neuen** DB-Datei angelegt (Standard `data/iperf3-tracker.db`). Die alte `backend/iperf_tracker.db` wird nicht angefasst.
 
 Tabellen: `users`, `servers`, `tests`, `traces`, `trace_hops`. Spalten, Typen, Defaults, Indizes und Foreign Keys bleiben exakt erhalten, insbesondere:
 - `servers.default_num_streams` (001), `servers.auto_trace_enabled` (003), `trace_hops.geoip_interpolated` (004)
