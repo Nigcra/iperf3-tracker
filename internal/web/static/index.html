@@ -133,12 +133,44 @@
               box-shadow: var(--card-shadow); }
   .sum-card .val { font-size: 1.6em; font-weight: 700; color: var(--accent); font-variant-numeric: tabular-nums; }
   .sum-card .lbl { font-size: 0.75em; color: var(--muted); margin-top: 4px; }
-  .ds-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 18px; }
+  .sum-card .sub { font-size: 0.72em; color: var(--faint); margin-top: 2px; }
+  .sum-card.warn { border-top-color: var(--warn); } .sum-card.warn .val { color: var(--warn); }
+  .sum-card.ok { border-top-color: var(--ok); } .sum-card.ok .val { color: var(--ok); }
+
+  /* Karten mit Kopf, Kennzahlen und Fortschrittsbalken (wie Datastore-Karten im Spherifyer). */
+  .ds-header { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+  .ds-name { font-weight: 700; color: var(--heading); flex: 1; min-width: 100px; word-break: break-all; }
+  .ds-badges { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+  .ds-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; }
+  .stat { display: flex; flex-direction: column; }
+  .stat-label { font-size: 0.75em; color: var(--muted); }
+  .stat-val { font-size: 0.95em; font-weight: 600; color: var(--heading); font-variant-numeric: tabular-nums; }
+  .stat-val.down { color: var(--accent-light); } .stat-val.up { color: var(--ok); }
+  :root[data-theme="light"] .stat-val.down { color: var(--accent); } :root[data-theme="light"] .stat-val.up { color: #059669; }
+  .card-actions { display: flex; gap: 6px; }
+  .card-actions .icon-btn { width: 32px; height: 32px; }
+  .bar-bg { background: var(--track); border-radius: 999px; height: 8px; overflow: hidden; margin: 2px 0 12px; }
+  .bar-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--accent), var(--accent-light)); transition: width .4s ease; }
+  .bar-fill.failed { background: var(--crit); }
+  .live-line { display: flex; justify-content: space-between; font-size: 0.78em; color: var(--muted); margin-bottom: 4px; }
+  .hist-controls { display: flex; gap: 14px; align-items: center; margin-bottom: 18px; flex-wrap: wrap; color: var(--text); }
+  .hist-controls .spacer { flex: 1; }
+  .ds-toggle-label { display: inline-flex; align-items: center; gap: 8px; font-size: 0.86em;
+                     color: var(--text); padding: 7px 14px; background: var(--surface-2); border-radius: 10px;
+                     border: 1px solid var(--border); user-select: none; }
+  .ds-toggle-label input[type=number] { width: 80px; padding: 3px 6px; text-align: right; }
+  .chart-wrap { position: relative; height: 300px; }
+  .chart-empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--faint); font-style: italic; font-size: 0.9em; }
+  @keyframes pulse { 50% { opacity: .45; } }
+  .pulse { animation: pulse 1.4s ease-in-out infinite; }
+  .ds-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(340px, 100%), 1fr)); gap: 18px; }
   .ds-card, .chart-box { background: var(--surface); border-radius: 16px; border: 1px solid var(--border); box-shadow: var(--card-shadow); }
   .ds-card { padding: 18px 20px; }
   .chart-box { padding: 18px; margin-bottom: 20px; }
   .chart-box h3 { font-size: 0.95em; margin-bottom: 14px; color: var(--heading); font-weight: 600; }
-  .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 20px; }
+  .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(420px, 100%), 1fr)); gap: 20px; }
+  /* Grid-Zellen dürfen schmaler als ihr Inhalt (Canvas) werden, sonst läuft die Seite mobil über. */
+  .ds-grid > *, .grid-2 > * { min-width: 0; }
   .muted { color: var(--faint); font-style: italic; }
   .view-switch { display: inline-flex; gap: 4px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 4px; }
   .view-btn { background: none; border: none; color: var(--muted); padding: 7px 18px; font-size: 0.85em;
@@ -177,6 +209,12 @@
   .login-card input { width: 100%; }
   .form-error { color: #fca5a5; font-size: 0.85em; margin-bottom: 12px; }
   :root[data-theme="light"] .form-error { color: #dc2626; }
+
+  #toasts { position: fixed; right: 20px; bottom: 20px; z-index: 100; display: flex; flex-direction: column; gap: 8px; max-width: min(420px, calc(100vw - 40px)); }
+  .toast { padding: 11px 16px; border-radius: 10px; font-size: 0.86em; color: var(--heading);
+           background: var(--menu-bg); border: 1px solid var(--border); border-left: 4px solid var(--ok); box-shadow: var(--card-shadow); }
+  .toast-err { border-left-color: var(--crit); }
+  .icon-btn:disabled { opacity: .4; cursor: default; }
 
   footer { text-align: center; color: var(--faint); font-size: 0.76em; padding: 18px 0 28px; }
 
@@ -264,9 +302,32 @@
 <main id="appMain" hidden>
   <!-- Dashboard -->
   <div class="page" id="page-dashboard">
+    <div class="summary" id="dashSummary"></div>
+
     <div class="section">
-      <div class="section-title">Dashboard</div>
-      <p class="muted">Kennzahlen und Bandbreiten-Verlauf folgen in Phase 9b.</p>
+      <div class="section-title">Bandbreite im Verlauf</div>
+      <div class="hist-controls">
+        <label class="ds-toggle-label">Min. Download
+          <input type="number" id="thrDown" min="0" step="1" onchange="dashboard.setThreshold('down', this.value)"> Mbit/s</label>
+        <label class="ds-toggle-label">Min. Upload
+          <input type="number" id="thrUp" min="0" step="1" onchange="dashboard.setThreshold('up', this.value)"> Mbit/s</label>
+        <span class="spacer"></span>
+        <div class="view-switch" id="dashRange">
+          <button class="view-btn" data-range="1h" onclick="dashboard.setRange('1h')">1 h</button>
+          <button class="view-btn" data-range="24h" onclick="dashboard.setRange('24h')">24 h</button>
+          <button class="view-btn" data-range="7d" onclick="dashboard.setRange('7d')">7 Tage</button>
+          <button class="view-btn" data-range="30d" onclick="dashboard.setRange('30d')">30 Tage</button>
+        </div>
+      </div>
+      <div class="grid-2">
+        <div class="chart-box"><h3>Download (Mbit/s)</h3><div class="chart-wrap"><canvas id="chartDown"></canvas></div></div>
+        <div class="chart-box"><h3>Upload (Mbit/s)</h3><div class="chart-wrap"><canvas id="chartUp"></canvas></div></div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Server</div>
+      <div class="ds-grid" id="dashServers"></div>
     </div>
   </div>
 
