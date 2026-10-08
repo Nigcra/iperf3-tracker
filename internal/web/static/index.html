@@ -13,6 +13,8 @@
   })();
 </script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
   /* Designsprache des Spherifyer: semantische Tokens, zwei Themes (Navy dunkel
      als Standard, hell) über das data-theme-Attribut. */
@@ -269,6 +271,53 @@
   details.raw pre { max-height: 260px; overflow: auto; font-size: 0.72em; padding: 10px 12px; border-radius: 10px;
                     background: var(--surface-2); border: 1px solid var(--border); color: var(--text); white-space: pre-wrap; word-break: break-all; }
 
+  /* ---------- Peering-Map ---------- */
+  .peering-grid { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 20px; }
+  /* Eigener Stacking-Kontext: Leaflet und die Overlays nutzen z-index bis 1000,
+     das darf nicht über Dialoge und Menüs der Seite hinausreichen. */
+  .map-box { position: relative; isolation: isolate; padding: 0; margin: 0; height: 540px; overflow: hidden; }
+  #pmMap { position: absolute; inset: 0; background: var(--surface-2); }
+  .map-empty { z-index: 500; padding: 30px; text-align: center; background: var(--surface); }
+  .map-overlay { position: absolute; top: 12px; left: 56px; right: 12px; z-index: 600; display: flex; align-items: center; flex-wrap: wrap; gap: 10px;
+                 width: fit-content; max-width: calc(100% - 68px); padding: 9px 14px; border-radius: 10px; font-size: 0.84em;
+                 background: var(--header-bg); backdrop-filter: blur(10px); border: 1px solid var(--border); color: var(--text); box-shadow: var(--card-shadow); }
+  .map-overlay .sep { color: var(--faint); }
+  .trace-side { display: flex; flex-direction: column; max-height: 540px; padding: 16px; }
+  .side-title { font-size: 0.78em; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 10px; }
+  .trace-list { overflow-y: auto; display: flex; flex-direction: column; gap: 6px; margin: 0 -4px; padding: 0 4px; }
+  .trace-item { text-align: left; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 9px 12px;
+                cursor: pointer; color: var(--text); font: inherit; font-size: 0.84em; transition: all .15s; }
+  .trace-item:hover { border-color: rgb(var(--accent-rgb) / .45); }
+  .trace-item.active { background: rgb(var(--accent-rgb) / .16); border-color: rgb(var(--accent-rgb) / .5); color: var(--heading); }
+  .trace-item .t { font-weight: 600; color: var(--heading); }
+  .trace-item .m { font-size: 0.86em; color: var(--muted); margin-top: 2px; }
+  .path-chain { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+  .hop-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px 4px 4px; border-radius: 999px; font-size: 0.78em;
+              background: var(--surface-2); border: 1px solid var(--border); color: var(--text); font-family: ui-monospace, 'Cascadia Code', Consolas, monospace; }
+  .hop-chip .n { width: 20px; height: 20px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+                 background: var(--accent); color: #fff; font-size: 0.85em; font-weight: 700; font-family: inherit; }
+  .hop-chip.timeout { border-style: dashed; color: var(--faint); } .hop-chip.timeout .n { background: var(--faint); }
+  .hop-chip.est .n { background: var(--warn); } .hop-chip.first .n { background: var(--ok); } .hop-chip.dest .n { background: var(--crit); }
+  .path-arrow { color: var(--faint); font-size: 0.8em; }
+  /* Dunkle Karte ohne eigenen Kachelstil: OSM-Kacheln invertieren und den Farbton zurückdrehen. */
+  :root:not([data-theme="light"]) .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(.9) contrast(.9) saturate(.6); }
+  .leaflet-container { background: var(--surface-2); }
+  .hop-icon { background: none; border: none; }
+  .hop-marker { width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+                color: #fff; font-size: 11px; font-weight: 700; border: 2px solid #fff; box-shadow: 0 2px 8px rgb(0 0 0 / .45); }
+  .leaflet-popup-content-wrapper, .leaflet-popup-tip { background: var(--menu-bg); color: var(--text); box-shadow: var(--card-shadow); }
+  .leaflet-popup-content { font-family: inherit; font-size: 12.5px; line-height: 1.5; }
+  .leaflet-container a.leaflet-popup-close-button { color: var(--muted); }
+  .leaflet-control-attribution { background: var(--header-bg) !important; color: var(--faint) !important; }
+  .leaflet-control-attribution a { color: var(--muted) !important; }
+  .leaflet-bar a { background: var(--menu-bg); color: var(--text); border-color: var(--border); }
+  .leaflet-bar a:hover { background: var(--surface-2); color: var(--heading); }
+  @media (max-width: 900px) {
+    .peering-grid { grid-template-columns: minmax(0, 1fr); }
+    .map-box { height: 380px; }
+    .trace-side { max-height: 320px; }
+  }
+
   #toasts { position: fixed; right: 20px; bottom: 20px; z-index: 100; display: flex; flex-direction: column; gap: 8px; max-width: min(420px, calc(100vw - 40px)); }
   .toast { padding: 11px 16px; border-radius: 10px; font-size: 0.86em; color: var(--heading);
            background: var(--menu-bg); border: 1px solid var(--border); border-left: 4px solid var(--ok); box-shadow: var(--card-shadow); }
@@ -440,8 +489,41 @@
   <!-- Peering-Map -->
   <div class="page" id="page-peering">
     <div class="section">
-      <div class="section-title">Peering-Map</div>
-      <p class="muted">Karte und Live-Traceroute folgen in Phase 9e.</p>
+      <div class="section-head">
+        <div class="section-title">Peering-Map</div>
+        <div class="hist-controls" style="margin:0">
+          <select id="pmServer" onchange="peering.selectServer(this.value)"></select>
+          <button class="btn" id="pmStart" onclick="peering.toggleLive()">Traceroute starten</button>
+        </div>
+      </div>
+      <div class="peering-grid">
+        <div class="chart-box map-box">
+          <div id="pmMap"></div>
+          <div class="map-overlay" id="pmOverlay" hidden></div>
+          <div class="chart-empty map-empty" id="pmMapEmpty" hidden></div>
+        </div>
+        <div class="ds-card trace-side">
+          <div class="side-title">Gespeicherte Traces</div>
+          <div class="trace-list" id="pmTraceList"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section" id="pmDetails" hidden>
+      <div class="section-head">
+        <div class="section-title" id="pmDetailTitle">Pfad</div>
+        <div id="pmDetailActions"></div>
+      </div>
+      <div class="ds-card" style="margin-bottom:18px">
+        <div class="detail-grid" id="pmSummary" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin-bottom:14px"></div>
+        <div class="path-chain" id="pmChain"></div>
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>#</th><th>IP-Adresse</th><th>Hostname</th><th style="text-align:right">RTT</th><th>Standort</th></tr></thead>
+          <tbody id="pmHops"></tbody>
+        </table>
+      </div>
     </div>
   </div>
 

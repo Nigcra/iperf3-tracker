@@ -1154,6 +1154,303 @@ const testsPage = {
 };
 pages.tests = testsPage;
 
+// ---------- Peering-Map ----------
+
+// OpenStreetMap-Standardkacheln (ohne API-Schlüssel; CARTO verlangt inzwischen
+// einen). Die dunkle Darstellung entsteht per CSS-Filter auf der Kachelebene.
+const TILE_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+const TILE_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>-Mitwirkende';
+const HOP_COLORS = { first: '#10b981', dest: '#ef4444', est: '#f59e0b', hop: '#3b82f6' };
+
+const peering = {
+  map: null,
+  tiles: null,
+  layer: null,
+  servers: [],
+  traces: [],
+  serverId: null,
+  trace: null,         // angezeigter gespeicherter Trace
+  live: null,          // { source, host, hops } während einer Live-Traceroute
+
+  async enter() {
+    this.initMap();
+    await this.load();
+    if (pendingPeeringServer != null) {
+      const id = pendingPeeringServer;
+      pendingPeeringServer = null;
+      this.selectServer(id);
+      if (!this.live) this.startLive();
+    }
+  },
+
+  initMap() {
+    if (!window.L) {
+      this.mapMessage('Karte nicht verfügbar (Leaflet konnte nicht geladen werden). Der Pfad wird unten angezeigt.');
+      return;
+    }
+    if (!this.map) {
+      this.map = L.map('pmMap', { worldCopyJump: true }).setView([50.5, 10], 4);
+      this.layer = L.layerGroup().addTo(this.map);
+      this.setTiles();
+    }
+    setTimeout(() => this.map.invalidateSize(), 0);
+  },
+
+  setTiles() {
+    if (!this.map || this.tiles) return;
+    this.tiles = L.tileLayer(TILE_URL, { attribution: TILE_ATTRIBUTION, maxZoom: 19 }).addTo(this.map);
+  },
+
+  mapMessage(text) {
+    const el = document.getElementById('pmMapEmpty');
+    el.textContent = text || '';
+    el.hidden = !text;
+  },
+
+  async load() {
+    try {
+      const [servers, traces] = await Promise.all([apiGet('/servers'), apiGet('/traces?limit=500')]);
+      this.servers = servers.sort((a, b) => a.name.localeCompare(b.name, 'de'));
+      this.traces = traces;
+    } catch (e) {
+      if (e.status !== 401) notify('Traces konnten nicht geladen werden: ' + e.message, 'err');
+      return;
+    }
+    const sel = document.getElementById('pmServer');
+    sel.innerHTML = this.servers.length
+      ? this.servers.map(s => `<option value="${s.id}">${esc(s.name)} (${this.tracesFor(s).length} Traces)</option>`).join('')
+      : '<option value="">Keine Server angelegt</option>';
+    document.getElementById('pmStart').disabled = !this.servers.length && !this.live;
+    if (!this.servers.some(s => s.id === this.serverId)) this.serverId = this.servers[0] ? this.servers[0].id : null;
+    if (this.serverId != null) sel.value = this.serverId;
+    if (!this.live) {
+      const list = this.tracesFor(this.server());
+      if (!this.trace || !list.some(t => t.id === this.trace.id)) this.trace = list[0] || null;
+      else this.trace = list.find(t => t.id === this.trace.id);
+      this.show();
+    }
+    this.renderList();
+  },
+
+  server() { return this.servers.find(s => s.id === this.serverId); },
+  tracesFor(sv) { return sv ? this.traces.filter(t => t.destination_host === sv.host) : []; },
+
+  selectServer(id) {
+    if (this.live) return;
+    this.serverId = Number(id);
+    document.getElementById('pmServer').value = this.serverId;
+    this.trace = this.tracesFor(this.server())[0] || null;
+    this.renderList();
+    this.show();
+  },
+
+  selectTrace(id) {
+    if (this.live) return;
+    this.trace = this.traces.find(t => t.id === id) || null;
+    this.renderList();
+    this.show();
+  },
+
+  renderList() {
+    const list = document.getElementById('pmTraceList');
+    const traces = this.tracesFor(this.server());
+    if (!this.server()) { list.innerHTML = '<p class="muted">Zuerst unter „Server“ einen Server anlegen.</p>'; return; }
+    if (!traces.length) { list.innerHTML = '<p class="muted">Noch keine Traces. „Traceroute starten“ zeichnet den ersten auf.</p>'; return; }
+    list.innerHTML = traces.map(t => `
+      <button class="trace-item ${this.trace && this.trace.id === t.id && !this.live ? 'active' : ''}" onclick="peering.selectTrace(${t.id})" ${this.live ? 'disabled' : ''}>
+        <div class="t">${fmtDate(t.created_at)}</div>
+        <div class="m">${t.total_hops} Hops${t.total_rtt_ms != null ? ' · ' + fmt(t.total_rtt_ms, 1) + ' ms' : ''}${t.test_id ? ' · Test #' + t.test_id : ''}${t.completed ? '' : ' · <span style="color:var(--crit)">unvollständig</span>'}</div>
+      </button>`).join('');
+  },
+
+  // show zeigt den Live-Trace bzw. den gewählten gespeicherten Trace auf Karte und in den Details.
+  show() {
+    const hops = this.live ? this.live.hops : (this.trace ? this.trace.hops : []);
+    this.drawMap(hops);
+    this.renderDetails(hops);
+    this.renderOverlay();
+  },
+
+  // hopKind bestimmt die Markierung: erster Hop, Ziel, geschätzter Standort oder normal.
+  hopKind(h, i, hops) {
+    if (!h.responded) return 'timeout';
+    const destIP = this.live ? null : this.trace && this.trace.destination_ip;
+    const isLast = i === hops.length - 1 && (!this.live || this.live.done);
+    if ((destIP && h.ip_address === destIP) || (isLast && h.responded)) return 'dest';
+    if (i === hops.findIndex(x => x.responded)) return 'first';
+    if (h.geoip_interpolated) return 'est';
+    return 'hop';
+  },
+
+  drawMap(hops) {
+    if (!this.map) return;
+    this.layer.clearLayers();
+    const geo = hops.map((h, i) => [h, i]).filter(([h]) => h.latitude != null && h.longitude != null);
+    if (!geo.length) {
+      this.mapMessage(hops.length
+        ? 'Keine Standortdaten – vermutlich ein privates Netz. Der Pfad ist unten aufgeführt.'
+        : (this.live ? 'Warte auf die ersten Hops …' : 'Kein Trace ausgewählt.'));
+      return;
+    }
+    this.mapMessage('');
+    const coords = geo.map(([h]) => [h.latitude, h.longitude]);
+    L.polyline(coords, { color: '#3b82f6', weight: 3, opacity: 0.75, dashArray: '10, 6' }).addTo(this.layer);
+    for (const [h, i] of geo) {
+      const kind = this.hopKind(h, i, hops);
+      const icon = L.divIcon({
+        className: 'hop-icon', iconSize: [26, 26], iconAnchor: [13, 13],
+        html: `<div class="hop-marker" style="background:${HOP_COLORS[kind] || HOP_COLORS.hop}">${h.hop_number}</div>`,
+      });
+      const place = [h.city, h.country].filter(Boolean).join(', ') || 'unbekannt';
+      L.marker([h.latitude, h.longitude], { icon }).bindPopup(
+        `<strong>Hop ${h.hop_number}</strong>${h.geoip_interpolated ? ' <span style="color:#f59e0b">(Standort geschätzt)</span>' : ''}<br>`
+        + `${esc(h.ip_address)}${h.hostname ? '<br>' + esc(h.hostname) : ''}<br>`
+        + `RTT: ${h.rtt_ms != null ? fmt(h.rtt_ms, 1) + ' ms' : '–'}<br>Standort: ${esc(place)}`).addTo(this.layer);
+    }
+    this.map.fitBounds(L.latLngBounds(coords), { padding: [50, 50], maxZoom: 9 });
+  },
+
+  renderOverlay() {
+    const el = document.getElementById('pmOverlay');
+    if (!this.live) { el.hidden = true; return; }
+    const located = this.live.hops.filter(h => h.latitude != null).length;
+    el.hidden = false;
+    el.innerHTML = `<span class="live-badge">LIVE</span><span>${esc(this.live.host)}</span><span class="sep">|</span>`
+      + `<span>${this.live.hops.length} Hops</span><span class="sep">|</span><span>${located} verortet</span>`;
+  },
+
+  renderDetails(hops) {
+    const box = document.getElementById('pmDetails');
+    const t = this.live ? null : this.trace;
+    box.hidden = !this.live && !t;
+    if (box.hidden) return;
+
+    document.getElementById('pmDetailTitle').textContent = this.live
+      ? 'Live-Traceroute zu ' + this.live.host
+      : 'Trace vom ' + fmtDate(t.created_at);
+    document.getElementById('pmDetailActions').innerHTML = t
+      ? `<button class="btn btn-secondary" onclick="peering.deleteTrace(${t.id})">${ICON_TRASH} Trace löschen</button>` : '';
+
+    const stat = (label, val) => `<div class="stat"><span class="stat-label">${label}</span><span class="stat-val">${val}</span></div>`;
+    const lastRtt = [...hops].reverse().find(h => h.rtt_ms != null);
+    document.getElementById('pmSummary').innerHTML = [
+      stat('Ziel', esc(this.live ? this.live.host : t.destination_host) + (t && t.destination_ip && t.destination_ip !== t.destination_host ? ` (${esc(t.destination_ip)})` : '')),
+      t && t.source_ip ? stat('Quelle', esc(t.source_ip)) : '',
+      stat('Hops', hops.length),
+      stat('RTT zum Ziel', t && t.total_rtt_ms != null ? fmt(t.total_rtt_ms, 1) + ' ms' : (lastRtt ? fmt(lastRtt.rtt_ms, 1) + ' ms' : '–')),
+      stat('Status', this.live ? 'läuft …' : t.completed ? 'vollständig' : `<span style="color:var(--crit)">${esc(t.error_message || 'unvollständig')}</span>`),
+      t && t.test_id ? stat('Zu Test', '#' + t.test_id) : '',
+    ].join('');
+
+    const label = { first: 'Start', dest: 'Ziel', est: 'geschätzt', timeout: 'keine Antwort' };
+    document.getElementById('pmChain').innerHTML = hops.map((h, i) => {
+      const kind = this.hopKind(h, i, hops);
+      return `<span class="hop-chip ${kind}" title="${label[kind] || ''}"><span class="n">${h.hop_number}</span>${h.responded ? esc(h.ip_address) : '*'}</span>`;
+    }).join('<span class="path-arrow">→</span>') || '<span class="muted">Noch keine Hops.</span>';
+
+    document.getElementById('pmHops').innerHTML = hops.map(h => {
+      const place = [h.city, h.country_code || h.country].filter(Boolean).join(', ');
+      return `<tr>
+        <td>${h.hop_number}</td>
+        <td class="mono">${h.responded ? esc(h.ip_address) : '<span class="muted">* keine Antwort</span>'}</td>
+        <td>${h.hostname ? esc(h.hostname) : '–'}</td>
+        <td class="num">${h.rtt_ms != null ? fmt(h.rtt_ms, 1) + ' ms' : '–'}</td>
+        <td>${place ? esc(place) : '–'}${h.geoip_interpolated ? ' <span class="sev-badge sev-warn">geschätzt</span>' : ''}</td>
+      </tr>`;
+    }).join('') || '<tr><td colspan="5" class="muted" style="text-align:center;padding:20px">Noch keine Hops</td></tr>';
+  },
+
+  // ----- Live-Traceroute (Server-Sent Events) -----
+  toggleLive() {
+    if (this.live) this.stopLive(true);
+    else this.startLive();
+  },
+
+  startLive() {
+    const sv = this.server();
+    if (!sv) return;
+    const url = `/api/live-trace/stream/${encodeURIComponent(sv.host)}?token=${encodeURIComponent(storageGet('iperf-token') || '')}`;
+    const source = new EventSource(url);
+    this.live = { source, host: sv.host, hops: [], done: false };
+    this.setRunning(true);
+    this.show();
+
+    source.onmessage = ev => {
+      let msg;
+      try { msg = JSON.parse(ev.data); } catch (e) { return; }
+      if (!this.live || this.live.source !== source) return;
+      switch (msg.type) {
+        case 'hop':
+          this.live.hops.push(msg.data);
+          this.show();
+          break;
+        case 'interpolation_complete':
+          this.live.hops = msg.hops;
+          this.live.done = true;
+          this.show();
+          break;
+        case 'complete':
+          this.finishLive(msg.trace_id);
+          break;
+        case 'error':
+          notify('Traceroute fehlgeschlagen: ' + msg.message, 'err');
+          this.stopLive(false);
+          break;
+      }
+    };
+    // Ohne close() würde EventSource nach Verbindungsende neu verbinden und
+    // damit eine weitere Traceroute starten.
+    source.onerror = () => {
+      if (this.live && this.live.source === source) {
+        notify('Verbindung zur Live-Traceroute verloren', 'err');
+        this.stopLive(false);
+      } else {
+        source.close();
+      }
+    };
+  },
+
+  async finishLive(traceId) {
+    this.live.source.close();
+    this.live = null;
+    this.setRunning(false);
+    notify('Traceroute abgeschlossen');
+    await this.load();
+    if (traceId) this.selectTrace(traceId);
+  },
+
+  stopLive(byUser) {
+    if (!this.live) return;
+    this.live.source.close();
+    this.live = null;
+    this.setRunning(false);
+    if (byUser) notify('Traceroute abgebrochen');
+    this.renderList();
+    this.show();
+  },
+
+  setRunning(running) {
+    const btn = document.getElementById('pmStart');
+    btn.textContent = running ? 'Abbrechen' : 'Traceroute starten';
+    btn.classList.toggle('btn-danger', running);
+    document.getElementById('pmServer').disabled = running;
+  },
+
+  async deleteTrace(id) {
+    const ok = await confirmDialog('Trace löschen?', 'Der Trace wird mit allen Hops endgültig gelöscht.', 'Löschen');
+    if (!ok) return;
+    try {
+      await api('DELETE', '/traces/' + id);
+      notify('Trace gelöscht');
+      this.trace = null;
+      await this.load();
+    } catch (e) {
+      notify(e.message, 'err');
+    }
+  },
+};
+pages.peering = peering;
+
 // ---------- Start ----------
 (async function init() {
   loadInfo();
