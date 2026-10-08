@@ -10,7 +10,8 @@ Ziel: Das bestehende Python/FastAPI-Backend **und** das React-Frontend werden du
 > | 1 – Auth | ✅ erledigt: bcrypt, JWT, Middleware, alle `/auth/*`-Endpunkte, Standard-Admin, Go-Tests (`internal/web/handlers_auth_test.go`) |
 > | 2 – Server-CRUD | ✅ erledigt: `/api/servers` (Liste mit `enabled`/`skip`/`limit`, Detail, Anlegen, partielles Update, Löschen per Cascade), Go-Tests. Scheduler-Aufrufe folgen in Phase 7 |
 > | 3 – Tests | ✅ erledigt: `/api/tests/*` (Liste mit Filtern, Detail, Start, Löschen, latest, live), Runner mit Warteschlange und Live-Status, Auswertung per `iperf3 --json-stream`, Fixture- und Runner-Tests, End-to-End gegen lokalen iperf3-Server geprüft |
-> | 4–10 | offen |
+> | 4 – Statistiken | ✅ erledigt: `/api/stats/dashboard`, `/api/stats/servers[/{id}]` als eine Aggregations-Abfrage statt 7 Abfragen je Server; Store- und HTTP-Tests |
+> | 5–10 | offen |
 >
 > Abweichungen bei der Umsetzung:
 > - Das Schema stammt aus den **SQLAlchemy-Modellen** (`models.py`) und nicht aus den Migrationen. Eine frische Python-DB entsteht per `create_all` aus den Modellen. Unterschied zur Migration 002: `traces.test_id` ist nullable und nicht `UNIQUE`.
@@ -20,6 +21,7 @@ Ziel: Das bestehende Python/FastAPI-Backend **und** das React-Frontend werden du
 > - `detail`-Fehlermeldungen sind deutsch. Das React-Frontend wertet nur die Statuscodes aus, und die sind unverändert.
 > - `servers`, `tests` und `stats` waren in Python **ohne Anmeldung** erreichbar. In Go verlangen sie ein gültiges Token. Das React-Frontend sendet es immer mit, der Ablauf bleibt also unverändert.
 > - **iperf3 (Phase 3):** Download nutzt jetzt `-R`. Python hatte Download und Upload vertauscht, weil `-R` „Server sendet“ bedeutet. Die Testsperre wird direkt nach dem Test freigegeben; Python hielt sie noch 10 s länger fest. Die Live-Werte funktionieren jetzt auch unter Linux, Python lieferte sie nur unter Windows. Zusätzlich werden Bytes, CPU-Last, Retransmits (wo iperf3 sie liefert) sowie bei UDP Jitter und Verlust gespeichert; in Python waren diese Felder immer `null`. `raw_output` enthält die JSON-Zeilen statt der Textausgabe. Beim Start werden Tests, die durch einen Absturz in `pending`/`running` hängen geblieben sind, als fehlgeschlagen markiert.
+> - **Statistiken (Phase 4):** `failed_tests` zählt nur echte Fehlschläge. Python rechnete `total - successful` und zählte so auch wartende und laufende Tests mit. „Heute“ (`tests_today`) bezieht sich auf die lokale Zeitzone des Servers statt auf UTC. `avg_jitter_ms` und `avg_packet_loss_percent` mitteln über beide Richtungen.
 > - Noch offen: Smoke-Test von Phase 1 mit dem React-Frontend im Browser. Die API ist per curl und Go-Tests geprüft.
 >
 > **Änderungen gegenüber der Fassung vom 3. Aug.:**

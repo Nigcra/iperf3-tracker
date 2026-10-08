@@ -155,6 +155,32 @@ type TestDetail struct {
 	RawOutput *string `json:"raw_output"`
 }
 
+// DashboardStats sind die Kennzahlen der Übersicht.
+type DashboardStats struct {
+	TotalServers    int        `json:"total_servers"`
+	ActiveServers   int        `json:"active_servers"`
+	TotalTests      int        `json:"total_tests"`
+	TestsToday      int        `json:"tests_today"`
+	AvgDownloadMbps *float64   `json:"avg_download_mbps"`
+	AvgUploadMbps   *float64   `json:"avg_upload_mbps"`
+	LastTestAt      *time.Time `json:"last_test_at"`
+}
+
+// ServerStats sind die Kennzahlen eines Servers. Mittelwerte beziehen sich
+// nur auf erfolgreiche Tests.
+type ServerStats struct {
+	ServerID             int64      `json:"server_id"`
+	ServerName           string     `json:"server_name"`
+	TotalTests           int        `json:"total_tests"`
+	SuccessfulTests      int        `json:"successful_tests"`
+	FailedTests          int        `json:"failed_tests"`
+	AvgDownloadMbps      *float64   `json:"avg_download_mbps"`
+	AvgUploadMbps        *float64   `json:"avg_upload_mbps"`
+	AvgJitterMs          *float64   `json:"avg_jitter_ms"`
+	AvgPacketLossPercent *float64   `json:"avg_packet_loss_percent"`
+	LastTestAt           *time.Time `json:"last_test_at"`
+}
+
 // Server ist ein iperf3-Server-Profil.
 type Server struct {
 	ID int64 `json:"id"`

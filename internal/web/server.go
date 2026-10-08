@@ -58,6 +58,10 @@ func (s *Server) routes() {
 	s.mux.Handle("DELETE /api/tests/{test_id}", s.requireUser(s.handleDeleteTest))
 	s.mux.Handle("GET /api/tests/{test_id}/live", s.requireUser(s.handleTestLive))
 	s.mux.Handle("GET /api/tests/server/{server_id}/latest", s.requireUser(s.handleLatestTest))
+
+	s.mux.Handle("GET /api/stats/dashboard", s.requireUser(s.handleDashboardStats))
+	s.mux.Handle("GET /api/stats/servers", s.requireUser(s.handleServerStatsList))
+	s.mux.Handle("GET /api/stats/servers/{server_id}", s.requireUser(s.handleServerStats))
 }
 
 func (s *Server) handleInfo(w http.ResponseWriter, r *http.Request) {
