@@ -38,14 +38,15 @@ type LiveStatus struct {
 
 // Runner führt Tests nacheinander aus – es läuft immer nur ein iperf3 gleichzeitig.
 type Runner struct {
-	store   *store.Store
-	cmdMu   sync.RWMutex
-	command []string // iperf3-Binary, ggf. mit festen Vorab-Argumenten (Tests)
-	status  Status
-	sem     chan struct{}
-	ctx     context.Context
-	cancel  context.CancelFunc
-	wg      sync.WaitGroup
+	store      *store.Store
+	cmdMu      sync.RWMutex
+	configured string   // fest konfigurierter Pfad; dann keine Installation
+	command    []string // iperf3-Binary, ggf. mit festen Vorab-Argumenten (Tests)
+	status     Status
+	sem        chan struct{}
+	ctx        context.Context
+	cancel     context.CancelFunc
+	wg         sync.WaitGroup
 
 	mu   sync.RWMutex
 	live map[int64]*LiveStatus

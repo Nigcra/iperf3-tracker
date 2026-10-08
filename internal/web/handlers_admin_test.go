@@ -65,3 +65,18 @@ func TestPublicServers(t *testing.T) {
 	}
 	expectStatus(t, srv, "GET", "/api/public-servers/search", "", "", http.StatusUnprocessableEntity)
 }
+
+func TestInstallIperfRoute(t *testing.T) {
+	srv := newTestServer(t)
+	admin := login(t, srv, "admin", "admin123")
+	call(t, srv, "POST", "/api/auth/register", admin, `{"username":"bob","email":"bob@example.org","password":"geheim1"}`, nil)
+	user := login(t, srv, "bob", "geheim1")
+
+	expectStatus(t, srv, "POST", "/api/iperf3/install", "", "", http.StatusUnauthorized)
+	expectStatus(t, srv, "POST", "/api/iperf3/install", user, "", http.StatusForbidden)
+	// Der Test-Runner wurde nicht vorbereitet und gilt daher nicht als installierbar.
+	var res map[string]any
+	if code := call(t, srv, "POST", "/api/iperf3/install", admin, "", &res); code != http.StatusConflict {
+		t.Fatalf("nicht installierbar: %d, %v", code, res)
+	}
+}

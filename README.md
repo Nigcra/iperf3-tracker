@@ -28,11 +28,12 @@ Go-Binary liefert API und Oberfläche aus – ohne Node, Python oder Webserver.
 
 ## Voraussetzungen
 
-- **iperf3 ab Version 3.17** (wegen `--json-stream`). Fehlt iperf3, installiert
-  der Dienst es beim Start automatisch im Hintergrund – unter Windows per
-  winget, unter Linux über den vorhandenen Paketmanager (apt-get, dnf, yum,
-  zypper, apk, pacman; ohne Root über `sudo -n`). Abschaltbar mit
-  `iperf.auto_install: false`. Manuell:
+- **iperf3 ab Version 3.17** (wegen `--json-stream`). Fehlt iperf3, bietet die
+  Oberfläche Administratoren nach der Anmeldung die Installation an – unter
+  Windows per winget, unter Linux über den vorhandenen Paketmanager (apt-get,
+  dnf, yum, zypper, apk, pacman; ohne Root über `sudo -n`). Ohne Nachfrage beim
+  Start installieren: `iperf.auto_install: true` (z. B. für Server ohne
+  Oberfläche). Manuell:
   - Windows: `winget install ar51an.iPerf3`
   - Linux: Paket `iperf3` der Distribution, sofern mindestens 3.17
     (z. B. Debian 13: `apt install iperf3`)
@@ -80,7 +81,7 @@ Werte lassen sich per Umgebungsvariable überschreiben:
 | `auth.secret_key` | `SECRET_KEY` | beim ersten Start zufällig erzeugt |
 | `scheduler.enabled` | `SCHEDULER_ENABLED` | `true` |
 | `iperf.path` | `IPERF3_PATH` | automatisch (PATH, winget-Pfad) |
-| `iperf.auto_install` | `IPERF3_AUTO_INSTALL` | `true` |
+| `iperf.auto_install` | `IPERF3_AUTO_INSTALL` | `false` (Oberfläche fragt nach) |
 | `geoip.path` | `GEOIP_PATH` | `geoip/GeoLite2-City.mmdb` |
 | `log.level` | `LOG_LEVEL` | `info` |
 

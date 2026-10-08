@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"runtime"
 	"strings"
 )
 
@@ -67,7 +66,7 @@ func installCommands(goos string, lookPath func(string) (string, error), isRoot 
 // Install installiert iperf3 über den Paketmanager des Systems (Windows:
 // winget, Linux: apt-get/dnf/yum/zypper/apk/pacman, macOS: brew).
 func Install(ctx context.Context) error {
-	cmds, err := installCommands(runtime.GOOS, exec.LookPath, os.Geteuid() == 0)
+	cmds, err := installPlan()
 	if err != nil {
 		return err
 	}

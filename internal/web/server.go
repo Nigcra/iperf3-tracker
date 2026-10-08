@@ -112,6 +112,7 @@ func (s *Server) routes() {
 	s.mux.Handle("DELETE /api/admin/cleanup/tests", s.requireAdmin(s.handleCleanupTests))
 	s.mux.Handle("DELETE /api/admin/cleanup/traces", s.requireAdmin(s.handleCleanupTraces))
 	s.mux.Handle("GET /api/admin/stats/database", s.requireAdmin(s.handleDatabaseStats))
+	s.mux.Handle("POST /api/iperf3/install", s.requireAdmin(s.handleInstallIperf))
 
 	// Öffentlich wie bisher: statische Liste ohne Benutzerdaten.
 	s.mux.HandleFunc("GET /api/public-servers", s.handlePublicServers)

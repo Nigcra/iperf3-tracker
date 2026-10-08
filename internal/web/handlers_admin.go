@@ -1,11 +1,14 @@
 package web
 
 import (
+	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
 
+	"iperf3-tracker/internal/iperf"
 	"iperf3-tracker/internal/model"
 )
 
@@ -129,4 +132,25 @@ func (s *Server) handleSearchPublicServers(w http.ResponseWriter, r *http.Reques
 		}
 	}
 	writeJSON(w, http.StatusOK, results)
+}
+
+// handleInstallIperf startet nach Bestätigung in der Oberfläche die
+// Installation von iperf3 über den Paketmanager.
+func (s *Server) handleInstallIperf(w http.ResponseWriter, r *http.Request, u *model.User) {
+	switch err := s.runner.InstallAsync(); {
+	case errors.Is(err, iperf.ErrInstallRunning):
+		writeError(w, http.StatusConflict, err.Error())
+	case errors.Is(err, iperf.ErrNotInstallable):
+		st := s.runner.Status()
+		msg := err.Error()
+		if st.Error != "" {
+			msg += ": " + st.Error
+		}
+		writeError(w, http.StatusConflict, msg)
+	case err != nil:
+		writeInternal(w, r, err)
+	default:
+		slog.Info("iperf3-Installation angefordert", "benutzer", u.Username)
+		writeJSON(w, http.StatusAccepted, s.runner.Status())
+	}
 }

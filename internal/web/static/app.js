@@ -99,6 +99,7 @@ function showApp(user) {
   document.getElementById('userName').textContent = user.username;
   document.getElementById('userAdminBadge').hidden = !user.is_admin;
   document.getElementById('navAdmin').hidden = !user.is_admin;
+  iperfSetup.reset();
   startStatusPolling();
   showTab(tabFromHash());
 }
@@ -203,6 +204,10 @@ async function loadStatus() {
          + '<div class="sp-row"><span class="sp-label">Scheduler:</span> ' + (status.scheduler_running ? 'aktiv' : 'aus') + '</div>'
          + '<div class="sp-row"><span class="sp-label">Laufende Tests:</span> ' + running.length
          + (pending.length ? ' (+' + pending.length + ' wartend)' : '') + '</div>';
+    if (ip.installable && !ip.installing && currentUser && currentUser.is_admin) {
+      rows += '<button class="btn" style="width:100%;margin-top:10px" onclick="iperfSetup.prompt()">iperf3 installieren</button>';
+    }
+    iperfSetup.update(ip);
     const broken = !ip.available && !ip.installing;
     if (broken) { cls = 'status-dot-err'; sym = '&#9888;'; title = 'iperf3 nicht verfügbar – Details anzeigen'; }
     else if (ip.installing) { cls = 'status-dot-warn'; sym = '&#9679;'; title = 'iperf3 wird installiert'; }
@@ -220,6 +225,59 @@ async function loadStatus() {
   btn.title = title;
   panel.innerHTML = rows;
 }
+
+// iperfSetup fragt nach, wenn iperf3 fehlt, und meldet das Ergebnis einer
+// Installation. Installiert wird nur nach Bestätigung durch einen Admin.
+const iperfSetup = {
+  status: null,
+  asked: false,       // einmal je Anmeldung nachfragen bzw. hinweisen
+  prompting: false,
+  wasInstalling: false,
+
+  reset() { this.asked = false; this.wasInstalling = false; },
+
+  update(ip) {
+    this.status = ip;
+    if (this.wasInstalling && !ip.installing) {
+      if (ip.available) notify(`iperf3 ${ip.version} installiert – Tests können jetzt laufen.`);
+      else notify('iperf3-Installation fehlgeschlagen: ' + (ip.error || 'unbekannter Fehler'), 'err');
+    }
+    this.wasInstalling = ip.installing;
+    if (ip.available || ip.installing || this.prompting || this.asked) return;
+    this.asked = true;
+    if (!currentUser || !currentUser.is_admin) {
+      notify('iperf3 ist auf dem Server nicht verfügbar – Tests schlagen fehl. Bitte einen Administrator informieren.', 'warn');
+      return;
+    }
+    let later = false;
+    try { later = sessionStorage.getItem('iperf-install-later') === '1'; } catch (e) {}
+    if (ip.installable && !later) this.prompt();
+  },
+
+  async prompt() {
+    const ip = this.status;
+    if (!ip || !ip.installable || this.prompting) return;
+    closeMenus();
+    this.prompting = true;
+    const ok = await confirmDialog('iperf3 installieren?',
+      'iperf3 wurde auf diesem System nicht gefunden – ohne iperf3 laufen keine Tests.\n\n'
+      + 'Soll es jetzt über den Paketmanager installiert werden? Ausgeführt wird:\n' + ip.install_command,
+      'Installieren', false, 'Später');
+    this.prompting = false;
+    if (!ok) {
+      try { sessionStorage.setItem('iperf-install-later', '1'); } catch (e) {}
+      return;
+    }
+    try {
+      await api('POST', '/iperf3/install');
+      this.wasInstalling = true;
+      notify('iperf3 wird installiert – das kann einige Minuten dauern …');
+      loadStatus();
+    } catch (e) {
+      notify('Installation nicht möglich: ' + e.message, 'err');
+    }
+  },
+};
 
 function startStatusPolling() {
   stopStatusPolling();
@@ -596,14 +654,17 @@ pages.dashboard = dashboard;
 
 // ---------- Bestätigungsdialog ----------
 
-// confirmDialog fragt eine Bestätigung ab und liefert true bei "OK".
-function confirmDialog(title, text, okLabel) {
+// confirmDialog fragt eine Bestätigung ab und liefert true bei "OK". danger
+// färbt die Bestätigung rot (Löschen); sonst erscheint sie als normale Aktion.
+function confirmDialog(title, text, okLabel, danger = true, cancelLabel = 'Abbrechen') {
   const modal = document.getElementById('confirmModal');
   document.getElementById('confirmTitle').textContent = title;
   document.getElementById('confirmText').textContent = text;
   const ok = document.getElementById('confirmOk');
   const cancel = document.getElementById('confirmCancel');
   ok.textContent = okLabel;
+  ok.classList.toggle('btn-danger', danger);
+  cancel.textContent = cancelLabel;
   modal.hidden = false;
   cancel.focus();
   return new Promise(resolve => {

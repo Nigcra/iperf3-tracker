@@ -23,8 +23,9 @@ scheduler:
 iperf:
   # Pfad zur iperf3-Binary (mind. Version 3.17); leer = automatisch suchen.
   path: ""
-  # Fehlt iperf3, beim Start automatisch installieren (winget bzw. Paketmanager).
-  auto_install: true
+  # Fehlt iperf3, beim Start ohne Nachfrage installieren (winget bzw. Paketmanager).
+  # Standard: aus – die Oberfläche fragt einen Admin vor der Installation.
+  auto_install: false
 
 geoip:
   # GeoLite2-City-Datenbank für die Standorte auf der Karte (relativ zu dieser Datei).

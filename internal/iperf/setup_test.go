@@ -118,68 +118,114 @@ func waitInstalled(t *testing.T, r *Runner) Status {
 	return r.Status()
 }
 
-func stubInstall(t *testing.T, f func(ctx context.Context) error) *int {
+// stubInstall ersetzt Installationsplanung und Installation. Ist plan nil,
+// gilt iperf3 als installierbar per "fake install iperf3".
+func stubInstall(t *testing.T, planErr error, f func(ctx context.Context) error) *int {
 	t.Helper()
 	calls := 0
-	orig := installFunc
+	origPlan, origFunc := installPlan, installFunc
+	installPlan = func() ([][]string, error) {
+		if planErr != nil {
+			return nil, planErr
+		}
+		return [][]string{{"fake", "install", "iperf3"}}, nil
+	}
 	installFunc = func(ctx context.Context) error { calls++; return f(ctx) }
-	t.Cleanup(func() { installFunc = orig })
+	t.Cleanup(func() { installPlan, installFunc = origPlan, origFunc })
 	return &calls
 }
 
-func TestPrepareInstallsMissingIperf(t *testing.T) {
+func TestInstallOnRequest(t *testing.T) {
 	dir := isolateSearch(t)
 	t.Setenv("FAKE_IPERF3_VERSION", "3.21")
-	calls := stubInstall(t, func(context.Context) error { placeFakeIperf(t, dir); return nil })
+	release := make(chan struct{})
+	calls := stubInstall(t, nil, func(context.Context) error { <-release; placeFakeIperf(t, dir); return nil })
 
-	r := NewRunner(nil, "iperf3")
-	t.Cleanup(r.Stop)
-	r.Prepare("", true)
-	st := waitInstalled(t, r)
-	if *calls != 1 || !st.Available || st.Version != "3.21" || !strings.HasPrefix(st.Path, dir) {
-		t.Fatalf("nach Installation: %+v (Aufrufe %d)", st, *calls)
-	}
-	if got := r.commandLine()[0]; got != st.Path {
-		t.Errorf("Runner nutzt %s statt %s", got, st.Path)
-	}
-}
-
-func TestPrepareReportsFailedInstall(t *testing.T) {
-	isolateSearch(t)
-	stubInstall(t, func(context.Context) error { return errors.New("winget: Zugriff verweigert") })
-
-	r := NewRunner(nil, "iperf3")
-	t.Cleanup(r.Stop)
-	r.Prepare("", true)
-	st := waitInstalled(t, r)
-	if st.Available || !strings.Contains(st.Error, "Installation fehlgeschlagen") || !strings.Contains(st.Error, "Zugriff verweigert") {
-		t.Fatalf("Status: %+v", st)
-	}
-}
-
-func TestPrepareWithoutInstall(t *testing.T) {
-	dir := isolateSearch(t)
-	calls := stubInstall(t, func(context.Context) error { return nil })
-
-	// Abgeschaltet: keine Installation, Fehler im Status.
 	r := NewRunner(nil, "iperf3")
 	t.Cleanup(r.Stop)
 	r.Prepare("", false)
-	if st := r.Status(); st.Available || st.Installing || *calls != 0 || !strings.Contains(st.Error, "nicht installiert") {
-		t.Fatalf("auto_install aus: %+v, Aufrufe %d", st, *calls)
+	st := r.Status()
+	if st.Available || st.Installing || !st.Installable || st.InstallCommand != "fake install iperf3" || *calls != 0 {
+		t.Fatalf("ohne Auto-Installation: %+v, Aufrufe %d", st, *calls)
 	}
 
-	// Fest konfigurierter Pfad wird nie ersetzt.
+	if err := r.InstallAsync(); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.InstallAsync(); !errors.Is(err, ErrInstallRunning) {
+		t.Errorf("zweiter Aufruf: %v, erwartet ErrInstallRunning", err)
+	}
+	close(release)
+	st = waitInstalled(t, r)
+	if !st.Available || st.Version != "3.21" || st.Installable || *calls != 1 || r.commandLine()[0] != st.Path {
+		t.Fatalf("nach Installation: %+v, Aufrufe %d", st, *calls)
+	}
+	if err := r.InstallAsync(); !errors.Is(err, ErrNotInstallable) {
+		t.Errorf("bereits vorhanden: %v, erwartet ErrNotInstallable", err)
+	}
+}
+
+func TestPrepareAutoInstall(t *testing.T) {
+	dir := isolateSearch(t)
+	t.Setenv("FAKE_IPERF3_VERSION", "3.21")
+	calls := stubInstall(t, nil, func(context.Context) error { placeFakeIperf(t, dir); return nil })
+
+	r := NewRunner(nil, "iperf3")
+	t.Cleanup(r.Stop)
+	r.Prepare("", true)
+	if st := waitInstalled(t, r); !st.Available || *calls != 1 {
+		t.Fatalf("auto_install: %+v, Aufrufe %d", st, *calls)
+	}
+}
+
+func TestInstallFailureCanBeRetried(t *testing.T) {
+	isolateSearch(t)
+	stubInstall(t, nil, func(context.Context) error { return errors.New("winget: Zugriff verweigert") })
+
+	r := NewRunner(nil, "iperf3")
+	t.Cleanup(r.Stop)
+	r.Prepare("", false)
+	if err := r.InstallAsync(); err != nil {
+		t.Fatal(err)
+	}
+	st := waitInstalled(t, r)
+	if st.Available || !st.Installable || !strings.Contains(st.Error, "Installation fehlgeschlagen") || !strings.Contains(st.Error, "Zugriff verweigert") {
+		t.Fatalf("Status: %+v", st)
+	}
+	if err := r.InstallAsync(); err != nil {
+		t.Errorf("erneuter Versuch: %v", err)
+	}
+	waitInstalled(t, r)
+}
+
+func TestNotInstallable(t *testing.T) {
+	dir := isolateSearch(t)
+	calls := stubInstall(t, nil, func(context.Context) error { return nil })
+	r := NewRunner(nil, "iperf3")
+	t.Cleanup(r.Stop)
+
+	// Fest konfigurierter Pfad wird nie ersetzt, auch nicht mit auto_install.
 	r.Prepare(filepath.Join(dir, "gibt-es-nicht.exe"), true)
-	if st := r.Status(); st.Installing || *calls != 0 {
+	if st := r.Status(); st.Installable || st.Installing || *calls != 0 || !errors.Is(r.InstallAsync(), ErrNotInstallable) {
 		t.Fatalf("konfigurierter Pfad: %+v, Aufrufe %d", st, *calls)
 	}
 
-	// Zu alte Version: nur melden, nicht installieren.
+	// Zu alte Version: nur melden.
 	placeFakeIperf(t, dir)
 	t.Setenv("FAKE_IPERF3_VERSION", "3.12")
 	r.Prepare("", true)
-	if st := r.Status(); st.Available || st.Installing || *calls != 0 || !strings.Contains(st.Error, "zu alt") {
+	if st := r.Status(); st.Installable || st.Installing || *calls != 0 || !strings.Contains(st.Error, "zu alt") {
 		t.Fatalf("zu alt: %+v, Aufrufe %d", st, *calls)
+	}
+}
+
+func TestNoPackageManager(t *testing.T) {
+	isolateSearch(t)
+	stubInstall(t, errors.New("kein unterstützter Paketmanager gefunden"), func(context.Context) error { return nil })
+	r := NewRunner(nil, "iperf3")
+	t.Cleanup(r.Stop)
+	r.Prepare("", true)
+	if st := r.Status(); st.Installable || st.Installing || !strings.Contains(st.Error, "kein unterstützter Paketmanager") {
+		t.Fatalf("Status: %+v", st)
 	}
 }

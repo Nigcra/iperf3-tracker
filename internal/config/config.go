@@ -57,8 +57,9 @@ type IperfConfig struct {
 	// Path zur iperf3-Binary; leer = automatisch suchen (PATH, unter Windows
 	// zusätzlich übliche Installationsorte).
 	Path string `yaml:"path"`
-	// AutoInstall installiert iperf3 beim Start über den Paketmanager, falls es
-	// fehlt (Windows: winget, Linux: apt-get/dnf/yum/zypper/apk/pacman).
+	// AutoInstall installiert iperf3 beim Start ohne Nachfrage über den
+	// Paketmanager, falls es fehlt. Standard ist aus: dann fragt die Oberfläche
+	// einen Admin, bevor installiert wird (sinnvoll ohne Oberfläche, z. B. Docker).
 	AutoInstall bool `yaml:"auto_install"`
 }
 
@@ -104,8 +105,9 @@ scheduler:
 iperf:
   # Pfad zur iperf3-Binary (mind. Version 3.17); leer = automatisch suchen.
   path: ""
-  # Fehlt iperf3, beim Start automatisch installieren (winget bzw. Paketmanager).
-  auto_install: true
+  # Fehlt iperf3, beim Start ohne Nachfrage installieren (winget bzw. Paketmanager).
+  # Standard: aus – die Oberfläche fragt einen Admin vor der Installation.
+  auto_install: false
 
 geoip:
   # GeoLite2-City-Datenbank für die Standorte auf der Karte (relativ zu dieser Datei).
@@ -165,7 +167,6 @@ func defaults() *Config {
 		Web:       WebConfig{Listen: "0.0.0.0:8000"},
 		Storage:   StorageConfig{Path: "data/iperf3-tracker.db"},
 		GeoIP:     GeoIPConfig{Path: "geoip/GeoLite2-City.mmdb"},
-		Iperf:     IperfConfig{AutoInstall: true},
 		Scheduler: SchedulerConfig{Enabled: true},
 		Log:       LogConfig{Level: "info"},
 	}
