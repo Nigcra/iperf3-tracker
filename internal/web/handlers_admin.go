@@ -99,6 +99,7 @@ var publicServers = []model.PublicServer{
 	{Name: "Online.net Paris", Host: "ping.online.net", Port: 5200, Location: "Paris, Frankreich", Provider: "Online.net", Description: "Öffentlicher iperf3-Server von Online.net"},
 	{Name: "wilhelm.tel Hamburg", Host: "speedtest.wtnet.de", Port: 5200, Location: "Hamburg, Deutschland", Provider: "wilhelm.tel", Description: "Öffentlicher iperf3-Server von wilhelm.tel"},
 	{Name: "Speedtest Frankfurt", Host: "speedtest.fra.de.as9136.net", Port: 5200, Location: "Frankfurt, Deutschland", Provider: "AS9136", Description: "Öffentlicher iperf3-Server in Frankfurt"},
+	{Name: "Wobcom Wolfsburg", Host: "a400.speedtest.wobcom.de", Port: 5201, Location: "Wolfsburg, Deutschland", Provider: "WOBCOM", Description: "Öffentlicher iperf3-Server von WOBCOM (AS9136)"},
 	{Name: "Uztelecom Taschkent", Host: "speedtest.uztelecom.uz", Port: 5200, Location: "Taschkent, Usbekistan", Provider: "Uztelecom", Description: "Öffentlicher iperf3-Server von Uztelecom"},
 	{Name: "AT&T Ashburn VA", Host: "speedtest.ashb.va.us.as7018.net", Port: 5201, Location: "Ashburn, Virginia, USA", Provider: "AT&T", Description: "Öffentlicher iperf3-Server von AT&T in Virginia"},
 	{Name: "Hurricane Electric", Host: "speedtest.dal.tx.us.he.net", Port: 5201, Location: "Dallas, Texas, USA", Provider: "Hurricane Electric", Description: "Öffentlicher Server von Hurricane Electric in Dallas"},

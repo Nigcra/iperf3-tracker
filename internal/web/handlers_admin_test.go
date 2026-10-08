@@ -53,11 +53,11 @@ func TestPublicServers(t *testing.T) {
 	srv := newTestServer(t)
 
 	var all []model.PublicServer
-	if code := call(t, srv, "GET", "/api/public-servers", "", "", &all); code != http.StatusOK || len(all) != 10 {
+	if code := call(t, srv, "GET", "/api/public-servers", "", "", &all); code != http.StatusOK || len(all) != 11 {
 		t.Fatalf("Liste ohne Anmeldung: %d, %d Einträge", code, len(all))
 	}
 	var found []model.PublicServer
-	if call(t, srv, "GET", "/api/public-servers/search?query=DEUTSCHLAND", "", "", &found); len(found) != 2 {
+	if call(t, srv, "GET", "/api/public-servers/search?query=DEUTSCHLAND", "", "", &found); len(found) != 3 {
 		t.Errorf("Suche nach Ort: %+v", found)
 	}
 	if call(t, srv, "GET", "/api/public-servers/search?query=init7", "", "", &found); len(found) != 1 || found[0].Host != "speedtest.init7.net" {

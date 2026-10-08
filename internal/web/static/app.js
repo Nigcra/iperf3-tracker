@@ -242,6 +242,8 @@ function notify(message, kind = 'ok') {
   t.className = 'toast toast-' + kind;
   t.textContent = message;
   box.appendChild(t);
+  // Höchstens drei Meldungen gleichzeitig, damit sie keine Formulare verdecken.
+  while (box.children.length > 3) box.firstChild.remove();
   setTimeout(() => t.remove(), kind === 'err' ? 7000 : 3500);
 }
 
@@ -580,6 +582,237 @@ const dashboard = {
   },
 };
 pages.dashboard = dashboard;
+
+// ---------- Bestätigungsdialog ----------
+
+// confirmDialog fragt eine Bestätigung ab und liefert true bei "OK".
+function confirmDialog(title, text, okLabel) {
+  const modal = document.getElementById('confirmModal');
+  document.getElementById('confirmTitle').textContent = title;
+  document.getElementById('confirmText').textContent = text;
+  const ok = document.getElementById('confirmOk');
+  const cancel = document.getElementById('confirmCancel');
+  ok.textContent = okLabel;
+  modal.hidden = false;
+  cancel.focus();
+  return new Promise(resolve => {
+    const close = result => {
+      modal.hidden = true;
+      ok.onclick = cancel.onclick = modal.onclick = null;
+      document.removeEventListener('keydown', onKey);
+      resolve(result);
+    };
+    const onKey = ev => { if (ev.key === 'Escape') close(false); };
+    ok.onclick = () => close(true);
+    cancel.onclick = () => close(false);
+    modal.onclick = ev => { if (ev.target === modal) close(false); };
+    document.addEventListener('keydown', onKey);
+  });
+}
+
+// ---------- Server-Profile ----------
+
+const ICON_EDIT = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/></svg>';
+const ICON_POWER = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.77.04"/></svg>';
+const ICON_TRASH = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>';
+
+const serversPage = {
+  servers: [],
+  publicServers: null,
+  editing: null, // Server-ID beim Bearbeiten, sonst null
+
+  enter() { this.load(); },
+
+  async load() {
+    try {
+      this.servers = await apiGet('/servers');
+      this.render();
+    } catch (e) {
+      if (e.status !== 401) notify('Server konnten nicht geladen werden: ' + e.message, 'err');
+    }
+  },
+
+  render() {
+    const grid = document.getElementById('serverGrid');
+    if (!this.servers.length) {
+      grid.innerHTML = '<div class="ds-card"><p class="muted">Noch keine Server angelegt. '
+        + 'Über „Server hinzufügen“ einen eigenen oder einen öffentlichen iperf3-Server eintragen.</p></div>';
+      return;
+    }
+    const row = (label, val) => `<div class="stat"><span class="stat-label">${label}</span><span class="stat-val">${val}</span></div>`;
+    syncCards(grid, [...this.servers].sort((a, b) => a.name.localeCompare(b.name, 'de')).map(sv => {
+      const color = serverColor(this.servers, sv.id);
+      const udp = sv.default_protocol === 'udp'
+        ? row('UDP-Zielrate', sv.default_udp_bandwidth_mbps ? fmt(sv.default_udp_bandwidth_mbps, 1) + ' Mbit/s' : 'Standard (1 Mbit/s)') : '';
+      return [sv.id, `
+        <div class="ds-header">
+          <span style="width:10px;height:10px;border-radius:50%;background:${color};flex:none"></span>
+          <span class="ds-name">${esc(sv.name)}</span>
+          <div class="card-actions">
+            <button class="icon-btn" title="Bearbeiten" onclick="serversPage.openForm(${sv.id})">${ICON_EDIT}</button>
+            <button class="icon-btn" title="${sv.enabled ? 'Deaktivieren' : 'Aktivieren'}" onclick="serversPage.toggle(${sv.id})">${ICON_POWER}</button>
+            <button class="icon-btn" title="Löschen" onclick="serversPage.remove(${sv.id})">${ICON_TRASH}</button>
+          </div>
+        </div>
+        <div class="host">${esc(sv.host)}:${sv.port}</div>
+        ${sv.description ? `<div class="desc">${esc(sv.description)}</div>` : ''}
+        <div class="ds-badges">
+          <span class="sev-badge ${sv.enabled ? 'sev-ok' : 'sev-crit'}">${sv.enabled ? 'aktiv' : 'deaktiviert'}</span>
+          ${sv.schedule_enabled ? `<span class="sev-badge sev-info">alle ${sv.schedule_interval_minutes} min</span>` : '<span class="sev-badge sev-info">kein Zeitplan</span>'}
+          ${sv.schedule_enabled && sv.auto_trace_enabled ? '<span class="sev-badge sev-info">Auto-Trace</span>' : ''}
+        </div>
+        <div class="ds-stats">
+          ${row('Protokoll', protocolLabel(sv.default_protocol))}
+          ${row('Richtung', directionLabel(sv.default_direction))}
+          ${row('Testdauer', sv.default_duration + ' s')}
+          ${row('Streams', sv.default_parallel)}
+          ${udp}
+        </div>`];
+    }));
+    grid.querySelectorAll('.ds-card').forEach(card => {
+      const sv = this.servers.find(s => String(s.id) === card.dataset.key);
+      card.classList.toggle('inactive', !!sv && !sv.enabled);
+    });
+  },
+
+  // ----- Dialog -----
+  val(id) { return document.getElementById(id); },
+
+  async openForm(id) {
+    const sv = id ? this.servers.find(s => s.id === id) : null;
+    this.editing = sv ? sv.id : null;
+    const d = sv || {
+      name: '', host: '', port: 5201, description: '', enabled: true,
+      default_protocol: 'tcp', default_direction: 'download', default_duration: 10, default_parallel: 1,
+      default_udp_bandwidth_mbps: null, schedule_enabled: false, schedule_interval_minutes: 30, auto_trace_enabled: false,
+    };
+    this.val('serverFormTitle').textContent = sv ? 'Server bearbeiten' : 'Server hinzufügen';
+    this.val('sfName').value = d.name;
+    this.val('sfHost').value = d.host;
+    this.val('sfPort').value = d.port;
+    this.val('sfDesc').value = d.description || '';
+    this.val('sfProto').value = d.default_protocol;
+    this.val('sfDir').value = d.default_direction;
+    this.val('sfDuration').value = d.default_duration;
+    this.val('sfParallel').value = d.default_parallel;
+    this.val('sfUdp').value = d.default_udp_bandwidth_mbps ?? '';
+    this.val('sfSchedule').checked = d.schedule_enabled;
+    this.val('sfInterval').value = d.schedule_interval_minutes;
+    this.val('sfAutoTrace').checked = d.auto_trace_enabled;
+    this.val('sfEnabled').checked = d.enabled;
+    this.val('sfPublic').value = '';
+    this.val('publicPick').hidden = !!sv;
+    this.showError('');
+    this.syncForm();
+    this.val('serverModal').hidden = false;
+    this.val(sv ? 'sfName' : 'sfPublic').focus();
+    document.addEventListener('keydown', this.onKey);
+    if (!sv) this.loadPublicServers();
+  },
+
+  onKey(ev) { if (ev.key === 'Escape') serversPage.closeForm(); },
+
+  closeForm() {
+    this.val('serverModal').hidden = true;
+    document.removeEventListener('keydown', this.onKey);
+  },
+
+  // syncForm blendet abhängige Felder ein oder aus (UDP-Rate, Intervall, Auto-Trace).
+  syncForm() {
+    const udp = this.val('sfProto').value === 'udp';
+    const sched = this.val('sfSchedule').checked;
+    this.val('sfUdpField').hidden = !udp;
+    this.val('sfInterval').disabled = !sched;
+    this.val('sfAutoTrace').disabled = !sched;
+    this.val('sfAutoTraceRow').classList.toggle('disabled', !sched);
+  },
+
+  async loadPublicServers() {
+    if (this.publicServers) return;
+    try {
+      this.publicServers = await apiGet('/public-servers');
+      this.val('sfPublic').insertAdjacentHTML('beforeend', this.publicServers.map((p, i) =>
+        `<option value="${i}">${esc(p.name)} – ${esc(p.location)} (${esc(p.host)})</option>`).join(''));
+    } catch (e) {}
+  },
+
+  applyPublic(index) {
+    const p = this.publicServers && this.publicServers[index];
+    if (!p) return;
+    this.val('sfName').value = p.name;
+    this.val('sfHost').value = p.host;
+    this.val('sfPort').value = p.port;
+    this.val('sfDesc').value = p.description;
+  },
+
+  showError(msg) {
+    const el = this.val('serverFormError');
+    el.textContent = msg;
+    el.hidden = !msg;
+  },
+
+  async save(ev) {
+    ev.preventDefault();
+    const num = id => { const v = this.val(id).value.trim(); return v === '' ? null : Number(v); };
+    const body = {
+      name: this.val('sfName').value.trim(),
+      host: this.val('sfHost').value.trim(),
+      port: num('sfPort') ?? 5201,
+      description: this.val('sfDesc').value.trim() || null,
+      default_protocol: this.val('sfProto').value,
+      default_direction: this.val('sfDir').value,
+      default_duration: num('sfDuration') ?? 10,
+      default_parallel: num('sfParallel') ?? 1,
+      default_udp_bandwidth_mbps: this.val('sfProto').value === 'udp' ? num('sfUdp') : null,
+      schedule_enabled: this.val('sfSchedule').checked,
+      schedule_interval_minutes: num('sfInterval') ?? 30,
+      auto_trace_enabled: this.val('sfSchedule').checked && this.val('sfAutoTrace').checked,
+      enabled: this.val('sfEnabled').checked,
+    };
+    if (!body.name || !body.host) { this.showError('Name und Host sind Pflichtfelder.'); return; }
+    const btn = this.val('serverFormSave');
+    btn.disabled = true;
+    try {
+      if (this.editing) await api('PUT', '/servers/' + this.editing, body);
+      else await api('POST', '/servers', body);
+      this.closeForm();
+      notify(`Server „${body.name}“ gespeichert`);
+      await this.load();
+    } catch (e) {
+      this.showError(e.message);
+    } finally {
+      btn.disabled = false;
+    }
+  },
+
+  async toggle(id) {
+    const sv = this.servers.find(s => s.id === id);
+    if (!sv) return;
+    try {
+      await api('PUT', '/servers/' + id, { enabled: !sv.enabled });
+      notify(`„${sv.name}“ ${sv.enabled ? 'deaktiviert' : 'aktiviert'}`);
+      await this.load();
+    } catch (e) {
+      notify(e.message, 'err');
+    }
+  },
+
+  async remove(id) {
+    const sv = this.servers.find(s => s.id === id);
+    if (!sv) return;
+    const ok = await confirmDialog('Server löschen?',
+      `„${sv.name}“ wird mit allen zugehörigen Tests und Traces endgültig gelöscht.`, 'Löschen');
+    if (!ok) return;
+    try {
+      await api('DELETE', '/servers/' + id);
+      notify(`„${sv.name}“ gelöscht`);
+      await this.load();
+    } catch (e) {
+      notify(e.message, 'err');
+    }
+  },
+};
+pages.servers = serversPage;
 
 // ---------- Start ----------
 (async function init() {

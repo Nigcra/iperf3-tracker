@@ -210,6 +210,32 @@
   .form-error { color: #fca5a5; font-size: 0.85em; margin-bottom: 12px; }
   :root[data-theme="light"] .form-error { color: #dc2626; }
 
+  /* ---------- Dialoge & Formulare ---------- */
+  .modal-backdrop { position: fixed; inset: 0; z-index: 90; display: flex; align-items: flex-start; justify-content: center;
+                    padding: 6vh 16px; overflow-y: auto; background: rgb(2 6 23 / .6); backdrop-filter: blur(4px); }
+  .modal { width: 100%; max-width: 620px; background: var(--menu-bg); border: 1px solid var(--border); border-radius: 16px;
+           box-shadow: 0 24px 64px -24px rgb(0 0 0 / .6); }
+  .modal.small { max-width: 440px; }
+  .modal-head { display: flex; align-items: center; justify-content: space-between; padding: 18px 22px; border-bottom: 1px solid var(--border); }
+  .modal-head h2 { font-size: 1.05em; color: var(--heading); font-weight: 700; }
+  .modal-body { padding: 20px 22px; }
+  .modal-foot { display: flex; justify-content: flex-end; gap: 10px; padding: 14px 22px 18px; border-top: 1px solid var(--border); }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
+  .form-grid .full { grid-column: 1 / -1; }
+  .form-grid input, .form-grid select, .form-grid textarea { width: 100%; }
+  .form-section { font-size: 0.72em; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .06em;
+                  margin: 6px 0 12px; grid-column: 1 / -1; }
+  .check-row { display: flex; align-items: center; gap: 9px; font-size: 0.88em; color: var(--text); margin-bottom: 12px; cursor: pointer; }
+  .check-row input { width: 16px; height: 16px; accent-color: var(--accent); }
+  .check-row.disabled { opacity: .5; cursor: default; }
+  .hint { font-size: 0.76em; color: var(--faint); margin-top: -8px; margin-bottom: 12px; }
+  .section-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
+  .section-head .section-title { margin-bottom: 0; }
+  .host { font-family: ui-monospace, 'Cascadia Code', Consolas, monospace; font-size: 0.84em; color: var(--muted); margin: -6px 0 10px; word-break: break-all; }
+  .desc { font-size: 0.84em; color: var(--text); margin-bottom: 12px; }
+  .ds-card.inactive { opacity: .62; }
+  @media (max-width: 560px) { .form-grid { grid-template-columns: 1fr; } }
+
   #toasts { position: fixed; right: 20px; bottom: 20px; z-index: 100; display: flex; flex-direction: column; gap: 8px; max-width: min(420px, calc(100vw - 40px)); }
   .toast { padding: 11px 16px; border-radius: 10px; font-size: 0.86em; color: var(--heading);
            background: var(--menu-bg); border: 1px solid var(--border); border-left: 4px solid var(--ok); box-shadow: var(--card-shadow); }
@@ -350,8 +376,11 @@
   <!-- Server -->
   <div class="page" id="page-servers">
     <div class="section">
-      <div class="section-title">Server</div>
-      <p class="muted">Server-Profile folgen in Phase 9d.</p>
+      <div class="section-head">
+        <div class="section-title">Server-Profile</div>
+        <button class="btn" onclick="serversPage.openForm()">+ Server hinzufügen</button>
+      </div>
+      <div class="ds-grid" id="serverGrid"></div>
     </div>
   </div>
 
@@ -363,6 +392,61 @@
     </div>
   </div>
 </main>
+
+<!-- Dialog: Server anlegen/bearbeiten -->
+<div class="modal-backdrop" id="serverModal" hidden onclick="if (event.target === this) serversPage.closeForm()">
+  <form class="modal" id="serverForm" onsubmit="serversPage.save(event)" novalidate>
+    <div class="modal-head">
+      <h2 id="serverFormTitle">Server hinzufügen</h2>
+      <button type="button" class="icon-btn" aria-label="Schließen" onclick="serversPage.closeForm()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-error" id="serverFormError" hidden></div>
+      <div class="form-grid">
+        <div class="field full" id="publicPick">
+          <label for="sfPublic">Öffentlichen Server übernehmen</label>
+          <select id="sfPublic" onchange="serversPage.applyPublic(this.value)"><option value="">– eigenen Server eintragen –</option></select>
+        </div>
+        <div class="field"><label for="sfName">Name *</label><input id="sfName" maxlength="100" required></div>
+        <div class="field"><label for="sfHost">Host *</label><input id="sfHost" maxlength="255" required placeholder="iperf.example.org"></div>
+        <div class="field"><label for="sfPort">Port</label><input id="sfPort" type="number" min="1" max="65535"></div>
+        <div class="field"><label for="sfDesc">Beschreibung</label><input id="sfDesc"></div>
+
+        <div class="form-section">Testvorgaben</div>
+        <div class="field"><label for="sfProto">Protokoll</label>
+          <select id="sfProto" onchange="serversPage.syncForm()"><option value="tcp">TCP</option><option value="udp">UDP</option></select></div>
+        <div class="field"><label for="sfDir">Richtung</label>
+          <select id="sfDir"><option value="download">Download</option><option value="upload">Upload</option><option value="bidirectional">Bidirektional</option></select></div>
+        <div class="field"><label for="sfDuration">Testdauer (s)</label><input id="sfDuration" type="number" min="1" max="300"></div>
+        <div class="field"><label for="sfParallel">Parallele Streams</label><input id="sfParallel" type="number" min="1" max="128"></div>
+        <div class="field full" id="sfUdpField"><label for="sfUdp">UDP-Zielbandbreite (Mbit/s)</label>
+          <input id="sfUdp" type="number" min="0.1" max="100000" step="any" placeholder="leer = iperf3-Standard (1 Mbit/s)"></div>
+
+        <div class="form-section">Zeitplan</div>
+        <label class="check-row"><input type="checkbox" id="sfSchedule" onchange="serversPage.syncForm()"> Regelmäßig testen</label>
+        <div class="field"><label for="sfInterval">Intervall (min)</label><input id="sfInterval" type="number" min="1"></div>
+        <label class="check-row full" id="sfAutoTraceRow"><input type="checkbox" id="sfAutoTrace"> Nach jedem geplanten Test eine Traceroute aufzeichnen</label>
+        <label class="check-row full"><input type="checkbox" id="sfEnabled"> Server aktiv (inaktive Server werden weder geplant noch getestet)</label>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button type="button" class="btn btn-secondary" onclick="serversPage.closeForm()">Abbrechen</button>
+      <button type="submit" class="btn" id="serverFormSave">Speichern</button>
+    </div>
+  </form>
+</div>
+
+<!-- Dialog: Bestätigung -->
+<div class="modal-backdrop" id="confirmModal" hidden>
+  <div class="modal small">
+    <div class="modal-head"><h2 id="confirmTitle"></h2></div>
+    <div class="modal-body"><p id="confirmText" style="font-size:.9em;line-height:1.5"></p></div>
+    <div class="modal-foot">
+      <button type="button" class="btn btn-secondary" id="confirmCancel">Abbrechen</button>
+      <button type="button" class="btn btn-danger" id="confirmOk"></button>
+    </div>
+  </div>
+</div>
 
 <footer>
   iperf3-Tracker <span id="appVersion"></span> · Build <span id="buildDate">–</span>
