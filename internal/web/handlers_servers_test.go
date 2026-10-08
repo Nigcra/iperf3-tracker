@@ -79,3 +79,15 @@ func TestServerCRUD(t *testing.T) {
 }
 
 func itoa(id int64) string { return strconv.FormatInt(id, 10) }
+
+func TestRejectsInvalidUTF8(t *testing.T) {
+	srv := newTestServer(t)
+	tok := login(t, srv, "admin", "admin123")
+	// "Ö" in Latin-1 (0xD6) statt UTF-8, wie es manche Konsolen senden.
+	expectStatus(t, srv, "POST", "/api/servers", tok, "{\"name\":\"A\",\"host\":\"a\",\"description\":\"\xd6ffentlich\"}", http.StatusUnprocessableEntity)
+	var sv model.Server
+	if code := call(t, srv, "POST", "/api/servers", tok, `{"name":"A","host":"a","description":"Öffentlich"}`, &sv); code != http.StatusCreated ||
+		sv.Description == nil || *sv.Description != "Öffentlich" {
+		t.Fatalf("UTF-8-Umlaut: %d, %+v", code, sv.Description)
+	}
+}

@@ -202,7 +202,7 @@ func TestTracerMissingCommand(t *testing.T) {
 
 func TestGeoIPLookup(t *testing.T) {
 	// Nutzt die im Repository liegende GeoLite2-Datenbank, sofern vorhanden.
-	geo, _, err := OpenGeoIP(filepath.Join("..", "..", "backend", "geoip", "GeoLite2-City.mmdb"))
+	geo, _, err := OpenGeoIP(filepath.Join("..", "..", "geoip", "GeoLite2-City.mmdb"))
 	if err != nil {
 		t.Skip("GeoLite2-City.mmdb nicht vorhanden")
 	}

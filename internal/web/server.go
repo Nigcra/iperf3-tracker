@@ -6,9 +6,11 @@ package web
 import (
 	"embed"
 	"encoding/json"
+	"io"
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"unicode/utf8"
 
 	"iperf3-tracker/internal/auth"
 	"iperf3-tracker/internal/iperf"
@@ -58,7 +60,7 @@ func NewServer(d Deps) *Server {
 }
 
 // Handler liefert den HTTP-Handler.
-func (s *Server) Handler() http.Handler { return withCORS(s.mux) }
+func (s *Server) Handler() http.Handler { return s.mux }
 
 func (s *Server) routes() {
 	// Oberfläche: index.html unter "/", Skripte und Styles unter /static/.
@@ -98,7 +100,6 @@ func (s *Server) routes() {
 	s.mux.Handle("DELETE /api/tests/{test_id}/trace", s.requireUser(s.handleDeleteTestTrace))
 	s.mux.Handle("POST /api/traces", s.requireUser(s.handleCreateTrace))
 	s.mux.Handle("GET /api/traces", s.requireUser(s.handleListTraces))
-	s.mux.Handle("GET /api/traces/recent", s.requireUser(s.handleRecentTraces))
 	s.mux.Handle("GET /api/traces/{trace_id}", s.requireUser(s.handleGetTrace))
 	s.mux.Handle("GET /api/traces/test/{test_id}", s.requireUser(s.handleTracesByTest))
 	s.mux.Handle("DELETE /api/traces/{trace_id}", s.requireUser(s.handleDeleteTrace))
@@ -130,33 +131,6 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// withCORS entspricht der bisherigen CORSMiddleware (alle Origins, Methoden
-// und Header, credentials erlaubt). Wird in Phase 10 auf Same-Origin reduziert.
-func withCORS(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		origin := r.Header.Get("Origin")
-		if origin == "" {
-			next.ServeHTTP(w, r)
-			return
-		}
-		h := w.Header()
-		h.Set("Access-Control-Allow-Origin", origin)
-		h.Set("Access-Control-Allow-Credentials", "true")
-		h.Add("Vary", "Origin")
-
-		if r.Method == http.MethodOptions && r.Header.Get("Access-Control-Request-Method") != "" {
-			h.Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
-			if req := r.Header.Get("Access-Control-Request-Headers"); req != "" {
-				h.Set("Access-Control-Allow-Headers", req)
-			}
-			h.Set("Access-Control-Max-Age", "600")
-			w.WriteHeader(http.StatusOK)
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
-}
-
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
@@ -177,8 +151,18 @@ func writeInternal(w http.ResponseWriter, r *http.Request, err error) {
 // decodeJSON liest den Request-Body nach dst; bei Fehlern wird mit 422
 // geantwortet (wie FastAPI bei ungültigen Bodies) und false geliefert.
 func decodeJSON(w http.ResponseWriter, r *http.Request, dst any) bool {
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
-	if err := json.NewDecoder(r.Body).Decode(dst); err != nil {
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 1<<20))
+	if err != nil {
+		writeError(w, http.StatusUnprocessableEntity, "Ungültiger Request-Body: "+err.Error())
+		return false
+	}
+	// encoding/json ersetzt ungültige Bytes stillschweigend durch U+FFFD; so
+	// würden falsch kodierte Umlaute unbemerkt verfälscht gespeichert.
+	if !utf8.Valid(body) {
+		writeError(w, http.StatusUnprocessableEntity, "Ungültige Zeichenkodierung – erwartet wird UTF-8")
+		return false
+	}
+	if err := json.Unmarshal(body, dst); err != nil {
 		writeError(w, http.StatusUnprocessableEntity, "Ungültiger Request-Body: "+err.Error())
 		return false
 	}

@@ -33,9 +33,6 @@ func TestTraceRoutes(t *testing.T) {
 	if call(t, srv, "GET", "/api/traces?limit=5", tok, "", &list); len(list) != 1 {
 		t.Errorf("Liste: %d", len(list))
 	}
-	if call(t, srv, "GET", "/api/traces/recent", tok, "", &list); len(list) != 0 {
-		t.Errorf("recent darf unvollständige Traces nicht enthalten: %d", len(list))
-	}
 
 	// Trace zu einem Test: läuft im Hintergrund.
 	var sv model.Server

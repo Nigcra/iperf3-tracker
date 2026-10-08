@@ -1,53 +1,24 @@
-# Byte-compiled / optimized / DLL files
-__pycache__/
-*.py[cod]
-*$py.class
-
-# Virtual environments
-venv/
-env/
-ENV/
-
-# Database
-*.db
-*.sqlite
-*.sqlite3
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# Environment variables
-.env
-.env.local
-
-# Logs
-*.log
-
-# OS files
-.DS_Store
-Thumbs.db
-
-# Node modules (if any)
-node_modules/
-
-# Build files
-build/
-dist/
-
-# Data directory
-data/
-
 # Go-Build
 /_release/
 *.exe
 
-# Lokale Konfiguration (enthält secret_key)
+# Lokale Konfiguration und Daten (config.yaml enthält den Token-Schlüssel)
 /config.yaml
-
-# SQLite-Begleitdateien
+/data/
+*.db
 *.db-wal
 *.db-shm
+
+# Gesicherte lokale Dateien des alten Python-Backends (.env, alte Datenbank)
+/_altdaten/
+
+# Nicht getrackte Reste des entfernten Python-/React-Codes (venv,
+# node_modules, build) – können gelöscht werden
+/backend/
+/frontend/
+
+# Editor / Betriebssystem
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

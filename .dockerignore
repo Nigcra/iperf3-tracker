@@ -1,0 +1,13 @@
+# Nur Quellcode und GeoIP-Datenbank gehören in den Build-Kontext.
+.git
+_release
+_altdaten
+_screenshots
+data
+backend
+frontend
+config.yaml
+*.db
+*.db-wal
+*.db-shm
+*.exe

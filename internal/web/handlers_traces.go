@@ -143,21 +143,12 @@ func (s *Server) handleGetTrace(w http.ResponseWriter, r *http.Request, _ *model
 }
 
 func (s *Server) handleListTraces(w http.ResponseWriter, r *http.Request, _ *model.User) {
-	s.listTraces(w, r, false)
-}
-
-// handleRecentTraces liefert nur vollständige Traces (Altroute, entspricht /traces?limit=).
-func (s *Server) handleRecentTraces(w http.ResponseWriter, r *http.Request, _ *model.User) {
-	s.listTraces(w, r, true)
-}
-
-func (s *Server) listTraces(w http.ResponseWriter, r *http.Request, onlyCompleted bool) {
 	limit, err := queryInt(r, "limit", 10, 1, 1000)
 	if err != nil {
 		writeError(w, http.StatusUnprocessableEntity, err.Error())
 		return
 	}
-	traces, err := s.store.ListTraces(r.Context(), limit, onlyCompleted)
+	traces, err := s.store.ListTraces(r.Context(), limit)
 	if err != nil {
 		writeInternal(w, r, err)
 		return

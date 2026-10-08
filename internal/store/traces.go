@@ -99,13 +99,9 @@ func (s *Store) TraceByTestID(ctx context.Context, testID int64) (*model.Trace, 
 	return s.queryTrace(ctx, `SELECT `+traceColumns+` FROM traces WHERE test_id = ? ORDER BY created_at DESC, id DESC LIMIT 1`, testID)
 }
 
-// ListTraces liefert die neuesten Traces; onlyCompleted blendet abgebrochene aus.
-func (s *Store) ListTraces(ctx context.Context, limit int, onlyCompleted bool) ([]model.Trace, error) {
-	where := ""
-	if onlyCompleted {
-		where = ` WHERE completed = 1`
-	}
-	return s.queryTraces(ctx, `SELECT `+traceColumns+` FROM traces`+where+` ORDER BY created_at DESC, id DESC LIMIT ?`, limit)
+// ListTraces liefert die neuesten Traces.
+func (s *Store) ListTraces(ctx context.Context, limit int) ([]model.Trace, error) {
+	return s.queryTraces(ctx, `SELECT `+traceColumns+` FROM traces ORDER BY created_at DESC, id DESC LIMIT ?`, limit)
 }
 
 // TracesByTest liefert alle Traces eines Tests, neueste zuerst.

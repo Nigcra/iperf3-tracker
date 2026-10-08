@@ -83,9 +83,9 @@ if errorlevel 1 (
 :: ---------- GeoIP-Datenbank ----------
 :: Die Binary sucht geoip\GeoLite2-City.mmdb neben der config.yaml, also im
 :: Arbeitsverzeichnis. Für den Start per Doppelklick in _release ablegen.
-if not exist "%OUTDIR%\geoip\GeoLite2-City.mmdb" if exist "backend\geoip\GeoLite2-City.mmdb" (
+if not exist "%OUTDIR%\geoip\GeoLite2-City.mmdb" if exist "geoip\GeoLite2-City.mmdb" (
     if not exist "%OUTDIR%\geoip" mkdir "%OUTDIR%\geoip"
-    copy /y "backend\geoip\GeoLite2-City.mmdb" "%OUTDIR%\geoip\" >nul
+    copy /y "geoip\GeoLite2-City.mmdb" "%OUTDIR%\geoip\" >nul
     echo [INFO ] GeoIP-Datenbank nach %OUTDIR%\geoip kopiert
 )
 

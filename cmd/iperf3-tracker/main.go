@@ -12,7 +12,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"syscall"
 	"time"
 
@@ -91,10 +90,7 @@ func run(cfgPath string) error {
 	defer runner.Stop()
 
 	// --- GeoIP für Trace-Standorte ---
-	// backend/geoip ist der bisherige Ablageort (Python-Backend, bis Phase 10).
-	geo, geoPath, err := trace.OpenGeoIP(cfg.GeoIP.Path,
-		filepath.Join(cfg.Dir, "backend", "geoip", "GeoLite2-City.mmdb"),
-		"/var/lib/GeoIP/GeoLite2-City.mmdb")
+	geo, geoPath, err := trace.OpenGeoIP(cfg.GeoIP.Path, "/var/lib/GeoIP/GeoLite2-City.mmdb")
 	if err != nil {
 		slog.Warn("GeoIP-Datenbank nicht verfügbar – Traces ohne Standorte", "pfad", cfg.GeoIP.Path, "fehler", err)
 	} else {

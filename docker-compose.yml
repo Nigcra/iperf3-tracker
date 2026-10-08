@@ -1,36 +1,24 @@
-version: '3.8'
+# iperf3-Tracker: ein Container mit API und Oberfläche unter http://<host>:8000
+# Start: docker compose up -d --build
+# Noch nicht unter Docker getestet (Stand: Go-Portierung, Phase 10).
 
 services:
-  backend:
-    build: ./backend
-    container_name: iperf3-tracker-backend
+  iperf3-tracker:
+    build:
+      context: .
+      args:
+        BUILD_DATE: docker
+    container_name: iperf3-tracker
     ports:
       - "8000:8000"
     volumes:
-      - ./backend:/app
-      - iperf-data:/app/data
+      # config.yaml (inkl. Token-Schlüssel) und Datenbank
+      - iperf-data:/data
     environment:
-      - DATABASE_URL=sqlite+aiosqlite:///./data/iperf_tracker.db
+      - TZ=Europe/Berlin
       - SCHEDULER_ENABLED=true
-      - LOG_LEVEL=INFO
+      - LOG_LEVEL=info
     restart: unless-stopped
-    networks:
-      - iperf-network
-
-  frontend:
-    build: ./frontend
-    container_name: iperf3-tracker-frontend
-    ports:
-      - "3000:80"
-    depends_on:
-      - backend
-    restart: unless-stopped
-    networks:
-      - iperf-network
 
 volumes:
   iperf-data:
-
-networks:
-  iperf-network:
-    driver: bridge

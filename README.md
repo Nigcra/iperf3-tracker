@@ -1,211 +1,110 @@
-# iperf3 Tracker
+# iperf3-Tracker
 
-A self-hosted application to monitor and track network performance using iperf3 tests. Similar to Speedtest-Tracker but for iperf3.
-
-> ⚠️ **Early Development Stage**  
-> This project is in early development. Expect bugs, missing features, and breaking changes. Extensive testing and bug fixing is still required. Use in production environments at your own risk.
-
-## Features
-
-- **Automated Testing**: Schedule periodic iperf3 tests against multiple servers
-- **Rich Dashboards**: Visualize bandwidth over time with interactive charts
-- **Parallel Transfers**: Configure number of parallel streams (-P flag)
-- **Multiple Server Profiles**: Test against different servers (LAN, WAN, remote locations)
-- **Historical Data**: Track performance trends and analyze patterns (bandwidth, jitter, packet loss)
-- **Docker Ready**: Easy deployment with Docker and Docker Compose
-- **Web Interface**: Modern, responsive React-based UI
-- **REST API**: Full API access for automation and integration
-
-## Screenshots
-
-![Dashboard Dark](_screenshots/dashboard_dark.png)
-*Dashboard - Dark Theme*
+Misst regelmäßig die Bandbreite zu iperf3-Servern, speichert die Ergebnisse
+historisch und zeigt den Netzwerkpfad auf einer Karte. Eine einzelne
+Go-Binary liefert API und Oberfläche aus – ohne Node, Python oder Webserver.
 
 ![Dashboard](_screenshots/dashboard.png)
-*Main Dashboard*
 
-![iperf Test](_screenshots/iperf_test.gif)
-*Running iperf3 Performance Tests*
+## Funktionen
 
-![Peering Map](_screenshots/peering_map.gif)
-*Live Traceroute Visualization*
+- **Dashboard** – Kennzahlen, Download-/Upload-Verlauf je Server mit
+  Schwellwerten, Live-Fortschritt laufender Tests
+- **Tests** – Test mit beliebigen Parametern starten (TCP/UDP, Download,
+  Upload, bidirektional, parallele Streams, UDP-Zielbandbreite), Live-Anzeige,
+  Testverlauf mit Details und iperf3-Rohausgabe
+- **Zeitplan** – Tests je Server im eingestellten Intervall, optional mit
+  anschließender Traceroute (Auto-Trace)
+- **Peering-Map** – Traceroute live auf der Karte, Standorte aus der
+  GeoLite2-Datenbank (fehlende Standorte werden aus Nachbar-Hops geschätzt),
+  Pfad- und Hop-Tabelle auch für private Netze
+- **Server-Profile** – eigene oder öffentliche iperf3-Server (Auswahlliste)
+- **Administration** – Benutzer, Bereinigung alter Daten, Datenbank-Statistik
+- Hell/Dunkel, mobil nutzbar, Oberfläche auf Deutsch
 
-> **Note:** The map visualization relies on free GeoIP data for hop location. Geographic accuracy may vary depending on the IP address database and is not guaranteed to be 100% precise.
+| Tests | Peering-Map | Server (hell) |
+|---|---|---|
+| ![Tests](_screenshots/tests.png) | ![Peering-Map](_screenshots/peering-map.png) | ![Server](_screenshots/server-hell.png) |
 
-## Architecture
+## Voraussetzungen
 
-- **Backend**: Python FastAPI with SQLAlchemy ORM
-- **Frontend**: React with TypeScript and Recharts
-- **Database**: SQLite (upgradeable to PostgreSQL)
-- **Scheduler**: APScheduler for automated tests
-- **Containerization**: Docker & Docker Compose
+- **iperf3 ab Version 3.17** (wegen `--json-stream`)
+  - Windows: `winget install ar51an.iPerf3`
+  - Linux: Paket `iperf3` der Distribution, sofern mindestens 3.17
+    (z. B. Debian 13: `apt install iperf3`)
+- **tracert** (Windows, vorinstalliert) bzw. **traceroute** (Linux)
+- Zum Bauen: **Go 1.24** oder neuer
 
-## Quick Start
+## Schnellstart (Windows)
 
-### Prerequisites
+```cmd
+start.cmd
+```
 
-- Docker and Docker Compose installed
-- OR: Python 3.11+, Node.js 18+, and iperf3 installed on your system
-- At least one iperf3 server to test against
+Baut `_release\iperf3-tracker.exe` beim ersten Aufruf, startet den Dienst und
+öffnet http://localhost:8000. Nach Code-Änderungen neu bauen mit
+`start.cmd neu` oder `build.cmd release`.
 
-### Using Docker (Recommended)
+Erste Anmeldung: **`admin` / `admin123`** – danach über das Benutzermenü
+(Personen-Symbol oben rechts) **„Passwort ändern“**.
+
+Die Binary lässt sich auch direkt per Doppelklick starten. `config.yaml` und
+die Datenbank (`data\`) werden beim ersten Start neben der Binary angelegt;
+`build.cmd` legt die GeoIP-Datenbank in `_release\geoip\` ab.
+
+## Docker
 
 ```bash
-# Clone the repository
-git clone <repository-url>
-cd iperf-Tracker
-
-# Start the application
-docker-compose up -d
-
-# Access the web interface
-# Frontend: http://localhost:3000
-# API: http://localhost:8000
-# API Docs: http://localhost:8000/docs
+docker compose up -d --build
 ```
 
-### Manual Setup
+Ein Container mit iperf3 3.18 und traceroute (Debian trixie); Konfiguration
+und Datenbank liegen im Volume `iperf-data`. Oberfläche unter
+`http://<host>:8000`.
 
-#### Backend
+> Die Docker-Variante ist vorbereitet, aber noch nicht getestet.
 
-```bash
-cd backend
+## Konfiguration
 
-# Create virtual environment
-python -m venv venv
-.\venv\Scripts\Activate.ps1  # Windows PowerShell
+`config.yaml` (siehe [config.example.yaml](config.example.yaml)); einzelne
+Werte lassen sich per Umgebungsvariable überschreiben:
 
-# Install dependencies
-pip install -r requirements.txt
+| Einstellung | Umgebungsvariable | Standard |
+|---|---|---|
+| `web.listen` | `LISTEN_ADDR` | `0.0.0.0:8000` |
+| `storage.path` | `DB_PATH` | `data/iperf3-tracker.db` |
+| `auth.secret_key` | `SECRET_KEY` | beim ersten Start zufällig erzeugt |
+| `scheduler.enabled` | `SCHEDULER_ENABLED` | `true` |
+| `iperf.path` | `IPERF3_PATH` | automatisch (PATH, winget-Pfad) |
+| `geoip.path` | `GEOIP_PATH` | `geoip/GeoLite2-City.mmdb` |
+| `log.level` | `LOG_LEVEL` | `info` |
 
-# Run migrations
-alembic upgrade head
+Relative Pfade beziehen sich auf das Verzeichnis der `config.yaml`.
 
-# Start the server
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+## Entwicklung
+
+```cmd
+go test ./...
+go run ./cmd/iperf3-tracker
 ```
 
-#### Frontend
+| Verzeichnis | Inhalt |
+|---|---|
+| `cmd/iperf3-tracker` | Einstiegspunkt |
+| `internal/web` | HTTP-API, Live-Trace (SSE), eingebettete Oberfläche (`static/`) |
+| `internal/iperf` | iperf3-Ausführung und Auswertung von `--json-stream` |
+| `internal/trace` | tracert/traceroute, GeoIP, Standort-Interpolation |
+| `internal/scheduler` | Zeitplan je Server, Auto-Trace |
+| `internal/store`, `internal/db` | SQLite (reiner Go-Treiber, kein CGO) |
+| `geoip/` | GeoLite2-City-Datenbank |
 
-```bash
-cd frontend
+Die Oberfläche folgt der Designsprache des Spherifyer und lädt Chart.js und
+Leaflet per CDN; die Karte nutzt OpenStreetMap-Kacheln.
 
-# Install dependencies
-npm install
+Die Portierung vom früheren Python/React-Stand ist in
+[GO_PORT_PLAN.md](GO_PORT_PLAN.md) dokumentiert.
 
-# Start development server
-npm start
-```
+## GeoIP-Hinweis
 
-## Configuration
-
-### Server Profiles
-
-Add iperf3 servers through the web interface or API:
-
-```json
-{
-  "name": "Local LAN Server",
-  "host": "192.168.1.100",
-  "port": 5201,
-  "enabled": true
-}
-```
-
-### Test Configuration
-
-Configure test parameters:
-- **Interval**: How often to run tests (e.g., every 30 minutes)
-- **Duration**: Test duration in seconds (default: 10)
-- **Parallel Streams**: Number of parallel connections (1-128)
-- **Protocol**: TCP or UDP
-- **Direction**: Download, Upload, or Bidirectional
-
-## API Documentation
-
-Full API documentation is available at `http://localhost:8000/docs` when running.
-
-### Key Endpoints
-
-- `GET /api/servers` - List all server profiles
-- `POST /api/servers` - Create new server profile
-- `GET /api/tests` - List test results with filters
-- `POST /api/tests/run` - Run immediate test
-- `GET /api/stats` - Get statistics and aggregations
-
-## Development
-
-### Project Structure
-
-```
-iperf-Tracker/
-├── backend/
-│   ├── app/
-│   │   ├── api/
-│   │   │   ├── routes/       # API route handlers
-│   │   │   │   ├── auth.py
-│   │   │   │   ├── servers.py
-│   │   │   │   ├── tests.py
-│   │   │   │   └── users.py
-│   │   │   └── deps.py       # Dependencies
-│   │   ├── core/
-│   │   │   ├── config.py     # Configuration
-│   │   │   └── security.py   # Auth & JWT
-│   │   ├── models/
-│   │   │   └── models.py     # SQLAlchemy models
-│   │   ├── schemas/
-│   │   │   └── schemas.py    # Pydantic schemas
-│   │   ├── services/
-│   │   │   ├── iperf_service.py  # iperf3 execution
-│   │   │   └── scheduler.py      # Test scheduling
-│   │   ├── database.py       # Database setup
-│   │   └── main.py           # FastAPI app
-│   ├── alembic/              # Database migrations
-│   │   ├── versions/
-│   │   └── env.py
-│   ├── requirements.txt
-│   ├── alembic.ini
-│   └── Dockerfile
-├── frontend/
-│   ├── public/
-│   ├── src/
-│   │   ├── components/
-│   │   │   ├── AdminPanel.tsx
-│   │   │   ├── Dashboard.tsx
-│   │   │   ├── Login.tsx
-│   │   │   ├── ServerManager.tsx
-│   │   │   ├── TestRunner.tsx
-│   │   │   ├── AdminPanel.css
-│   │   │   ├── Dashboard.css
-│   │   │   ├── Login.css
-│   │   │   └── ...
-│   │   ├── services/
-│   │   │   └── api.ts        # API client
-│   │   ├── index.tsx         # App entry point
-│   │   └── index.css         # Global styles
-│   ├── package.json
-│   ├── tsconfig.json
-│   └── Dockerfile
-├── docker-compose.yml
-└── README.md
-```
-
-### Running Tests
-
-```bash
-# Backend tests
-cd backend
-pytest
-
-# Frontend tests
-cd frontend
-npm test
-```
-
-## License
-
-MIT License
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
+Enthält GeoLite2-Daten von MaxMind, verfügbar unter
+https://www.maxmind.com.
