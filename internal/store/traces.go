@@ -33,7 +33,7 @@ func scanTrace(row rowScanner) (*model.Trace, error) {
 // queryTraces lädt Traces samt Hops. Die Hops werden in einer zweiten Abfrage
 // geladen, nachdem die erste vollständig gelesen ist (nur eine DB-Verbindung).
 func (s *Store) queryTraces(ctx context.Context, query string, args ...any) ([]model.Trace, error) {
-	rows, err := s.db.QueryContext(ctx, query, args...)
+	rows, err := s.db.QueryContext(noCancel(ctx), query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -57,7 +57,7 @@ func (s *Store) queryTraces(ctx context.Context, query string, args ...any) ([]m
 		index[t.ID] = i
 		ids[i] = t.ID
 	}
-	hopRows, err := s.db.QueryContext(ctx,
+	hopRows, err := s.db.QueryContext(noCancel(ctx),
 		`SELECT `+hopColumns+` FROM trace_hops WHERE trace_id IN (?`+strings.Repeat(", ?", len(ids)-1)+`)
 		 ORDER BY trace_id, hop_number`, ids...)
 	if err != nil {
@@ -117,13 +117,13 @@ func (s *Store) TracesByTest(ctx context.Context, testID int64) ([]model.Trace, 
 func (s *Store) CreateTrace(ctx context.Context, t *model.Trace) error {
 	t.CreatedAt = db.Now()
 	t.TotalHops = len(t.Hops)
-	tx, err := s.db.BeginTx(ctx, nil)
+	tx, err := s.db.BeginTx(noCancel(ctx), nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
 
-	res, err := tx.ExecContext(ctx,
+	res, err := tx.ExecContext(noCancel(ctx),
 		`INSERT INTO traces (test_id, source_ip, destination_ip, destination_host, total_hops, total_rtt_ms,
 			completed, error_message, started_at, completed_at, created_at)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -138,7 +138,7 @@ func (s *Store) CreateTrace(ctx context.Context, t *model.Trace) error {
 
 	for i := range t.Hops {
 		h := &t.Hops[i]
-		res, err := tx.ExecContext(ctx,
+		res, err := tx.ExecContext(noCancel(ctx),
 			`INSERT INTO trace_hops (trace_id, hop_number, ip_address, hostname, latitude, longitude, city, country,
 				country_code, asn, asn_organization, geoip_interpolated, rtt_ms, packet_loss, responded)
 			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -156,10 +156,10 @@ func (s *Store) CreateTrace(ctx context.Context, t *model.Trace) error {
 
 // DeleteTrace löscht einen Trace; die Hops folgen per ON DELETE CASCADE.
 func (s *Store) DeleteTrace(ctx context.Context, id int64) error {
-	return affectedOne(s.db.ExecContext(ctx, `DELETE FROM traces WHERE id = ?`, id))
+	return affectedOne(s.db.ExecContext(noCancel(ctx), `DELETE FROM traces WHERE id = ?`, id))
 }
 
 // DeleteTracesByTest löscht alle Traces eines Tests.
 func (s *Store) DeleteTracesByTest(ctx context.Context, testID int64) error {
-	return affectedOne(s.db.ExecContext(ctx, `DELETE FROM traces WHERE test_id = ?`, testID))
+	return affectedOne(s.db.ExecContext(noCancel(ctx), `DELETE FROM traces WHERE test_id = ?`, testID))
 }

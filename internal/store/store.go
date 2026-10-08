@@ -2,6 +2,7 @@
 package store
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 
@@ -47,6 +48,12 @@ type Store struct {
 
 // New erstellt einen Store auf einer bereits geöffneten Datenbank.
 func New(conn *sql.DB) *Store { return &Store{db: conn} }
+
+// noCancel entkoppelt Datenbankzugriffe vom Abbruch des Aufrufers. Bricht ein
+// Context mitten in einer SQLite-Abfrage ab, kann der Treiber die Verbindung
+// verwaist zurücklassen: Sie hält die Datei offen und blockiert WAL-Checkpoints.
+// Die Abfragen sind lokal und kurz, ein Abbruch spart nichts.
+func noCancel(ctx context.Context) context.Context { return context.WithoutCancel(ctx) }
 
 // rowScanner deckt *sql.Row und *sql.Rows ab.
 type rowScanner interface {

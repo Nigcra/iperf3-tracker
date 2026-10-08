@@ -28,7 +28,11 @@ func newEnv(t *testing.T) *env {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { conn.Close() })
+	t.Cleanup(func() {
+		if err := conn.Close(); err != nil {
+			t.Errorf("DB schließen: %v", err)
+		}
+	})
 	st := store.New(conn)
 
 	runner := iperf.NewRunner(st, filepath.Join(t.TempDir(), "kein-iperf3"))

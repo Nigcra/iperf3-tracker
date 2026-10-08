@@ -21,7 +21,7 @@ func (s *Store) DeleteTests(ctx context.Context, before *time.Time, serverID *in
 		query += ` AND server_id = ?`
 		args = append(args, *serverID)
 	}
-	res, err := s.db.ExecContext(ctx, query, args...)
+	res, err := s.db.ExecContext(noCancel(ctx), query, args...)
 	if err != nil {
 		return 0, err
 	}
@@ -35,17 +35,17 @@ func (s *Store) DeleteTraces(ctx context.Context, before *time.Time) (traces, ho
 	if before != nil {
 		where, args = ` WHERE created_at < ?`, []any{db.FormatTime(*before)}
 	}
-	tx, err := s.db.BeginTx(ctx, nil)
+	tx, err := s.db.BeginTx(noCancel(ctx), nil)
 	if err != nil {
 		return 0, 0, err
 	}
 	defer tx.Rollback()
 
-	if err := tx.QueryRowContext(ctx,
+	if err := tx.QueryRowContext(noCancel(ctx),
 		`SELECT COUNT(*) FROM trace_hops WHERE trace_id IN (SELECT id FROM traces`+where+`)`, args...).Scan(&hops); err != nil {
 		return 0, 0, err
 	}
-	res, err := tx.ExecContext(ctx, `DELETE FROM traces`+where, args...)
+	res, err := tx.ExecContext(noCancel(ctx), `DELETE FROM traces`+where, args...)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -58,7 +58,7 @@ func (s *Store) DeleteTraces(ctx context.Context, before *time.Time) (traces, ho
 // DatabaseStats liefert die Anzahl der Datensätze und die Zeitspanne der Tests.
 func (s *Store) DatabaseStats(ctx context.Context) (*model.DatabaseStats, error) {
 	var st model.DatabaseStats
-	err := s.db.QueryRowContext(ctx, `
+	err := s.db.QueryRowContext(noCancel(ctx), `
 		SELECT
 			(SELECT COUNT(*) FROM tests),
 			(SELECT COUNT(*) FROM servers),

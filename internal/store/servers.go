@@ -30,7 +30,7 @@ func scanServer(row rowScanner) (*model.Server, error) {
 
 // ServerByID lädt ein Server-Profil anhand seiner ID.
 func (s *Store) ServerByID(ctx context.Context, id int64) (*model.Server, error) {
-	return scanServer(s.db.QueryRowContext(ctx, `SELECT `+serverColumns+` FROM servers WHERE id = ?`, id))
+	return scanServer(s.db.QueryRowContext(noCancel(ctx), `SELECT `+serverColumns+` FROM servers WHERE id = ?`, id))
 }
 
 // ListServers liefert Server-Profile, neueste zuerst. enabled filtert optional.
@@ -44,7 +44,7 @@ func (s *Store) ListServers(ctx context.Context, enabled *bool, skip, limit int)
 	query += ` ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`
 	args = append(args, limit, skip)
 
-	rows, err := s.db.QueryContext(ctx, query, args...)
+	rows, err := s.db.QueryContext(noCancel(ctx), query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -66,7 +66,7 @@ func (s *Store) ListServers(ctx context.Context, enabled *bool, skip, limit int)
 func (s *Store) CreateServer(ctx context.Context, sv *model.Server) error {
 	sv.CreatedAt = db.Now()
 	sv.UpdatedAt = sv.CreatedAt
-	res, err := s.db.ExecContext(ctx,
+	res, err := s.db.ExecContext(noCancel(ctx),
 		`INSERT INTO servers (name, host, port, description, enabled,
 			default_duration, default_parallel, default_num_streams, default_protocol, default_direction,
 			default_udp_bandwidth_mbps, schedule_enabled, schedule_interval_minutes, auto_trace_enabled, created_at, updated_at)
@@ -85,7 +85,7 @@ func (s *Store) CreateServer(ctx context.Context, sv *model.Server) error {
 // UpdateServer schreibt alle pflegbaren Felder von sv und setzt UpdatedAt.
 func (s *Store) UpdateServer(ctx context.Context, sv *model.Server) error {
 	sv.UpdatedAt = db.Now()
-	err := affectedOne(s.db.ExecContext(ctx,
+	err := affectedOne(s.db.ExecContext(noCancel(ctx),
 		`UPDATE servers SET name = ?, host = ?, port = ?, description = ?, enabled = ?,
 			default_duration = ?, default_parallel = ?, default_num_streams = ?,
 			default_protocol = ?, default_direction = ?, default_udp_bandwidth_mbps = ?,
@@ -101,5 +101,5 @@ func (s *Store) UpdateServer(ctx context.Context, sv *model.Server) error {
 
 // DeleteServer löscht ein Server-Profil; Tests und Traces folgen per ON DELETE CASCADE.
 func (s *Store) DeleteServer(ctx context.Context, id int64) error {
-	return affectedOne(s.db.ExecContext(ctx, `DELETE FROM servers WHERE id = ?`, id))
+	return affectedOne(s.db.ExecContext(noCancel(ctx), `DELETE FROM servers WHERE id = ?`, id))
 }

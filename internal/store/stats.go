@@ -14,7 +14,7 @@ import (
 // Beginn des aktuellen Tages; Tests ab diesem Zeitpunkt zählen als „heute“.
 func (s *Store) DashboardStats(ctx context.Context, todayStart time.Time) (*model.DashboardStats, error) {
 	var st model.DashboardStats
-	err := s.db.QueryRowContext(ctx, `
+	err := s.db.QueryRowContext(noCancel(ctx), `
 		SELECT
 			(SELECT COUNT(*) FROM servers),
 			(SELECT COUNT(*) FROM servers WHERE enabled = 1),
@@ -65,7 +65,7 @@ const serverStatsQuery = `
 
 // ServerStats liefert die Kennzahlen aller Server, sortiert nach ID.
 func (s *Store) ServerStats(ctx context.Context) ([]model.ServerStats, error) {
-	rows, err := s.db.QueryContext(ctx, serverStatsQuery+` GROUP BY s.id ORDER BY s.id`)
+	rows, err := s.db.QueryContext(noCancel(ctx), serverStatsQuery+` GROUP BY s.id ORDER BY s.id`)
 	if err != nil {
 		return nil, err
 	}
@@ -84,7 +84,7 @@ func (s *Store) ServerStats(ctx context.Context) ([]model.ServerStats, error) {
 
 // ServerStatsByID liefert die Kennzahlen eines Servers.
 func (s *Store) ServerStatsByID(ctx context.Context, id int64) (*model.ServerStats, error) {
-	return scanServerStats(s.db.QueryRowContext(ctx, serverStatsQuery+` WHERE s.id = ? GROUP BY s.id`, id))
+	return scanServerStats(s.db.QueryRowContext(noCancel(ctx), serverStatsQuery+` WHERE s.id = ? GROUP BY s.id`, id))
 }
 
 func scanServerStats(row rowScanner) (*model.ServerStats, error) {

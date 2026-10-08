@@ -36,7 +36,7 @@ func scanTest(row rowScanner, extra ...any) (*model.Test, error) {
 }
 
 func (s *Store) queryTests(ctx context.Context, query string, args ...any) ([]model.Test, error) {
-	rows, err := s.db.QueryContext(ctx, query, args...)
+	rows, err := s.db.QueryContext(noCancel(ctx), query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -89,13 +89,13 @@ func (s *Store) ListTests(ctx context.Context, f TestFilter) ([]model.Test, erro
 
 // TestByID lädt einen Test (ohne Rohausgabe).
 func (s *Store) TestByID(ctx context.Context, id int64) (*model.Test, error) {
-	return scanTest(s.db.QueryRowContext(ctx, `SELECT `+testColumns+` FROM tests WHERE id = ?`, id))
+	return scanTest(s.db.QueryRowContext(noCancel(ctx), `SELECT `+testColumns+` FROM tests WHERE id = ?`, id))
 }
 
 // TestDetailByID lädt einen Test inklusive Server-Profil und Rohausgabe.
 func (s *Store) TestDetailByID(ctx context.Context, id int64) (*model.TestDetail, error) {
 	var raw *string
-	t, err := scanTest(s.db.QueryRowContext(ctx, `SELECT `+testColumns+`, raw_output FROM tests WHERE id = ?`, id), &raw)
+	t, err := scanTest(s.db.QueryRowContext(noCancel(ctx), `SELECT `+testColumns+`, raw_output FROM tests WHERE id = ?`, id), &raw)
 	if err != nil {
 		return nil, err
 	}
@@ -108,7 +108,7 @@ func (s *Store) TestDetailByID(ctx context.Context, id int64) (*model.TestDetail
 
 // LatestCompletedTest liefert den jüngsten erfolgreichen Test eines Servers.
 func (s *Store) LatestCompletedTest(ctx context.Context, serverID int64) (*model.Test, error) {
-	return scanTest(s.db.QueryRowContext(ctx,
+	return scanTest(s.db.QueryRowContext(noCancel(ctx),
 		`SELECT `+testColumns+` FROM tests WHERE server_id = ? AND status = ?
 		 ORDER BY created_at DESC, id DESC LIMIT 1`, serverID, model.StatusCompleted))
 }
@@ -117,7 +117,7 @@ func (s *Store) LatestCompletedTest(ctx context.Context, serverID int64) (*model
 func (s *Store) CreateTest(ctx context.Context, t *model.Test) error {
 	t.Status = model.StatusPending
 	t.CreatedAt = db.Now()
-	res, err := s.db.ExecContext(ctx,
+	res, err := s.db.ExecContext(noCancel(ctx),
 		`INSERT INTO tests (server_id, protocol, direction, duration, parallel_streams, udp_bandwidth_mbps, status, created_at)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 		t.ServerID, t.Protocol, t.Direction, t.Duration, t.ParallelStreams, t.UDPBandwidthMbps, t.Status, db.FormatTime(t.CreatedAt))
@@ -130,7 +130,7 @@ func (s *Store) CreateTest(ctx context.Context, t *model.Test) error {
 
 // StartTest markiert einen Test als laufend.
 func (s *Store) StartTest(ctx context.Context, id int64, startedAt time.Time) error {
-	return affectedOne(s.db.ExecContext(ctx,
+	return affectedOne(s.db.ExecContext(noCancel(ctx),
 		`UPDATE tests SET status = ?, started_at = ? WHERE id = ?`,
 		model.StatusRunning, db.FormatTime(startedAt), id))
 }
@@ -138,7 +138,7 @@ func (s *Store) StartTest(ctx context.Context, id int64, startedAt time.Time) er
 // FinishTest speichert Endstatus, Messwerte, Fehlermeldung und Rohausgabe.
 func (s *Store) FinishTest(ctx context.Context, id int64, status model.TestStatus, completedAt time.Time,
 	r model.TestResult, errMsg, rawOutput *string) error {
-	return affectedOne(s.db.ExecContext(ctx,
+	return affectedOne(s.db.ExecContext(noCancel(ctx),
 		`UPDATE tests SET status = ?, completed_at = ?,
 			download_bandwidth_mbps = ?, download_bytes = ?, download_jitter_ms = ?, download_packet_loss_percent = ?,
 			upload_bandwidth_mbps = ?, upload_bytes = ?, upload_jitter_ms = ?, upload_packet_loss_percent = ?,
@@ -154,7 +154,7 @@ func (s *Store) FinishTest(ctx context.Context, id int64, status model.TestStatu
 // fehlgeschlagen. Wird beim Start aufgerufen, da solche Tests aus einem
 // vorherigen, abgebrochenen Lauf stammen.
 func (s *Store) FailUnfinishedTests(ctx context.Context, msg string) (int64, error) {
-	res, err := s.db.ExecContext(ctx,
+	res, err := s.db.ExecContext(noCancel(ctx),
 		`UPDATE tests SET status = ?, completed_at = ?, error_message = ? WHERE status IN (?, ?)`,
 		model.StatusFailed, db.FormatTime(db.Now()), msg, model.StatusPending, model.StatusRunning)
 	if err != nil {
@@ -165,5 +165,5 @@ func (s *Store) FailUnfinishedTests(ctx context.Context, msg string) (int64, err
 
 // DeleteTest löscht einen Test; zugehörige Traces folgen per ON DELETE CASCADE.
 func (s *Store) DeleteTest(ctx context.Context, id int64) error {
-	return affectedOne(s.db.ExecContext(ctx, `DELETE FROM tests WHERE id = ?`, id))
+	return affectedOne(s.db.ExecContext(noCancel(ctx), `DELETE FROM tests WHERE id = ?`, id))
 }
