@@ -50,7 +50,7 @@ func DefaultAdmin() (*model.User, error) {
 	}, nil
 }
 
-// Tokens erstellt und prüft Login-Tokens. Payload wie im Python-Backend:
+// Tokens erstellt und prüft Login-Tokens. Payload:
 // {"sub": <username>, "exp": <unix>}.
 type Tokens struct {
 	secret []byte

@@ -1,5 +1,4 @@
--- Schema des iperf3-Trackers. Entspricht den SQLAlchemy-Modellen des
--- Python-Backends (backend/app/models/models.py) inkl. der Migrationen 001–004.
+-- Schema des iperf3-Trackers.
 -- Enums werden als lowercase TEXT gespeichert, Zeitstempel als TEXT in UTC
 -- (Format siehe time.go).
 

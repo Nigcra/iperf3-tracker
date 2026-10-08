@@ -15,7 +15,7 @@ func TestServerCRUD(t *testing.T) {
 
 	expectStatus(t, srv, "GET", "/api/servers", "", "", http.StatusUnauthorized)
 
-	// Anlegen mit Minimaldaten: Vorgabewerte wie im Python-Schema.
+	// Anlegen mit Minimaldaten: Vorgabewerte aus DefaultServerSettings.
 	var a model.Server
 	if code := call(t, srv, "POST", "/api/servers", tok, `{"name":"A","host":"a.example.org","id":999}`, &a); code != http.StatusCreated {
 		t.Fatalf("Anlegen: Status %d", code)

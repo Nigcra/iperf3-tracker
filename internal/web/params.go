@@ -33,7 +33,7 @@ func queryInt(r *http.Request, name string, def, lo, hi int) (int, error) {
 }
 
 // queryBool liest einen optionalen Wahrheitswert; nil bedeutet „nicht angegeben".
-// Akzeptiert wie FastAPI true/false, 1/0, yes/no, on/off.
+// Akzeptiert true/false, 1/0, yes/no, on/off.
 func queryBool(r *http.Request, name string) (*bool, error) {
 	v := strings.ToLower(r.URL.Query().Get(name))
 	var b bool

@@ -1,6 +1,5 @@
-// Package model enthält die Datenstrukturen der Anwendung. Die JSON-Tags
-// entsprechen 1:1 den Feldnamen der bisherigen Python-API (snake_case);
-// optionale Felder sind Pointer und werden als null serialisiert.
+// Package model enthält die Datenstrukturen der Anwendung. JSON-Felder sind
+// in snake_case benannt; optionale Felder sind Pointer und werden als null serialisiert.
 package model
 
 import "time"
@@ -78,8 +77,7 @@ func DefaultServerSettings() ServerSettings {
 	}
 }
 
-// Validate prüft die Wertebereiche wie das bisherige Pydantic-Schema und
-// liefert eine Fehlermeldung oder "".
+// Validate prüft die Wertebereiche und liefert eine Fehlermeldung oder "".
 func (s ServerSettings) Validate() string {
 	inRange := func(v, lo, hi int) bool { return v >= lo && v <= hi }
 	switch {

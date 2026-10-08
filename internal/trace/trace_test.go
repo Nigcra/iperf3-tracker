@@ -70,7 +70,7 @@ func TestParseTracerouteLinux(t *testing.T) {
 	if hops[1].IP != "" {
 		t.Errorf("Hop 2 (* * *): %+v", hops[1])
 	}
-	// Teilweiser Timeout zählt als beantwortet (Python wertete das als Timeout).
+	// Teilweiser Timeout zählt als beantwortet.
 	if hops[2].IP != "92.79.253.252" || rtt(hops[2]) != 2.21 {
 		t.Errorf("Hop 3 (teilweiser Timeout): %+v rtt=%v", hops[2], rtt(hops[2]))
 	}

@@ -67,7 +67,7 @@ func (s *Server) handleGetTest(w http.ResponseWriter, r *http.Request, _ *model.
 }
 
 func (s *Server) handleRunTest(w http.ResponseWriter, r *http.Request, _ *model.User) {
-	// Vorgabewerte wie im bisherigen Schema TestCreate.
+	// Vorgabewerte für nicht angegebene Felder.
 	req := struct {
 		ServerID        int64           `json:"server_id"`
 		Protocol        model.Protocol  `json:"protocol"`

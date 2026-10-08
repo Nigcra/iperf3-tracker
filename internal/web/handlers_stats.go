@@ -10,7 +10,7 @@ import (
 )
 
 // handleDashboardStats liefert die Übersicht. „Heute“ bezieht sich auf die
-// lokale Zeitzone des Servers (das Python-Backend nutzte den UTC-Tag).
+// lokale Zeitzone des Servers.
 func (s *Server) handleDashboardStats(w http.ResponseWriter, r *http.Request, _ *model.User) {
 	now := time.Now()
 	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())

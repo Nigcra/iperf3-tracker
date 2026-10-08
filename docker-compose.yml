@@ -1,6 +1,6 @@
 # iperf3-Tracker: ein Container mit API und Oberfläche unter http://<host>:8000
 # Start: docker compose up -d --build
-# Noch nicht unter Docker getestet (Stand: Go-Portierung, Phase 10).
+# Noch nicht unter Docker getestet.
 
 services:
   iperf3-tracker:

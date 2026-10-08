@@ -1,6 +1,4 @@
 // Package web stellt die Oberfläche (eingebettet) und die HTTP-API bereit.
-// Pfade, JSON-Felder und Statuscodes entsprechen dem bisherigen Python-Backend,
-// damit das React-Frontend bis zur neuen Oberfläche unverändert weiterläuft.
 package web
 
 import (
@@ -79,7 +77,6 @@ func (s *Server) routes() {
 	s.mux.Handle("GET /api/auth/users", s.requireAdmin(s.handleListUsers))
 	s.mux.Handle("DELETE /api/auth/users/{user_id}", s.requireAdmin(s.handleDeleteUser))
 
-	// Im Python-Backend waren diese Routen ohne Anmeldung erreichbar.
 	s.mux.Handle("GET /api/servers", s.requireUser(s.handleListServers))
 	s.mux.Handle("POST /api/servers", s.requireUser(s.handleCreateServer))
 	s.mux.Handle("GET /api/servers/{server_id}", s.requireUser(s.handleGetServer))
@@ -114,7 +111,7 @@ func (s *Server) routes() {
 	s.mux.Handle("GET /api/admin/stats/database", s.requireAdmin(s.handleDatabaseStats))
 	s.mux.Handle("POST /api/iperf3/install", s.requireAdmin(s.handleInstallIperf))
 
-	// Öffentlich wie bisher: statische Liste ohne Benutzerdaten.
+	// Öffentlich: statische Liste ohne Benutzerdaten.
 	s.mux.HandleFunc("GET /api/public-servers", s.handlePublicServers)
 	s.mux.HandleFunc("GET /api/public-servers/search", s.handleSearchPublicServers)
 }
@@ -149,7 +146,7 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	json.NewEncoder(w).Encode(v)
 }
 
-// writeError schreibt eine Fehlerantwort im FastAPI-Format {"detail": "..."}.
+// writeError schreibt eine Fehlerantwort als {"detail": "..."}.
 func writeError(w http.ResponseWriter, status int, detail string) {
 	writeJSON(w, status, map[string]string{"detail": detail})
 }
@@ -161,7 +158,7 @@ func writeInternal(w http.ResponseWriter, r *http.Request, err error) {
 }
 
 // decodeJSON liest den Request-Body nach dst; bei Fehlern wird mit 422
-// geantwortet (wie FastAPI bei ungültigen Bodies) und false geliefert.
+// geantwortet und false geliefert.
 func decodeJSON(w http.ResponseWriter, r *http.Request, dst any) bool {
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 1<<20))
 	if err != nil {

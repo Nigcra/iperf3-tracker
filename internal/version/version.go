@@ -7,7 +7,7 @@ package version
 // Name ist der Anzeigename der Anwendung.
 const Name = "iperf3-Tracker"
 
-// Version ist die Anwendungsversion. 2.x kennzeichnet die Go-Portierung.
+// Version ist die Anwendungsversion.
 const Version = "2.0.0-dev"
 
 // BuildDate ist der zur Build-Zeit gesetzte Zeitstempel (Format 2006-01-02 15:04).

@@ -33,7 +33,7 @@ type Options struct {
 	Probes  int // Proben je Hop (nur traceroute; tracert sendet immer 3)
 }
 
-// DefaultOptions entspricht den bisherigen Vorgaben (30 Hops, 2 s, 3 Proben).
+// DefaultOptions: 30 Hops, 2 s Wartezeit je Probe, 3 Proben.
 func DefaultOptions() Options { return Options{MaxHops: 30, WaitSec: 2, Probes: 3} }
 
 // HopFunc wird für jeden Hop aufgerufen, sobald er ermittelt ist (Live-Ansicht).

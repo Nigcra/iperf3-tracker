@@ -161,7 +161,7 @@ func TestRunnerSequential(t *testing.T) {
 	if a.Status != model.StatusCompleted || b.Status != model.StatusCompleted {
 		t.Fatalf("Status %s / %s", a.Status, b.Status)
 	}
-	// Nacheinander, ohne die 10 s Wartezeit des Python-Backends dazwischen.
+	// Nacheinander und ohne Wartezeit dazwischen.
 	x, y := a, b
 	if y.StartedAt.Before(*x.StartedAt) {
 		x, y = y, x

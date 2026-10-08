@@ -36,7 +36,7 @@ func newSSEStream(w http.ResponseWriter) *sseStream {
 	return &sseStream{w: w, rc: http.NewResponseController(w)}
 }
 
-// send schreibt v als JSON in ein data-Event (ohne Event-Namen, wie bisher).
+// send schreibt v als JSON in ein data-Event (ohne Event-Namen).
 func (s *sseStream) send(v any) {
 	data, err := json.Marshal(v)
 	if err != nil {

@@ -93,9 +93,8 @@ func (s *Server) handleDatabaseStats(w http.ResponseWriter, r *http.Request, _ *
 	writeJSON(w, http.StatusOK, st)
 }
 
-// publicServers ist eine kuratierte Liste öffentlicher iperf3-Server. Gegenüber
-// dem Python-Backend sind drei falsch beschriftete Einträge korrigiert
-// (uztelecom.uz, wtnet.de, ovh.net); die Erreichbarkeit ist nicht garantiert.
+// publicServers ist eine kuratierte Liste öffentlicher iperf3-Server; ihre
+// Erreichbarkeit ist nicht garantiert.
 var publicServers = []model.PublicServer{
 	{Name: "Bouygues Telecom Paris", Host: "iperf.par2.as5410.net", Port: 5200, Location: "Paris, Frankreich", Provider: "Bouygues Telecom", Description: "Öffentlicher iperf3-Server in Paris"},
 	{Name: "OVH Proof", Host: "proof.ovh.net", Port: 5201, Location: "Frankreich", Provider: "OVH", Description: "Öffentlicher Testserver von OVH"},

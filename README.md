@@ -2,7 +2,8 @@
 
 Misst regelmäßig die Bandbreite zu iperf3-Servern, speichert die Ergebnisse
 historisch und zeigt den Netzwerkpfad auf einer Karte. Eine einzelne
-Go-Binary liefert API und Oberfläche aus – ohne Node, Python oder Webserver.
+Go-Binary liefert API und Oberfläche aus – ohne weitere Laufzeitumgebung oder
+Webserver.
 
 ![Dashboard](_screenshots/dashboard.png)
 
@@ -106,9 +107,6 @@ go run ./cmd/iperf3-tracker
 
 Die Oberfläche folgt der Designsprache des Spherifyer und lädt Chart.js und
 Leaflet per CDN; die Karte nutzt OpenStreetMap-Kacheln.
-
-Die Portierung vom früheren Python/React-Stand ist in
-[GO_PORT_PLAN.md](GO_PORT_PLAN.md) dokumentiert.
 
 ## GeoIP-Hinweis
 

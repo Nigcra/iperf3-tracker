@@ -310,8 +310,7 @@ func (r *Runner) trackProgress(id int64, duration int) (stop func()) {
 }
 
 // Args baut die iperf3-Argumente für einen Test. Download nutzt -R (der
-// Server sendet), Upload den Normalmodus (der Client sendet). Im
-// Python-Backend war diese Zuordnung vertauscht.
+// Server sendet), Upload den Normalmodus (der Client sendet).
 func Args(host string, port int, t *model.Test) []string {
 	args := []string{
 		"-c", host,

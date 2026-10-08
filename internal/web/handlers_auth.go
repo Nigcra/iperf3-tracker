@@ -117,8 +117,7 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request, _ *model
 	writeJSON(w, http.StatusOK, u)
 }
 
-// validateNewUser prüft die Feldlängen wie das bisherige Pydantic-Schema
-// (UserCreate); bcrypt begrenzt das Passwort zusätzlich auf 72 Byte.
+// validateNewUser prüft die Feldlängen; bcrypt begrenzt das Passwort zusätzlich auf 72 Byte.
 func validateNewUser(username, email, password string) string {
 	switch {
 	case utf8.RuneCountInString(username) < 3 || utf8.RuneCountInString(username) > 50:

@@ -9,14 +9,6 @@
 *.db-wal
 *.db-shm
 
-# Gesicherte lokale Dateien des alten Python-Backends (.env, alte Datenbank)
-/_altdaten/
-
-# Nicht getrackte Reste des entfernten Python-/React-Codes (venv,
-# node_modules, build) – können gelöscht werden
-/backend/
-/frontend/
-
 # Editor / Betriebssystem
 .vscode/
 .idea/
