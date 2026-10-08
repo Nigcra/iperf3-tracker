@@ -12,6 +12,7 @@ import (
 	"iperf3-tracker/internal/auth"
 	"iperf3-tracker/internal/db"
 	"iperf3-tracker/internal/iperf"
+	"iperf3-tracker/internal/scheduler"
 	"iperf3-tracker/internal/store"
 	"iperf3-tracker/internal/trace"
 )
@@ -49,7 +50,14 @@ func newTestServerWithTracer(t *testing.T, tracer *trace.Tracer) *httptest.Serve
 	if tracer == nil {
 		tracer = trace.NewTracer(nil, filepath.Join(t.TempDir(), "kein-traceroute"))
 	}
-	srv := httptest.NewServer(NewServer(st, auth.NewTokens("test-secret"), runner, tracer).Handler())
+	// Scheduler wird nicht gestartet (wie bei scheduler.enabled: false).
+	srv := httptest.NewServer(NewServer(Deps{
+		Store:     st,
+		Tokens:    auth.NewTokens("test-secret"),
+		Runner:    runner,
+		Tracer:    tracer,
+		Scheduler: scheduler.New(st, runner, tracer),
+	}).Handler())
 	t.Cleanup(srv.Close)
 	return srv
 }

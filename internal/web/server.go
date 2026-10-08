@@ -10,29 +10,41 @@ import (
 
 	"iperf3-tracker/internal/auth"
 	"iperf3-tracker/internal/iperf"
+	"iperf3-tracker/internal/scheduler"
 	"iperf3-tracker/internal/store"
 	"iperf3-tracker/internal/trace"
 	"iperf3-tracker/internal/version"
 )
 
+// Deps sind die Abhängigkeiten des HTTP-Servers.
+type Deps struct {
+	Store     *store.Store
+	Tokens    *auth.Tokens
+	Runner    *iperf.Runner
+	Tracer    *trace.Tracer
+	Scheduler *scheduler.Scheduler
+}
+
 // Server bündelt die HTTP-Handler.
 type Server struct {
-	store  *store.Store
-	tokens *auth.Tokens
-	runner *iperf.Runner
-	tracer *trace.Tracer
-	mux    *http.ServeMux
+	store     *store.Store
+	tokens    *auth.Tokens
+	runner    *iperf.Runner
+	tracer    *trace.Tracer
+	scheduler *scheduler.Scheduler
+	mux       *http.ServeMux
 
 	testTraces testTraces
 }
 
 // NewServer erstellt den HTTP-Server.
-func NewServer(st *store.Store, tokens *auth.Tokens, runner *iperf.Runner, tracer *trace.Tracer) *Server {
+func NewServer(d Deps) *Server {
 	s := &Server{
-		store:      st,
-		tokens:     tokens,
-		runner:     runner,
-		tracer:     tracer,
+		store:      d.Store,
+		tokens:     d.Tokens,
+		runner:     d.Runner,
+		tracer:     d.Tracer,
+		scheduler:  d.Scheduler,
 		mux:        http.NewServeMux(),
 		testTraces: testTraces{running: map[int64]bool{}},
 	}
@@ -99,7 +111,7 @@ func (s *Server) handleInfo(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"status":            "healthy",
-		"scheduler_running": false, // Scheduler folgt in Phase 7
+		"scheduler_running": s.scheduler.Running(),
 	})
 }
 

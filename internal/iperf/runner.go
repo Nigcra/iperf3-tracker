@@ -63,14 +63,18 @@ func NewRunner(st *store.Store, command ...string) *Runner {
 	}
 }
 
-// Submit reiht einen gespeicherten, wartenden Test zur Ausführung ein.
-func (r *Runner) Submit(t *model.Test) {
+// Submit reiht einen gespeicherten, wartenden Test zur Ausführung ein. Der
+// zurückgegebene Kanal wird geschlossen, sobald das Ergebnis gespeichert ist.
+func (r *Runner) Submit(t *model.Test) <-chan struct{} {
 	r.setLive(t.ID, &LiveStatus{Status: model.StatusPending, TotalSeconds: t.Duration})
+	done := make(chan struct{})
 	r.wg.Add(1)
 	go func() {
 		defer r.wg.Done()
+		defer close(done)
 		r.process(t.ID)
 	}()
+	return done
 }
 
 // Stop bricht laufende und wartende Tests ab und wartet, bis deren Status gespeichert ist.

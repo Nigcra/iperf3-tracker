@@ -166,6 +166,22 @@ type Test struct {
 	CreatedAt    time.Time `json:"created_at"`
 }
 
+// NewTestFromDefaults erstellt einen Test mit den Vorgaben des Servers
+// (für geplante Tests).
+func NewTestFromDefaults(sv *Server) *Test {
+	t := &Test{
+		ServerID:        sv.ID,
+		Protocol:        sv.DefaultProtocol,
+		Direction:       sv.DefaultDirection,
+		Duration:        sv.DefaultDuration,
+		ParallelStreams: sv.DefaultParallel,
+	}
+	if t.Protocol == ProtocolUDP {
+		t.UDPBandwidthMbps = sv.DefaultUDPBandwidthMbps
+	}
+	return t
+}
+
 // TestDetail ist ein Test inklusive Server-Profil und Rohausgabe.
 type TestDetail struct {
 	Test

@@ -19,6 +19,7 @@ import (
 	"iperf3-tracker/internal/config"
 	"iperf3-tracker/internal/db"
 	"iperf3-tracker/internal/iperf"
+	"iperf3-tracker/internal/scheduler"
 	"iperf3-tracker/internal/store"
 	"iperf3-tracker/internal/trace"
 	"iperf3-tracker/internal/version"
@@ -101,10 +102,27 @@ func run(cfgPath string) error {
 	}
 	tracer := trace.NewTracer(geo)
 
+	// --- Scheduler ---
+	sched := scheduler.New(st, runner, tracer)
+	if cfg.Scheduler.Enabled {
+		if err := sched.Start(context.Background()); err != nil {
+			return fmt.Errorf("Scheduler konnte nicht gestartet werden: %w", err)
+		}
+		defer sched.Stop()
+	} else {
+		slog.Info("Scheduler per Konfiguration deaktiviert")
+	}
+
 	// --- HTTP-Server ---
 	srv := &http.Server{
-		Addr:              cfg.Web.Listen,
-		Handler:           web.NewServer(st, auth.NewTokens(cfg.Auth.SecretKey), runner, tracer).Handler(),
+		Addr: cfg.Web.Listen,
+		Handler: web.NewServer(web.Deps{
+			Store:     st,
+			Tokens:    auth.NewTokens(cfg.Auth.SecretKey),
+			Runner:    runner,
+			Tracer:    tracer,
+			Scheduler: sched,
+		}).Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	errCh := make(chan error, 1)

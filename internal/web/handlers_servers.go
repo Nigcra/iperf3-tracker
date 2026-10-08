@@ -54,7 +54,7 @@ func (s *Server) handleCreateServer(w http.ResponseWriter, r *http.Request, _ *m
 		writeInternal(w, r, err)
 		return
 	}
-	// Phase 7: Scheduler für sv einplanen, falls schedule_enabled.
+	s.scheduler.Update(sv)
 	writeJSON(w, http.StatusCreated, sv)
 }
 
@@ -81,7 +81,7 @@ func (s *Server) handleUpdateServer(w http.ResponseWriter, r *http.Request, _ *m
 		writeInternal(w, r, err)
 		return
 	}
-	// Phase 7: Scheduler für sv neu einplanen bzw. austragen.
+	s.scheduler.Update(sv)
 	writeJSON(w, http.StatusOK, sv)
 }
 
@@ -90,7 +90,6 @@ func (s *Server) handleDeleteServer(w http.ResponseWriter, r *http.Request, _ *m
 	if !ok {
 		return
 	}
-	// Phase 7: Scheduler für id austragen.
 	if err := s.store.DeleteServer(r.Context(), id); errors.Is(err, store.ErrNotFound) {
 		writeError(w, http.StatusNotFound, msgServerNotFound)
 		return
@@ -98,6 +97,7 @@ func (s *Server) handleDeleteServer(w http.ResponseWriter, r *http.Request, _ *m
 		writeInternal(w, r, err)
 		return
 	}
+	s.scheduler.Remove(id)
 	w.WriteHeader(http.StatusNoContent)
 }
 
