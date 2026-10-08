@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>iperf3-Tracker</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%233b82f6' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m12 14 4-4'/%3E%3Cpath d='M3.34 19a10 10 0 1 1 17.32 0'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='44' fill='none' stroke='%234b5563' stroke-width='12'/%3E%3Cpath d='M50 94A44 44 0 0 1 50 6' fill='none' stroke='%23f97316' stroke-width='12'/%3E%3Cpath d='M50 50L71 20' stroke='%23f97316' stroke-width='10' stroke-linecap='round'/%3E%3Ccircle cx='50' cy='50' r='11' fill='%23f97316'/%3E%3C/svg%3E">
 <script>
   // Apply the saved theme before first paint to avoid a flash.
   (function () {
@@ -70,11 +70,23 @@
   .header-inner { max-width: 1152px; margin: 0 auto; width: 100%; padding: 0 24px;
                   display: flex; align-items: center; gap: 20px; flex-wrap: nowrap; min-width: 0; }
   .brand { display: flex; align-items: center; gap: 12px; flex: none; }
-  .brand-icon { width: 34px; height: 34px; border-radius: 11px; flex: none;
-                background: rgb(var(--accent-rgb) / .18); border: 1px solid rgb(var(--accent-rgb) / .40);
-                box-shadow: inset 0 1px 0 rgb(255 255 255 / .12);
-                background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='19' height='19' viewBox='0 0 24 24' fill='none' stroke='%2360a5fa' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m12 14 4-4'/%3E%3Cpath d='M3.34 19a10 10 0 1 1 17.32 0'/%3E%3C/svg%3E");
-                background-repeat: no-repeat; background-position: center; }
+  /* Logo: Tacho mit Zeiger, der beim Einblenden hochschnellt und kurz nachfedert. */
+  .logo { width: 36px; height: 36px; flex: none; overflow: visible; filter: drop-shadow(0 4px 12px rgb(0 0 0 / .15)); }
+  .logo-ring { fill: none; stroke: #4b5563; stroke-width: 10; }
+  .logo-arc { fill: none; stroke-width: 10; filter: drop-shadow(0 0 4px rgb(249 115 22 / .45)); }
+  .logo-needle { stroke: url(#logoNeedle); stroke-width: 7; stroke-linecap: round;
+                 transform-box: view-box; transform-origin: 50px 50px; transform: rotate(-55deg);
+                 animation: needleSweep 2s ease-out both; }
+  .logo-hub { fill: url(#logoHub); stroke: #1e293b; stroke-width: 2.5; }
+  .login-card .logo { width: 108px; height: 108px; }
+  .login-card .logo-needle { stroke-width: 3.5; }
+  @keyframes needleSweep {
+    0%   { transform: rotate(-135deg); }
+    60%  { transform: rotate(-55deg); }
+    70%  { transform: rotate(-60deg); }
+    80%, 100% { transform: rotate(-55deg); }
+  }
+  @media (prefers-reduced-motion: reduce) { .logo-needle { animation: none; } }
   .brand-title { font-size: 1.15em; font-weight: 600; letter-spacing: .2px; color: var(--heading); white-space: nowrap; }
   .nav-ico { width: 16px; height: 16px; flex: none; }
   .header .actions { display: flex; align-items: center; gap: 10px; margin-left: auto; flex-wrap: nowrap; }
@@ -223,7 +235,7 @@
   .login-wrap { flex: 1; display: flex; align-items: center; justify-content: center; padding: 40px 16px; }
   .login-card { width: 100%; max-width: 380px; padding: 32px 30px; }
   .login-card .brand { flex-direction: column; gap: 14px; margin-bottom: 26px; }
-  .login-card .brand-icon { width: 56px; height: 56px; border-radius: 16px; background-size: 30px; }
+
   .login-card .brand-title { font-size: 1.5em; }
   .login-card .btn { width: 100%; padding: 11px 16px; margin-top: 6px; }
   .login-card input { width: 100%; }
@@ -363,6 +375,18 @@
 </head>
 <body>
 
+<!-- Gemeinsame Verläufe des Logos -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <linearGradient id="logoNeedle" gradientUnits="userSpaceOnUse" x1="50" y1="50" x2="92" y2="50">
+      <stop offset="0" stop-color="#f97316" stop-opacity=".3"/><stop offset="1" stop-color="#f97316"/>
+    </linearGradient>
+    <linearGradient id="logoHub" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fb923c"/><stop offset="1" stop-color="#f97316"/>
+    </linearGradient>
+  </defs>
+</svg>
+
 <!-- Anmeldung -->
 <div class="login-wrap" id="loginView" hidden>
   <form class="ds-card login-card" id="loginForm" onsubmit="submitLogin(event)">
@@ -371,7 +395,7 @@
       <button type="button" data-lang="de" lang="de" title="Deutsch" onclick="setLang('de')">DE</button>
       <button type="button" data-lang="en" lang="en" title="English" onclick="setLang('en')">EN</button>
     </div>
-    <div class="brand"><span class="brand-icon"></span><span class="brand-title">iperf3-Tracker</span></div>
+    <div class="brand"><svg class="logo" viewBox="0 0 100 100" aria-hidden="true"><circle class="logo-ring" cx="50" cy="50" r="45"/><path class="logo-arc" stroke="#fb923c" d="M50 95A45 45 0 0 1 5 50"/><path class="logo-arc" stroke="#f97316" d="M5 50A45 45 0 0 1 50 5"/><line class="logo-needle" x1="50" y1="50" x2="92" y2="50"/><circle class="logo-hub" cx="50" cy="50" r="8"/></svg><span class="brand-title">iperf3-Tracker</span></div>
     <div class="form-error" id="loginError" hidden></div>
     <div class="field"><label for="loginUser" data-i18n="login.user">Benutzername</label><input id="loginUser" autocomplete="username" required autofocus></div>
     <div class="field"><label for="loginPass" data-i18n="login.pass">Passwort</label><input id="loginPass" type="password" autocomplete="current-password" required></div>
@@ -382,7 +406,7 @@
 <!-- Anwendung -->
 <header class="header" id="appHeader" hidden>
   <div class="header-inner">
-    <div class="brand"><span class="brand-icon"></span><span class="brand-title">iperf3-Tracker</span></div>
+    <div class="brand"><svg class="logo" viewBox="0 0 100 100" aria-hidden="true"><circle class="logo-ring" cx="50" cy="50" r="45"/><path class="logo-arc" stroke="#fb923c" d="M50 95A45 45 0 0 1 5 50"/><path class="logo-arc" stroke="#f97316" d="M5 50A45 45 0 0 1 50 5"/><line class="logo-needle" x1="50" y1="50" x2="92" y2="50"/><circle class="logo-hub" cx="50" cy="50" r="8"/></svg><span class="brand-title">iperf3-Tracker</span></div>
     <nav class="nav" id="nav">
       <button data-tab="dashboard" onclick="showTab('dashboard')">
         <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>
