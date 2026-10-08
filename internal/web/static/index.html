@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>iperf3-Tracker</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%233b82f6' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m12 14 4-4'/%3E%3Cpath d='M3.34 19a10 10 0 1 1 17.32 0'/%3E%3C/svg%3E">
+<script>
+  // Apply the saved theme before first paint to avoid a flash.
+  (function () {
+    try { document.documentElement.setAttribute('data-theme', localStorage.getItem('iperf-theme') || 'dark'); }
+    catch (e) { document.documentElement.setAttribute('data-theme', 'dark'); }
+  })();
+</script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  /* Designsprache des Spherifyer: semantische Tokens, zwei Themes (Navy dunkel
+     als Standard, hell) über das data-theme-Attribut. */
+  :root {
+    --accent: #3b82f6; --accent-light: #60a5fa; --accent-rgb: 59 130 246;
+    --ok: #34d399; --warn: #fbbf24; --crit: #f87171; --purple: #a78bfa;
+    --bg: #060b18;
+    --bg-grad:
+      radial-gradient(1100px 560px at 82% -12%, rgb(var(--accent-rgb) / .18), transparent 62%),
+      radial-gradient(900px 520px at -12% 28%, rgb(var(--accent-rgb) / .08), transparent 58%),
+      radial-gradient(700px 420px at 55% 115%, rgb(var(--accent-rgb) / .10), transparent 60%),
+      linear-gradient(180deg, #0b1b3a 0%, #081226 45%, #060b18 100%);
+    --surface: rgb(255 255 255 / .055); --surface-2: rgb(255 255 255 / .06);
+    --border: rgb(255 255 255 / .10); --track: rgb(255 255 255 / .08);
+    --heading: #fff; --text: #cbd5e1; --muted: #94a3b8; --faint: #64748b;
+    --header-bg: rgb(11 27 58 / .7); --nav-bg: rgb(8 18 38 / .6); --thead-bg: rgb(8 18 38 / .7);
+    --menu-bg: #0b1b3a; --card-shadow: 0 12px 32px -16px rgb(0 0 0 / .55);
+    --grid: rgba(148,163,184,.14);
+    color-scheme: dark;
+  }
+  :root[data-theme="light"] {
+    --bg: #eef2f8;
+    --bg-grad:
+      radial-gradient(1100px 560px at 85% -10%, rgb(var(--accent-rgb) / .12), transparent 60%),
+      radial-gradient(900px 520px at -10% 20%, rgb(var(--accent-rgb) / .07), transparent 55%),
+      linear-gradient(180deg, #f2f6fc 0%, #e9eef6 100%);
+    --surface: #ffffff; --surface-2: #ffffff;
+    --border: #e2e8f0; --track: rgb(15 23 42 / .06);
+    --heading: #0f172a; --text: #334155; --muted: #64748b; --faint: #94a3b8;
+    --header-bg: rgb(255 255 255 / .85); --nav-bg: rgb(255 255 255 / .8); --thead-bg: rgb(241 245 251 / .9);
+    --menu-bg: #ffffff; --card-shadow: 0 8px 24px -14px rgb(15 23 42 / .18);
+    --grid: rgba(15,23,42,.08);
+    color-scheme: light;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+    color: var(--text); font-size: 14px; min-height: 100vh; background-color: var(--bg);
+    -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; text-rendering: optimizeLegibility;
+    display: flex; flex-direction: column;
+  }
+  body::before { content: ""; position: fixed; inset: 0; z-index: -1; background: var(--bg-grad); }
+  * { scrollbar-width: thin; scrollbar-color: rgb(148 163 184 / .25) transparent; }
+  code, .mono { font-family: ui-monospace, 'Cascadia Code', Consolas, monospace; }
+  [hidden] { display: none !important; }
+
+  /* ---------- Kopfzeile ---------- */
+  .header { position: sticky; top: 0; z-index: 30; padding: 12px 0;
+            background: var(--header-bg); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+            border-bottom: 1px solid var(--border); box-shadow: 0 8px 24px -12px rgba(0,0,0,.35); }
+  .header-inner { max-width: 1152px; margin: 0 auto; width: 100%; padding: 0 24px;
+                  display: flex; align-items: center; gap: 20px; flex-wrap: nowrap; min-width: 0; }
+  .brand { display: flex; align-items: center; gap: 12px; flex: none; }
+  .brand-icon { width: 34px; height: 34px; border-radius: 11px; flex: none;
+                background: rgb(var(--accent-rgb) / .18); border: 1px solid rgb(var(--accent-rgb) / .40);
+                box-shadow: inset 0 1px 0 rgb(255 255 255 / .12);
+                background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='19' height='19' viewBox='0 0 24 24' fill='none' stroke='%2360a5fa' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m12 14 4-4'/%3E%3Cpath d='M3.34 19a10 10 0 1 1 17.32 0'/%3E%3C/svg%3E");
+                background-repeat: no-repeat; background-position: center; }
+  .brand-title { font-size: 1.15em; font-weight: 600; letter-spacing: .2px; color: var(--heading); white-space: nowrap; }
+  .nav-ico { width: 16px; height: 16px; flex: none; }
+  .header .actions { display: flex; align-items: center; gap: 10px; margin-left: auto; flex-wrap: nowrap; }
+
+  .nav { display: flex; gap: 4px; min-width: 0; overflow-x: auto; }
+  .nav button { background: none; border: none; color: var(--muted); padding: 8px 14px; font-size: 0.875rem; font-weight: 400;
+                cursor: pointer; border-radius: 8px; font-family: inherit; transition: all .15s; display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
+  .nav button:hover { color: var(--heading); background: var(--surface-2); }
+  .nav button.active { color: var(--heading); font-weight: 600; background: rgb(var(--accent-rgb) / .16);
+                       box-shadow: inset 0 0 0 1px rgb(var(--accent-rgb) / .35); }
+
+  .btn { color: #fff; border: none; padding: 9px 16px; border-radius: 8px; cursor: pointer; white-space: nowrap;
+         font-size: 0.85em; font-weight: 500; font-family: inherit; display: inline-flex; align-items: center; gap: 7px; justify-content: center;
+         background-image: linear-gradient(135deg, rgb(var(--accent-rgb)) 0%, rgb(var(--accent-rgb) / .75) 100%);
+         box-shadow: 0 8px 24px -8px rgb(var(--accent-rgb) / .55), inset 0 1px 0 rgb(255 255 255 / .15); transition: filter .15s; }
+  .btn:hover { filter: brightness(1.12); }
+  .btn:disabled { background: rgba(148,163,184,.2); box-shadow: none; color: var(--muted); cursor: default; filter: none; }
+  .btn-secondary { color: var(--text); background: var(--surface-2); background-image: none; border: 1px solid var(--border); box-shadow: none; }
+  .btn-secondary:hover { color: var(--heading); filter: none; background: var(--surface); }
+  .btn-danger { background-image: linear-gradient(135deg, #ef4444 0%, rgb(239 68 68 / .75) 100%); box-shadow: 0 8px 24px -8px rgb(239 68 68 / .55); }
+  .icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; flex: none;
+              border-radius: 8px; cursor: pointer; color: var(--text); background: var(--surface-2);
+              border: 1px solid var(--border); transition: all .15s; font-family: inherit; }
+  .icon-btn:hover { color: var(--heading); background: var(--surface); }
+
+  /* Klapp-Menüs in der Kopfzeile (Status, Benutzer). */
+  .menu { position: relative; display: inline-flex; }
+  .menu-panel { position: absolute; right: 0; top: calc(100% + 8px); z-index: 40;
+                min-width: 240px; max-width: 360px; padding: 12px 14px; border-radius: 12px;
+                background: var(--menu-bg); border: 1px solid var(--border); box-shadow: var(--card-shadow);
+                font-size: 0.82em; color: var(--text); }
+  .menu-panel .sp-row { margin-bottom: 5px; }
+  .menu-panel .sp-row:last-child { margin-bottom: 0; }
+  .sp-label { color: var(--muted); }
+  .sp-err { color: #fca5a5; word-break: break-word; }
+  :root[data-theme="light"] .sp-err { color: #dc2626; }
+  #statusIcon { font-size: 1.05em; line-height: 1; }
+  .status-dot-ok { color: var(--ok); } .status-dot-warn { color: var(--warn); } .status-dot-err { color: var(--crit); }
+  #statusBtn.has-error { border-color: rgb(248 113 113 / .5); background: rgb(248 113 113 / .12); }
+  .user-head { display: flex; align-items: center; gap: 8px; padding-bottom: 10px; margin-bottom: 10px; border-bottom: 1px solid var(--border); }
+  .user-name { font-weight: 600; color: var(--heading); font-size: 1.1em; }
+  .menu-item { display: flex; align-items: center; gap: 8px; width: 100%; background: none; border: none; color: var(--text);
+               padding: 7px 8px; border-radius: 8px; cursor: pointer; font: inherit; text-align: left; }
+  .menu-item:hover { background: var(--surface-2); color: var(--heading); }
+
+  .theme-icon-light { display: none; }
+  :root[data-theme="light"] .theme-icon-dark { display: none; }
+  :root[data-theme="light"] .theme-icon-light { display: inline; }
+
+  /* ---------- Seiten & Bausteine ---------- */
+  /* Inhalt fluchtet mit der Kopfzeile (gleiche Breite und Innenabstände). */
+  main { flex: 1; width: 100%; max-width: 1152px; margin: 0 auto; }
+  .page { display: none; } .page.active { display: block; }
+  .section { padding: 24px; }
+  .section-title { font-size: 1.1em; font-weight: 700; color: var(--heading); padding-left: 12px; margin-bottom: 18px;
+                   border-left: 4px solid var(--accent); }
+  .summary { display: flex; flex-wrap: wrap; gap: 14px; padding: 22px 24px 0; }
+  .sum-card { flex: 1; min-width: 140px; border-radius: 16px; padding: 16px 18px; text-align: center;
+              background: var(--surface); border: 1px solid var(--border); border-top: 3px solid var(--accent);
+              box-shadow: var(--card-shadow); }
+  .sum-card .val { font-size: 1.6em; font-weight: 700; color: var(--accent); font-variant-numeric: tabular-nums; }
+  .sum-card .lbl { font-size: 0.75em; color: var(--muted); margin-top: 4px; }
+  .ds-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 18px; }
+  .ds-card, .chart-box { background: var(--surface); border-radius: 16px; border: 1px solid var(--border); box-shadow: var(--card-shadow); }
+  .ds-card { padding: 18px 20px; }
+  .chart-box { padding: 18px; margin-bottom: 20px; }
+  .chart-box h3 { font-size: 0.95em; margin-bottom: 14px; color: var(--heading); font-weight: 600; }
+  .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 20px; }
+  .muted { color: var(--faint); font-style: italic; }
+  .view-switch { display: inline-flex; gap: 4px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 4px; }
+  .view-btn { background: none; border: none; color: var(--muted); padding: 7px 18px; font-size: 0.85em;
+              font-weight: 500; cursor: pointer; border-radius: 7px; font-family: inherit; transition: all .15s; }
+  .view-btn:hover { color: var(--heading); }
+  .view-btn.active { color: var(--heading); font-weight: 600; background: rgb(var(--accent-rgb) / .18);
+                     box-shadow: inset 0 0 0 1px rgb(var(--accent-rgb) / .35); }
+
+  input, select, textarea { color: var(--heading); background: var(--surface-2); border: 1px solid var(--border);
+                  padding: 8px 12px; border-radius: 8px; font-size: 0.88em; font-family: inherit; outline: none; transition: border-color .15s, box-shadow .15s; }
+  input:focus, select:focus, textarea:focus { border-color: rgb(var(--accent-rgb) / .6); box-shadow: 0 0 0 3px rgb(var(--accent-rgb) / .2); }
+  input::placeholder { color: var(--faint); }
+  option, optgroup { background: var(--menu-bg); color: var(--heading); }
+  .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+  .field label { font-size: 0.8em; color: var(--muted); font-weight: 500; }
+
+  .tbl-wrap { overflow-x: auto; border-radius: 16px; border: 1px solid var(--border); }
+  table { width: 100%; border-collapse: collapse; background: var(--surface); }
+  thead th { background: var(--thead-bg); color: var(--text); padding: 11px 14px; text-align: left; font-size: 0.74em;
+             font-weight: 600; text-transform: uppercase; letter-spacing: .05em; white-space: nowrap; }
+  tbody td { padding: 9px 14px; border-bottom: 1px solid var(--border); font-size: 0.86em; color: var(--text); }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover td { background: rgb(var(--accent-rgb) / .10); }
+  .badge-type { background: rgb(var(--accent-rgb) / .16); color: var(--accent); padding: 2px 9px; border-radius: 999px; font-size: 0.75em; font-weight: 600; }
+  .sev-badge { padding: 2px 9px; border-radius: 999px; font-size: 0.8em; font-weight: 700; white-space: nowrap; }
+  .sev-crit { background: rgb(239 68 68 / .16); color: #dc2626; } .sev-warn { background: rgb(217 119 6 / .16); color: #b45309; }
+  .sev-info { background: rgb(148 163 184 / .16); color: var(--text); } .sev-ok { background: rgb(52 211 153 / .16); color: #059669; }
+
+  /* ---------- Anmeldung ---------- */
+  .login-wrap { flex: 1; display: flex; align-items: center; justify-content: center; padding: 40px 16px; }
+  .login-card { width: 100%; max-width: 380px; padding: 32px 30px; }
+  .login-card .brand { flex-direction: column; gap: 14px; margin-bottom: 26px; }
+  .login-card .brand-icon { width: 56px; height: 56px; border-radius: 16px; background-size: 30px; }
+  .login-card .brand-title { font-size: 1.5em; }
+  .login-card .btn { width: 100%; padding: 11px 16px; margin-top: 6px; }
+  .login-card input { width: 100%; }
+  .form-error { color: #fca5a5; font-size: 0.85em; margin-bottom: 12px; }
+  :root[data-theme="light"] .form-error { color: #dc2626; }
+
+  footer { text-align: center; color: var(--faint); font-size: 0.76em; padding: 18px 0 28px; }
+
+  @media (max-width: 760px) {
+    /* Navigation in eigener Zeile über die volle Breite, nur Icons. */
+    .header-inner { padding: 0 16px; gap: 10px; flex-wrap: wrap; }
+    .nav { order: 3; width: 100%; justify-content: space-between; }
+    .nav button { padding: 8px 12px; }
+    .nav button span, .btn-label { display: none; }
+    .section, .summary { padding-left: 16px; padding-right: 16px; }
+    .grid-2 { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Anmeldung -->
+<div class="login-wrap" id="loginView" hidden>
+  <form class="ds-card login-card" id="loginForm" onsubmit="submitLogin(event)">
+    <div class="brand"><span class="brand-icon"></span><span class="brand-title">iperf3-Tracker</span></div>
+    <div class="form-error" id="loginError" hidden></div>
+    <div class="field"><label for="loginUser">Benutzername</label><input id="loginUser" autocomplete="username" required autofocus></div>
+    <div class="field"><label for="loginPass">Passwort</label><input id="loginPass" type="password" autocomplete="current-password" required></div>
+    <button class="btn" id="loginBtn" type="submit">Anmelden</button>
+  </form>
+</div>
+
+<!-- Anwendung -->
+<header class="header" id="appHeader" hidden>
+  <div class="header-inner">
+    <div class="brand"><span class="brand-icon"></span><span class="brand-title">iperf3-Tracker</span></div>
+    <nav class="nav" id="nav">
+      <button data-tab="dashboard" onclick="showTab('dashboard')">
+        <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>
+        <span>Dashboard</span>
+      </button>
+      <button data-tab="tests" onclick="showTab('tests')">
+        <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/></svg>
+        <span>Tests</span>
+      </button>
+      <button data-tab="peering" onclick="showTab('peering')">
+        <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.106 5.553a2 2 0 0 0 1.788 0l3.659-1.83A1 1 0 0 1 21 4.619v12.764a1 1 0 0 1-.553.894l-4.553 2.277a2 2 0 0 1-1.788 0l-4.212-2.106a2 2 0 0 0-1.788 0l-3.659 1.83A1 1 0 0 1 3 19.381V6.618a1 1 0 0 1 .553-.894l4.553-2.277a2 2 0 0 1 1.788 0z"/><path d="M15 5.764v15"/><path d="M9 3.236v15"/></svg>
+        <span>Peering-Map</span>
+      </button>
+      <button data-tab="servers" onclick="showTab('servers')">
+        <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="20" height="8" x="2" y="2" rx="2"/><rect width="20" height="8" x="2" y="14" rx="2"/><line x1="6" x2="6.01" y1="6" y2="6"/><line x1="6" x2="6.01" y1="18" y2="18"/></svg>
+        <span>Server</span>
+      </button>
+      <button data-tab="admin" onclick="showTab('admin')" id="navAdmin" hidden>
+        <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        <span>Admin</span>
+      </button>
+    </nav>
+    <div class="actions">
+      <div class="menu" id="statusMenu">
+        <button class="icon-btn" id="statusBtn" title="Status anzeigen" aria-label="Status" onclick="toggleMenu(event, 'statusPanel')">
+          <span id="statusIcon" class="status-dot-ok">&#9679;</span>
+        </button>
+        <div class="menu-panel" id="statusPanel" hidden></div>
+      </div>
+      <button class="icon-btn" id="themeBtn" title="Hell / Dunkel umschalten" aria-label="Theme umschalten" onclick="toggleTheme()">
+        <span class="theme-icon-dark" aria-hidden="true">☀</span>
+        <span class="theme-icon-light" aria-hidden="true">🌙</span>
+      </button>
+      <div class="menu" id="userMenu">
+        <button class="icon-btn" title="Benutzer" aria-label="Benutzermenü" onclick="toggleMenu(event, 'userPanel')">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="10" r="3"/><path d="M7 20.662V19a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v1.662"/></svg>
+        </button>
+        <div class="menu-panel" id="userPanel" hidden>
+          <div class="user-head"><span class="user-name" id="userName"></span><span class="badge-type" id="userAdminBadge" hidden>Admin</span></div>
+          <button class="menu-item" onclick="logout()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>
+            Abmelden
+          </button>
+        </div>
+      </div>
+      <button class="btn" onclick="showTab('tests')" title="Neuen Test starten">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="6 3 20 12 6 21 6 3"/></svg>
+        <span class="btn-label">Test starten</span>
+      </button>
+    </div>
+  </div>
+</header>
+
+<main id="appMain" hidden>
+  <!-- Dashboard -->
+  <div class="page" id="page-dashboard">
+    <div class="section">
+      <div class="section-title">Dashboard</div>
+      <p class="muted">Kennzahlen und Bandbreiten-Verlauf folgen in Phase 9b.</p>
+    </div>
+  </div>
+
+  <!-- Tests -->
+  <div class="page" id="page-tests">
+    <div class="section">
+      <div class="section-title">Tests</div>
+      <p class="muted">Test starten, Live-Anzeige und Verlauf folgen in Phase 9c.</p>
+    </div>
+  </div>
+
+  <!-- Peering-Map -->
+  <div class="page" id="page-peering">
+    <div class="section">
+      <div class="section-title">Peering-Map</div>
+      <p class="muted">Karte und Live-Traceroute folgen in Phase 9e.</p>
+    </div>
+  </div>
+
+  <!-- Server -->
+  <div class="page" id="page-servers">
+    <div class="section">
+      <div class="section-title">Server</div>
+      <p class="muted">Server-Profile folgen in Phase 9d.</p>
+    </div>
+  </div>
+
+  <!-- Admin -->
+  <div class="page" id="page-admin">
+    <div class="section">
+      <div class="section-title">Administration</div>
+      <p class="muted">Benutzer und Bereinigung folgen in Phase 9f.</p>
+    </div>
+  </div>
+</main>
+
+<footer>
+  iperf3-Tracker <span id="appVersion"></span> · Build <span id="buildDate">–</span>
+</footer>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

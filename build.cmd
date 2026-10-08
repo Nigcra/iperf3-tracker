@@ -80,10 +80,19 @@ if errorlevel 1 (
     exit /b 1
 )
 
+:: ---------- GeoIP-Datenbank ----------
+:: Die Binary sucht geoip\GeoLite2-City.mmdb neben der config.yaml, also im
+:: Arbeitsverzeichnis. Für den Start per Doppelklick in _release ablegen.
+if not exist "%OUTDIR%\geoip\GeoLite2-City.mmdb" if exist "backend\geoip\GeoLite2-City.mmdb" (
+    if not exist "%OUTDIR%\geoip" mkdir "%OUTDIR%\geoip"
+    copy /y "backend\geoip\GeoLite2-City.mmdb" "%OUTDIR%\geoip\" >nul
+    echo [INFO ] GeoIP-Datenbank nach %OUTDIR%\geoip kopiert
+)
+
 :: ---------- Ergebnis ----------
 for %%F in ("%OUT%") do set SIZE=%%~zF
 set /a SIZE_MB=%SIZE% / 1048576
 echo [OK   ] %OUT% erfolgreich erstellt  (%SIZE_MB% MB, Build %BUILD_DATE%)
-echo [HINWEIS] Beim ersten Start wird config.yaml im Arbeitsverzeichnis angelegt (oder -config ^<pfad^>).
+echo [HINWEIS] Start per Doppelklick auf %OUT% - Oberflaeche unter http://localhost:8000
 
 endlocal

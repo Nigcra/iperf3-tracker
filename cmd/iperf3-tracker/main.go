@@ -8,6 +8,7 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -128,6 +129,9 @@ func run(cfgPath string) error {
 	errCh := make(chan error, 1)
 	go func() { errCh <- srv.ListenAndServe() }()
 	slog.Info(version.Name+" läuft", "adresse", cfg.Web.Listen, "version", version.Version, "build", version.BuildDate)
+	if _, port, err := net.SplitHostPort(cfg.Web.Listen); err == nil {
+		slog.Info("Oberfläche: http://localhost:" + port)
+	}
 
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)

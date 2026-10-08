@@ -1,0 +1,3 @@
+# Windows-Skripte brauchen CRLF
+*.cmd text eol=crlf
+*.bat text eol=crlf

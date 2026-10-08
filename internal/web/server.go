@@ -1,10 +1,12 @@
-// Package web stellt die HTTP-API bereit (ab Phase 9 auch die Oberfläche).
+// Package web stellt die Oberfläche (eingebettet) und die HTTP-API bereit.
 // Pfade, JSON-Felder und Statuscodes entsprechen dem bisherigen Python-Backend,
 // damit das React-Frontend bis zur neuen Oberfläche unverändert weiterläuft.
 package web
 
 import (
+	"embed"
 	"encoding/json"
+	"io/fs"
 	"log/slog"
 	"net/http"
 
@@ -15,6 +17,9 @@ import (
 	"iperf3-tracker/internal/trace"
 	"iperf3-tracker/internal/version"
 )
+
+//go:embed static
+var static embed.FS
 
 // Deps sind die Abhängigkeiten des HTTP-Servers.
 type Deps struct {
@@ -56,8 +61,9 @@ func NewServer(d Deps) *Server {
 func (s *Server) Handler() http.Handler { return withCORS(s.mux) }
 
 func (s *Server) routes() {
-	// Bis zur neuen Oberfläche (Phase 9) liefert "/" wie bisher nur Metadaten.
-	s.mux.HandleFunc("GET /{$}", s.handleInfo)
+	// Oberfläche: index.html unter "/", Skripte und Styles unter /static/.
+	s.mux.HandleFunc("GET /{$}", handleIndex)
+	s.mux.Handle("GET /static/", noCache(http.FileServerFS(static)))
 	s.mux.HandleFunc("GET /api/info", s.handleInfo)
 	s.mux.HandleFunc("GET /health", s.handleHealth)
 
@@ -176,4 +182,24 @@ func decodeJSON(w http.ResponseWriter, r *http.Request, dst any) bool {
 		return false
 	}
 	return true
+}
+
+func handleIndex(w http.ResponseWriter, r *http.Request) {
+	data, err := fs.ReadFile(static, "static/index.html")
+	if err != nil {
+		writeInternal(w, r, err)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Write(data)
+}
+
+// noCache lässt den Browser eingebettete Dateien bei jedem Laden prüfen, damit
+// nach einem neuen Build sofort die aktuelle Oberfläche erscheint.
+func noCache(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-cache")
+		next.ServeHTTP(w, r)
+	})
 }
