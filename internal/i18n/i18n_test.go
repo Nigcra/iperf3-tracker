@@ -20,6 +20,8 @@ func TestTranslate(t *testing.T) {
 			"iperf3 cannot be installed automatically here: iperf3 not installed"},
 		{"tracert konnte nicht gestartet werden: exec: not found", "tracert could not be started: exec: not found"},
 		{"Zeitüberschreitung nach 1m30s", "Timed out after 1m30s"},
+		{"Passwort muss mindestens 10 Zeichen lang sein", "Password must be at least 10 characters long"},
+		{"Zu viele Fehlversuche – bitte später erneut versuchen", "Too many failed attempts – please try again later"},
 		{"Öffentlicher iperf3-Server von AT&T in Virginia", "Public iperf3 server by AT&T in Virginia"},
 		// Meldungen von iperf3 selbst bleiben unverändert.
 		{"unable to connect to server: Connection refused", "unable to connect to server: Connection refused"},

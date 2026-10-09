@@ -95,6 +95,7 @@ former names without prefix still work but log a deprecation warning.
 | `web.listen` | `IPERF3_WEB_LISTEN` | `LISTEN_ADDR` | `127.0.0.1:8000` if unset; the generated `config.yaml` and the Docker image set `0.0.0.0:8000` |
 | `storage.path` | `IPERF3_STORAGE_PATH` | `DB_PATH` | `data/iperf3-tracker.db` |
 | `auth.secret_key` | `IPERF3_AUTH_SECRET_KEY` | `SECRET_KEY` | randomly generated on first start |
+| `auth.session_ttl` | `IPERF3_AUTH_SESSION_TTL` | – | `12h` (session lifetime without activity, sliding; at least `1m`) |
 | `scheduler.enabled` | `IPERF3_SCHEDULER_ENABLED` | `SCHEDULER_ENABLED` | `true` |
 | `iperf.path` | `IPERF3_IPERF_PATH` | `IPERF3_PATH` | auto-detected (PATH, winget location) |
 | `iperf.auto_install` | `IPERF3_IPERF_AUTO_INSTALL` | `IPERF3_AUTO_INSTALL` | `false` (the web interface asks first) |
@@ -130,11 +131,28 @@ Content-Security-Policy (`img-src`).
   change it at the next sign-in.
 - Passwords are hashed with Argon2id. Older bcrypt hashes are still accepted
   and transparently re-hashed at the next successful sign-in.
+- New passwords need at least 10 characters (existing shorter ones keep
+  working until they are changed).
+- After 10 failed attempts (wrong password at sign-in or wrong current
+  password when changing it) within 5 minutes, the client address gets
+  `429 Too Many Requests` until the oldest attempt is 5 minutes old. Only the
+  TCP peer address counts (`X-Forwarded-For` is ignored), so behind a reverse
+  proxy all clients share one limit.
+- Sessions expire after `auth.session_ttl` (default 12 h) without activity;
+  with activity the session cookie is renewed once more than half of it has
+  passed. Signing out (`POST /api/auth/logout`) revokes the token, also when
+  sent as Bearer token. Changing the password ends all other sessions of the
+  user; `POST /api/auth/logout-all` ends all of them. Revoked single sessions
+  are kept in memory only – after a restart a signed-out, not yet expired
+  token would be accepted again (password change and logout-all survive
+  restarts).
 - The web interface keeps the session in an HttpOnly cookie (`SameSite=Lax`,
   `Secure` and `__Host-` prefix behind HTTPS / `X-Forwarded-Proto: https`).
   Changing requests need the CSRF token (header `X-CSRF-Token`); cross-site
   requests are rejected. API clients can still use
-  `Authorization: Bearer <access_token>` from the login response.
+  `Authorization: Bearer <access_token>` from the login response. Bearer
+  tokens are not renewed; after a password change use the new `access_token`
+  from the response.
 
 ## Command line and service
 

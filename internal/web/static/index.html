@@ -34,6 +34,7 @@
       <div class="field"><label for="loginUser" data-i18n="login.user">Benutzername</label><input id="loginUser" autocomplete="username" required autofocus></div>
       <div class="field"><label for="loginPass" data-i18n="login.pass">Passwort</label><input id="loginPass" type="password" autocomplete="current-password" required></div>
       <button class="btn" id="loginBtn" type="submit" data-i18n="login.submit">Anmelden</button>
+      <p class="login-foot" id="firstHint" data-i18n="login.firstHint" hidden>Beim ersten Start wurde ein Passwort für „admin“ erzeugt und einmalig im Log angezeigt (im Dienstbetrieb zusätzlich in initial-admin-password.txt neben config.yaml).</p>
     </form>
 
     <!-- Erzwungener Passwortwechsel (erstes Login mit Startpasswort) -->
@@ -42,7 +43,7 @@
       <div class="form-error" id="forceError" role="alert" hidden></div>
       <input id="forceUser" autocomplete="username" hidden>
       <div class="field" id="forceCurrentField"><label for="forceCurrent" data-i18n="pw.current">Aktuelles Passwort</label><input id="forceCurrent" type="password" autocomplete="current-password"></div>
-      <div class="field"><label for="forceNew" data-i18n="pw.new">Neues Passwort (mind. 6 Zeichen)</label><input id="forceNew" type="password" autocomplete="new-password"></div>
+      <div class="field"><label for="forceNew" data-i18n="pw.new">Neues Passwort (mind. 10 Zeichen)</label><input id="forceNew" type="password" autocomplete="new-password" minlength="10"></div>
       <div class="field"><label for="forceRepeat" data-i18n="pw.repeat">Neues Passwort wiederholen</label><input id="forceRepeat" type="password" autocomplete="new-password"></div>
       <button class="btn" id="forceSave" type="submit" data-i18n="force.submit">Passwort speichern</button>
       <button class="btn btn-secondary" type="button" data-click="logout" data-i18n="user.logout">Abmelden</button>
@@ -376,7 +377,7 @@
       <div class="form-error" id="userFormError" hidden></div>
       <div class="field"><label for="ufName" data-i18n="admin.ufName">Benutzername *</label><input id="ufName" maxlength="50" autocomplete="off"></div>
       <div class="field"><label for="ufMail" data-i18n="admin.ufMail">E-Mail *</label><input id="ufMail" type="email" maxlength="100" autocomplete="off"></div>
-      <div class="field"><label for="ufPass" data-i18n="admin.ufPass">Passwort * (mind. 6 Zeichen)</label><input id="ufPass" type="password" autocomplete="new-password"></div>
+      <div class="field"><label for="ufPass" data-i18n="admin.ufPass">Passwort * (mind. 10 Zeichen)</label><input id="ufPass" type="password" autocomplete="new-password" minlength="10"></div>
       <label class="check-row"><input type="checkbox" id="ufAdmin"> <span data-i18n="admin.ufAdmin">Administrator (darf Benutzer verwalten und Daten bereinigen)</span></label>
     </div>
     <div class="modal-foot">
@@ -396,7 +397,7 @@
     <div class="modal-body">
       <div class="form-error" id="passwordError" hidden></div>
       <div class="field"><label for="pwCurrent" data-i18n="pw.current">Aktuelles Passwort</label><input id="pwCurrent" type="password" autocomplete="current-password"></div>
-      <div class="field"><label for="pwNew" data-i18n="pw.new">Neues Passwort (mind. 6 Zeichen)</label><input id="pwNew" type="password" autocomplete="new-password"></div>
+      <div class="field"><label for="pwNew" data-i18n="pw.new">Neues Passwort (mind. 10 Zeichen)</label><input id="pwNew" type="password" autocomplete="new-password" minlength="10"></div>
       <div class="field"><label for="pwRepeat" data-i18n="pw.repeat">Neues Passwort wiederholen</label><input id="pwRepeat" type="password" autocomplete="new-password"></div>
     </div>
     <div class="modal-foot">

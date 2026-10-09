@@ -69,7 +69,7 @@ func (s *Server) handleLiveTrace(w http.ResponseWriter, r *http.Request) {
 		stream.send(map[string]string{"type": "error", "message": i18n.Translate(msg, lang)})
 	}
 
-	if _, err := s.userForRequest(r, false); err != nil {
+	if _, _, err := s.userForRequest(r, false); err != nil {
 		if !errors.Is(err, errUnauthorized) && !errors.Is(err, errInactive) && !errors.Is(err, errMustChangePass) {
 			slog.Error("Live-Trace: Anmeldung nicht prüfbar", "error", err)
 			err = errors.New("Interner Serverfehler")

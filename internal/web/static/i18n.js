@@ -24,6 +24,8 @@ const STRINGS = {
   'login.failed':         ['Benutzername oder Passwort falsch.', 'Wrong username or password.'],
   'login.expired':        ['Sitzung abgelaufen – bitte erneut anmelden.', 'Session expired – please sign in again.'],
   'login.unreachable':    ['Dienst nicht erreichbar: {msg}', 'Service unreachable: {msg}'],
+  'login.firstHint':      ['Beim ersten Start wurde ein Passwort für „admin“ erzeugt und einmalig im Log angezeigt (im Dienstbetrieb zusätzlich in initial-admin-password.txt neben config.yaml).',
+                           'On first start a password for “admin” was generated and shown once in the log (when running as a service, also written to initial-admin-password.txt next to config.yaml).'],
   'force.note':           ['Bitte jetzt ein eigenes Passwort festlegen. Das Startpasswort gilt nur für die erste Anmeldung.',
                            'Please set your own password now. The initial password is only valid for the first sign-in.'],
   'force.submit':         ['Passwort speichern', 'Save password'],
@@ -262,10 +264,11 @@ const STRINGS = {
 
   // Passwort
   'pw.current':           ['Aktuelles Passwort', 'Current password'],
-  'pw.new':               ['Neues Passwort (mind. 6 Zeichen)', 'New password (at least 6 characters)'],
+  'pw.new':               ['Neues Passwort (mind. 10 Zeichen)', 'New password (at least 10 characters)'],
   'pw.repeat':            ['Neues Passwort wiederholen', 'Repeat new password'],
   'pw.change':            ['Ändern', 'Change'],
   'pw.mismatch':          ['Die neuen Passwörter stimmen nicht überein.', 'The new passwords do not match.'],
+  'pw.tooShort':          ['Das Passwort muss mindestens {n} Zeichen lang sein.', 'The password must be at least {n} characters long.'],
   'pw.changed':           ['Passwort geändert', 'Password changed'],
 
   // Administration
@@ -299,7 +302,7 @@ const STRINGS = {
   'admin.createUser':     ['Benutzer anlegen', 'Create user'],
   'admin.ufName':         ['Benutzername *', 'Username *'],
   'admin.ufMail':         ['E-Mail *', 'Email *'],
-  'admin.ufPass':         ['Passwort * (mind. 6 Zeichen)', 'Password * (at least 6 characters)'],
+  'admin.ufPass':         ['Passwort * (mind. 10 Zeichen)', 'Password * (at least 10 characters)'],
   'admin.ufAdmin':        ['Administrator (darf Benutzer verwalten und Daten bereinigen)', 'Administrator (may manage users and clean up data)'],
   'admin.create':         ['Anlegen', 'Create'],
   'admin.userCreated':    ['Benutzer „{name}“ angelegt', 'User “{name}” created'],

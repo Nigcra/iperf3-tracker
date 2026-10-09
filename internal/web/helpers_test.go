@@ -17,6 +17,9 @@ import (
 	"iperf3-tracker/internal/trace"
 )
 
+// testSecret ist der Signaturschlüssel der Test-Server.
+const testSecret = "test-secret"
+
 // newTestServer startet die API auf einer frischen Datenbank mit Standard-Admin.
 func newTestServer(t *testing.T) *httptest.Server {
 	t.Helper()
@@ -53,7 +56,7 @@ func newTestServerWithTracer(t *testing.T, tracer *trace.Tracer) *httptest.Serve
 	// Scheduler wird nicht gestartet (wie bei scheduler.enabled: false).
 	srv := httptest.NewServer(NewServer(Deps{
 		Store:     st,
-		Tokens:    auth.NewTokens("test-secret"),
+		Tokens:    auth.NewTokens(testSecret, 0),
 		Runner:    runner,
 		Tracer:    tracer,
 		Scheduler: scheduler.New(st, runner, tracer),

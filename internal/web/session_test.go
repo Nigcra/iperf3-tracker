@@ -7,11 +7,13 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
+	"net/url"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
 
 	"iperf3-tracker/internal/auth"
@@ -104,12 +106,137 @@ func TestCookieSessionAndCSRF(t *testing.T) {
 		t.Errorf("Login von fremder Origin: %d", code)
 	}
 
-	// Abmelden löscht das Cookie.
+	// Abmelden löscht das Cookie und sperrt das Token: Auch ein zuvor
+	// kopiertes Cookie gilt danach nicht mehr.
+	stolen := b.cookie()
 	if code, _ := b.do("POST", "/api/auth/logout", "", nil, nil); code != http.StatusNoContent {
 		t.Errorf("logout: %d", code)
 	}
 	if code, _ := b.do("GET", "/api/auth/me", "", nil, nil); code != http.StatusUnauthorized {
 		t.Errorf("nach logout: %d", code)
+	}
+	if code, _ := cookieRequest(t, srv, "GET", "/api/auth/me", stolen); code != http.StatusUnauthorized {
+		t.Errorf("kopiertes Cookie nach logout: %d", code)
+	}
+}
+
+// cookie liefert den Wert des Sitzungs-Cookies im Cookie-Speicher.
+func (b *browser) cookie() string {
+	b.t.Helper()
+	u, _ := url.Parse(b.srv.URL)
+	for _, c := range b.c.Jar.Cookies(u) {
+		if c.Name == sessionCookie {
+			return c.Value
+		}
+	}
+	b.t.Fatal("kein Sitzungs-Cookie")
+	return ""
+}
+
+// cookieRequest schickt eine Anfrage mit dem Sitzungs-Cookie token (ohne
+// Cookie-Speicher) und liefert Status und Antwort-Header.
+func cookieRequest(t *testing.T, srv *httptest.Server, method, path, token string) (int, http.Header) {
+	t.Helper()
+	req, _ := http.NewRequest(method, srv.URL+path, nil)
+	req.AddCookie(&http.Cookie{Name: sessionCookie, Value: token})
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	return resp.StatusCode, resp.Header
+}
+
+// signToken erstellt ein Sitzungs-Token wie der Server, aber mit frei
+// wählbaren Zeitpunkten (für Verlängerung und Ablauf).
+func signToken(t *testing.T, user, sessionID string, iat, exp time.Time) string {
+	t.Helper()
+	tok, err := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"sub": user, "ver": 0, "jti": sessionID, "iat": iat.Unix(), "exp": exp.Unix(),
+	}).SignedString([]byte(testSecret))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return tok
+}
+
+// TestSlidingSession: Ist mehr als die Hälfte der Laufzeit verstrichen, stellt
+// der Server bei Aktivität ein neues Cookie mit voller Laufzeit aus – mit
+// derselben Sitzung, also gleichem CSRF-Token. Frische Cookies und
+// Bearer-Tokens werden nicht verlängert, abgelaufene abgewiesen.
+func TestSlidingSession(t *testing.T) {
+	srv := newTestServer(t)
+	ttl := auth.DefaultSessionTTL
+	now := time.Now()
+	old := signToken(t, "admin", "sitzung-alt", now.Add(-ttl/2-time.Minute), now.Add(ttl/2-time.Minute))
+
+	code, hdr := cookieRequest(t, srv, "GET", "/api/auth/me", old)
+	if code != http.StatusOK {
+		t.Fatalf("/me mit älterem Cookie: %d", code)
+	}
+	var renewed *http.Cookie
+	for _, c := range (&http.Response{Header: hdr}).Cookies() {
+		if c.Name == sessionCookie {
+			renewed = c
+		}
+	}
+	if renewed == nil || renewed.Value == old || renewed.MaxAge != int(ttl/time.Second) || !renewed.HttpOnly {
+		t.Fatalf("keine Verlängerung: %v", hdr.Values("Set-Cookie"))
+	}
+	claims, err := auth.NewTokens(testSecret, 0).Parse(renewed.Value)
+	if err != nil || claims.SessionID != "sitzung-alt" || claims.ExpiresAt.Before(now.Add(ttl-time.Minute)) {
+		t.Fatalf("verlängertes Token: %+v %v", claims, err)
+	}
+	csrf := auth.NewTokens(testSecret, 0).CSRF("sitzung-alt")
+	if hdr.Get(csrfHeader) != csrf {
+		t.Errorf("CSRF-Token nach Verlängerung geändert: %q", hdr.Get(csrfHeader))
+	}
+	// Das verlängerte Cookie funktioniert; da es frisch ist, wird es nicht erneut verlängert.
+	if code, hdr := cookieRequest(t, srv, "GET", "/api/auth/me", renewed.Value); code != http.StatusOK || hdr.Get("Set-Cookie") != "" {
+		t.Errorf("frisches Cookie: %d, Set-Cookie %q", code, hdr.Get("Set-Cookie"))
+	}
+	// Bearer-Tokens behalten ihre feste Laufzeit.
+	req, _ := http.NewRequest("GET", srv.URL+"/api/auth/me", nil)
+	req.Header.Set("Authorization", "Bearer "+old)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK || resp.Header.Get("Set-Cookie") != "" {
+		t.Errorf("Bearer: %d, Set-Cookie %q", resp.StatusCode, resp.Header.Get("Set-Cookie"))
+	}
+	// Ohne Aktivität innerhalb der Laufzeit ist die Sitzung beendet.
+	expired := signToken(t, "admin", "sitzung-abgelaufen", now.Add(-ttl-time.Minute), now.Add(-time.Minute))
+	if code, _ := cookieRequest(t, srv, "GET", "/api/auth/me", expired); code != http.StatusUnauthorized {
+		t.Errorf("abgelaufenes Cookie: %d", code)
+	}
+	// Tokens früherer Versionen ohne Sitzungskennung gelten nicht mehr.
+	if code, _ := cookieRequest(t, srv, "GET", "/api/auth/me", signToken(t, "admin", "", now, now.Add(time.Hour))); code != http.StatusUnauthorized {
+		t.Errorf("Token ohne jti: %d", code)
+	}
+}
+
+// TestCookiePasswordChangeKeepsSession: Im Browser läuft die Sitzung nach dem
+// Passwortwechsel mit neuem Cookie und unverändertem CSRF-Token weiter; ein
+// zuvor kopiertes Cookie ist beendet.
+func TestCookiePasswordChangeKeepsSession(t *testing.T) {
+	srv := newTestServer(t)
+	b := newBrowser(t, srv)
+	b.login("admin", "admin123")
+	before := b.cookie()
+	code, _ := b.do("POST", "/api/auth/change-password", `{"current_password":"admin123","new_password":"neuesPasswort"}`, map[string]string{csrfHeader: b.csrf}, nil)
+	if code != http.StatusOK {
+		t.Fatalf("change-password: %d", code)
+	}
+	if b.cookie() == before {
+		t.Fatal("Cookie nicht erneuert")
+	}
+	if code, _ := b.do("POST", "/api/servers", `{"name":"S1","host":"h1"}`, map[string]string{csrfHeader: b.csrf}, nil); code != http.StatusCreated && code != http.StatusOK {
+		t.Errorf("nach Passwortwechsel mit bisherigem CSRF-Token: %d", code)
+	}
+	if code, _ := cookieRequest(t, srv, "GET", "/api/auth/me", before); code != http.StatusUnauthorized {
+		t.Errorf("altes Cookie nach Passwortwechsel: %d", code)
 	}
 }
 
@@ -156,7 +283,7 @@ func newServerWithStore(t *testing.T) (*httptest.Server, *store.Store) {
 	t.Cleanup(runner.Stop)
 	tracer := trace.NewTracer(nil, filepath.Join(t.TempDir(), "kein-traceroute"))
 	srv := httptest.NewServer(NewServer(Deps{
-		Store: st, Tokens: auth.NewTokens("test-secret"), Runner: runner, Tracer: tracer,
+		Store: st, Tokens: auth.NewTokens(testSecret, 0), Runner: runner, Tracer: tracer,
 		Scheduler: scheduler.New(st, runner, tracer),
 	}).Handler())
 	t.Cleanup(srv.Close)
@@ -186,20 +313,13 @@ func TestFirstAdminMustChangePassword(t *testing.T) {
 	// Alles außer /me und Passwortwechsel ist gesperrt.
 	expectStatus(t, srv, "GET", "/api/servers", tok, "", http.StatusForbidden)
 	expectStatus(t, srv, "POST", "/api/auth/change-password", tok, `{"current_password":"`+password+`","new_password":"`+password+`"}`, http.StatusUnprocessableEntity)
-	expectStatus(t, srv, "POST", "/api/auth/change-password", tok, `{"current_password":"`+password+`","new_password":"neuesPasswort"}`, http.StatusOK)
-	expectStatus(t, srv, "GET", "/api/servers", tok, "", http.StatusOK)
-	expectStatus(t, srv, "POST", "/api/auth/init-admin", "", "", http.StatusBadRequest)
-}
-
-func TestInitAdminDoesNotRevealPassword(t *testing.T) {
-	srv, _ := newServerWithStore(t)
-	var out map[string]any
-	if code := call(t, srv, "POST", "/api/auth/init-admin", "", "", &out); code != http.StatusOK {
-		t.Fatalf("init-admin: %d %v", code, out)
+	var changed map[string]any
+	if code := call(t, srv, "POST", "/api/auth/change-password", tok, `{"current_password":"`+password+`","new_password":"neuesPasswort"}`, &changed); code != http.StatusOK {
+		t.Fatalf("change-password: %d %v", code, changed)
 	}
-	if _, ok := out["password"]; ok {
-		t.Errorf("Passwort in der Antwort: %v", out)
-	}
+	// Das Token mit dem Startpasswort ist beendet, die Sitzung läuft mit dem neuen weiter.
+	expectStatus(t, srv, "GET", "/api/servers", tok, "", http.StatusUnauthorized)
+	expectStatus(t, srv, "GET", "/api/servers", changed["access_token"].(string), "", http.StatusOK)
 }
 
 func TestLegacyBcryptRehashAndDefaultPassword(t *testing.T) {
@@ -220,6 +340,77 @@ func TestLegacyBcryptRehashAndDefaultPassword(t *testing.T) {
 	expectStatus(t, srv, "GET", "/api/tests", tok, "", http.StatusForbidden)
 	// Umgehashtes Passwort funktioniert weiter.
 	login(t, srv, "admin", "admin123")
+}
+
+// TestAuthStatusInitialPending: /api/auth/status ist ohne Anmeldung erreichbar
+// und meldet initial_pending nur, solange der Admin das beim ersten Start
+// erzeugte Passwort noch nicht geändert hat – danach nie wieder.
+func TestAuthStatusInitialPending(t *testing.T) {
+	status := func(srv *httptest.Server) map[string]any {
+		t.Helper()
+		var out map[string]any
+		if code := call(t, srv, "GET", "/api/auth/status", "", "", &out); code != http.StatusOK {
+			t.Fatalf("/api/auth/status: Status %d, %v", code, out)
+		}
+		if out["auth_enabled"] != true || len(out) != 2 {
+			t.Fatalf("/api/auth/status: %v", out)
+		}
+		return out
+	}
+	ctx := context.Background()
+
+	srv, st := newServerWithStore(t)
+	if got := status(srv)["initial_pending"]; got != false {
+		t.Errorf("ohne Benutzer: initial_pending = %v", got)
+	}
+	var password string
+	InitialPasswordHook = func(_, p string) { password = p }
+	t.Cleanup(func() { InitialPasswordHook = nil })
+	if created, err := EnsureAdmin(ctx, st); err != nil || !created {
+		t.Fatalf("EnsureAdmin: %v %v", created, err)
+	}
+	if got := status(srv)["initial_pending"]; got != true {
+		t.Errorf("nach dem ersten Start: initial_pending = %v", got)
+	}
+	// Anmelden allein ändert nichts, erst der Passwortwechsel.
+	tok := login(t, srv, "admin", password)
+	if got := status(srv)["initial_pending"]; got != true {
+		t.Errorf("nach der Anmeldung: initial_pending = %v", got)
+	}
+	expectStatus(t, srv, "POST", "/api/auth/change-password", tok, `{"current_password":"`+password+`","new_password":"neuesPasswort"}`, http.StatusOK)
+	if got := status(srv)["initial_pending"]; got != false {
+		t.Errorf("nach dem Passwortwechsel: initial_pending = %v", got)
+	}
+	// Auch nach einem Neustart (FlagLegacyDefaultPassword) bleibt der Hinweis aus.
+	if err := FlagLegacyDefaultPassword(ctx, st); err != nil {
+		t.Fatal(err)
+	}
+	if got := status(srv)["initial_pending"]; got != false {
+		t.Errorf("nach Neustart: initial_pending = %v", got)
+	}
+
+	// Früheres Standardpasswort: Wechsel erzwungen, aber kein erzeugtes Passwort.
+	legacySrv, legacySt := newServerWithStore(t)
+	h, _ := bcrypt.GenerateFromPassword([]byte(auth.LegacyDefaultPassword), bcrypt.MinCost)
+	if err := legacySt.CreateUser(ctx, &model.User{Username: "admin", Email: "a@x", HashedPassword: string(h), IsActive: true, IsAdmin: true}); err != nil {
+		t.Fatal(err)
+	}
+	if err := FlagLegacyDefaultPassword(ctx, legacySt); err != nil {
+		t.Fatal(err)
+	}
+	if got := status(legacySrv)["initial_pending"]; got != false {
+		t.Errorf("früheres Standardpasswort: initial_pending = %v", got)
+	}
+	// Nach dem Umhashen auf Argon2id bleibt es dabei.
+	login(t, legacySrv, "admin", auth.LegacyDefaultPassword)
+	if got := status(legacySrv)["initial_pending"]; got != false {
+		t.Errorf("früheres Standardpasswort nach Umhashen: initial_pending = %v", got)
+	}
+
+	// Vorhandener Admin ohne Wechselzwang.
+	if got := status(newTestServer(t))["initial_pending"]; got != false {
+		t.Errorf("bestehender Admin: initial_pending = %v", got)
+	}
 }
 
 func TestLiveTestsStream(t *testing.T) {

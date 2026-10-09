@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -54,9 +55,20 @@ type StorageConfig struct {
 type AuthConfig struct {
 	// SecretKey signiert die Sitzungen (JWT, HS256) und leitet die CSRF-Tokens ab.
 	SecretKey string `yaml:"secret_key"`
+	// SessionTTL ist die Gültigkeit einer Sitzung ohne Aktivität (z. B. 12h).
+	// Bei Aktivität verlängert sie sich gleitend.
+	SessionTTL string `yaml:"session_ttl"`
 	// SecretGenerated ist true, wenn kein Schlüssel konfiguriert war und für
 	// diese Laufzeit ein zufälliger erzeugt wurde.
 	SecretGenerated bool `yaml:"-"`
+}
+
+// SessionDuration liefert die Sitzungsdauer (leer = 12h).
+func (a AuthConfig) SessionDuration() (time.Duration, error) {
+	if a.SessionTTL == "" {
+		return 12 * time.Hour, nil
+	}
+	return time.ParseDuration(a.SessionTTL)
 }
 
 // SchedulerConfig steuert die zeitgesteuerten Tests.
@@ -147,6 +159,8 @@ auth:
   # Key used to sign login sessions. Generated randomly on first start;
   # changing it invalidates all existing logins.
   secret_key: "%s"
+  # Session lifetime without activity; activity extends it (sliding).
+  session_ttl: "12h"
 
 scheduler:
   enabled: true
@@ -230,6 +244,7 @@ func defaults() *Config {
 	return &Config{
 		Web:       WebConfig{Listen: DefaultListen},
 		Storage:   StorageConfig{Path: "data/iperf3-tracker.db"},
+		Auth:      AuthConfig{SessionTTL: "12h"},
 		GeoIP:     GeoIPConfig{Path: "geoip/GeoLite2-City.mmdb"},
 		Scheduler: SchedulerConfig{Enabled: true},
 		Log:       LogConfig{Level: "info", Format: "text"},
@@ -243,6 +258,9 @@ func (c *Config) validate() error {
 	var lvl slog.Level
 	if err := lvl.UnmarshalText([]byte(c.Log.Level)); err != nil {
 		return fmt.Errorf("log.level ist ungültig: %q", c.Log.Level)
+	}
+	if d, err := c.Auth.SessionDuration(); err != nil || d < time.Minute {
+		return fmt.Errorf("auth.session_ttl muss eine Dauer von mindestens 1m sein (z. B. 12h): %q", c.Auth.SessionTTL)
 	}
 	switch c.Log.Format {
 	case "", "text", "json":

@@ -5,9 +5,9 @@
 #
 # Every key can be overridden with an environment variable
 # IPERF3_<SECTION>_<KEY>, e.g. IPERF3_WEB_LISTEN, IPERF3_STORAGE_PATH,
-# IPERF3_AUTH_SECRET_KEY, IPERF3_SCHEDULER_ENABLED, IPERF3_IPERF_PATH,
-# IPERF3_IPERF_AUTO_INSTALL, IPERF3_GEOIP_PATH, IPERF3_MAP_TILE_URL,
-# IPERF3_LOG_LEVEL, IPERF3_LOG_FORMAT.
+# IPERF3_AUTH_SECRET_KEY, IPERF3_AUTH_SESSION_TTL, IPERF3_SCHEDULER_ENABLED,
+# IPERF3_IPERF_PATH, IPERF3_IPERF_AUTO_INSTALL, IPERF3_GEOIP_PATH,
+# IPERF3_MAP_TILE_URL, IPERF3_LOG_LEVEL, IPERF3_LOG_FORMAT.
 # Deprecated aliases (still accepted, logged as warning): LISTEN_ADDR, DB_PATH,
 # SECRET_KEY, SCHEDULER_ENABLED, IPERF3_PATH, IPERF3_AUTO_INSTALL, GEOIP_PATH,
 # LOG_LEVEL.
@@ -25,6 +25,10 @@ auth:
   # Key used to sign login sessions. Empty = random on every start
   # (logins then become invalid after a restart).
   secret_key: ""
+  # Session lifetime without activity (Go duration, at least 1m). Activity
+  # extends it: once more than half has passed, the session cookie is
+  # renewed. Bearer tokens (API clients) keep their fixed lifetime.
+  session_ttl: "12h"
 
 scheduler:
   enabled: true

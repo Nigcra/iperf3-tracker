@@ -115,6 +115,16 @@ const apiGet = path => api('GET', path);
 // ---------- Sitzung ----------
 let currentUser = null;
 
+// Mindestlänge neuer Passwörter in Zeichen (wie auth.MinPasswordLength auf
+// dem Server). Bestehende kürzere Passwörter bleiben für die Anmeldung gültig.
+const MIN_PASSWORD_LENGTH = 10;
+
+// passwordError prüft ein neues Passwort und liefert die Fehlermeldung oder ''.
+// Gezählt werden Zeichen (Codepoints), nicht UTF-16-Einheiten.
+function passwordError(pw) {
+  return [...pw].length < MIN_PASSWORD_LENGTH ? t('pw.tooShort', { n: MIN_PASSWORD_LENGTH }) : '';
+}
+
 function showLogin(message) {
   currentUser = null;
   stopStatusPolling();
@@ -129,6 +139,19 @@ function showLogin(message) {
   err.textContent = message || '';
   err.hidden = !message;
   document.getElementById('loginUser').focus();
+  updateFirstHint();
+}
+
+// updateFirstHint zeigt den Hinweis auf das beim ersten Start erzeugte
+// Passwort nur, solange der Admin es noch nicht geändert hat
+// (GET /api/auth/status, ohne Anmeldung). Im Zweifel bleibt er verborgen.
+async function updateFirstHint() {
+  const el = document.getElementById('firstHint');
+  el.hidden = true;
+  try {
+    const r = await fetch('/api/auth/status', { credentials: 'same-origin' });
+    if (r.ok) el.hidden = !(await r.json()).initial_pending;
+  } catch (e) {}
 }
 
 function showApp(user) {
@@ -207,6 +230,8 @@ const forcePassword = {
     ev.preventDefault();
     const current = this.current || document.getElementById('forceCurrent').value;
     const next = document.getElementById('forceNew').value;
+    const short = passwordError(next);
+    if (short) { this.error(short); return; }
     if (next !== document.getElementById('forceRepeat').value) { this.error(t('pw.mismatch')); return; }
     const btn = document.getElementById('forceSave');
     btn.disabled = true;
@@ -1827,6 +1852,8 @@ const passwordDialog = {
     ev.preventDefault();
     const current = this.el('pwCurrent').value;
     const next = this.el('pwNew').value;
+    const short = passwordError(next);
+    if (short) { this.error(short); return; }
     if (next !== this.el('pwRepeat').value) { this.error(t('pw.mismatch')); return; }
     const btn = this.el('passwordSave');
     btn.disabled = true;
@@ -1928,6 +1955,8 @@ const adminPage = {
       password: document.getElementById('ufPass').value,
       is_admin: document.getElementById('ufAdmin').checked,
     };
+    const short = passwordError(body.password);
+    if (short) { this.userError(short); return; }
     const btn = document.getElementById('userFormSave');
     btn.disabled = true;
     try {

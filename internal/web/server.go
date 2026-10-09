@@ -58,6 +58,13 @@ type Server struct {
 	handler   http.Handler
 
 	testTraces testTraces
+	// legacyAdmin erkennt das frühere Standardpasswort für /api/auth/status.
+	legacyAdmin legacyPasswordCache
+	// limiter bremst Fehlanmeldungen (Login und falsches aktuelles Passwort
+	// beim Passwortwechsel) je Client-Adresse.
+	limiter *auth.Limiter
+	// revoked enthält die abgemeldeten Sitzungen bis zu ihrem Ablauf.
+	revoked *auth.Revocations
 }
 
 // NewServer erstellt den HTTP-Server.
@@ -71,6 +78,8 @@ func NewServer(d Deps) *Server {
 		mapCfg:     d.Map,
 		mux:        http.NewServeMux(),
 		testTraces: testTraces{running: map[int64]bool{}},
+		limiter:    auth.NewLimiter(auth.LoginMaxFailures, auth.LoginWindow),
+		revoked:    auth.NewRevocations(),
 	}
 	s.routes()
 	imgSrc := ""
@@ -96,7 +105,8 @@ func (s *Server) routes() {
 
 	s.mux.HandleFunc("POST /api/auth/login", s.handleLogin)
 	s.mux.HandleFunc("POST /api/auth/logout", s.handleLogout)
-	s.mux.HandleFunc("POST /api/auth/init-admin", s.handleInitAdmin)
+	s.mux.Handle("POST /api/auth/logout-all", s.requireUserPending(s.handleLogoutAll))
+	s.mux.HandleFunc("GET /api/auth/status", s.handleAuthStatus)
 	s.mux.Handle("GET /api/auth/me", s.requireUserPending(s.handleMe))
 	s.mux.Handle("POST /api/auth/change-password", s.requireUserPending(s.handleChangePassword))
 	s.mux.Handle("POST /api/auth/register", s.requireAdmin(s.handleRegister))

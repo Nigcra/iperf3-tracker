@@ -178,11 +178,13 @@ func run(cfgPath string, logOut io.Writer, stop <-chan struct{}) error {
 	if cfg.Map.TileURL != "" {
 		slog.Info("Peering-Map nutzt Kachelserver", "tile_url", cfg.Map.TileURL)
 	}
+	// Gültigkeit ist bereits in config.validate geprüft.
+	sessionTTL, _ := cfg.Auth.SessionDuration()
 	srv := &http.Server{
 		Addr: cfg.Web.Listen,
 		Handler: web.NewServer(web.Deps{
 			Store:     st,
-			Tokens:    auth.NewTokens(cfg.Auth.SecretKey),
+			Tokens:    auth.NewTokens(cfg.Auth.SecretKey, sessionTTL),
 			Runner:    runner,
 			Tracer:    tracer,
 			Scheduler: sched,

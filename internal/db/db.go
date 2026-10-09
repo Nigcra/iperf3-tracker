@@ -46,6 +46,7 @@ func Open(path string) (*sql.DB, error) {
 // (CREATE TABLE IF NOT EXISTS ändert bestehende Tabellen nicht).
 var columnMigrations = []struct{ table, column, ddl string }{
 	{"users", "must_change_password", `ALTER TABLE users ADD COLUMN must_change_password BOOLEAN NOT NULL DEFAULT 0`},
+	{"users", "token_version", `ALTER TABLE users ADD COLUMN token_version INTEGER NOT NULL DEFAULT 0`},
 }
 
 func migrate(conn *sql.DB) error {

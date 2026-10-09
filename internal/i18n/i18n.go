@@ -159,7 +159,7 @@ var catalog = [][2]string{
 	{"E-Mail-Adresse ist bereits registriert", "Email address is already registered"},
 	{"Benutzername muss 3–50 Zeichen lang sein", "Username must be 3–50 characters long"},
 	{"E-Mail-Adresse muss 3–100 Zeichen lang sein", "Email address must be 3–100 characters long"},
-	{"Passwort muss mindestens 6 Zeichen lang sein", "Password must be at least 6 characters long"},
+	{"Passwort muss mindestens %d Zeichen lang sein", "Password must be at least %d characters long"},
 	{"Passwort darf höchstens 256 Byte lang sein", "Password must be at most 256 bytes long"},
 	{"Das neue Passwort muss sich vom bisherigen unterscheiden", "The new password must differ from the current one"},
 	{"Passwortwechsel erforderlich", "Password change required"},
@@ -168,10 +168,8 @@ var catalog = [][2]string{
 	{"Das eigene Konto kann nicht gelöscht werden", "You cannot delete your own account"},
 	{"Benutzer nicht gefunden", "User not found"},
 	{"Benutzer gelöscht", "User deleted"},
-	{"Es existieren bereits Benutzer. Neue Benutzer über /auth/register anlegen.", "Users already exist. Create new users via /auth/register."},
-	{"Admin angelegt – das Passwort steht im Server-Log", "Admin created – the password is in the server log"},
-	{"Das Passwort muss bei der ersten Anmeldung geändert werden", "The password must be changed at the first login"},
 	{"Aktuelles Passwort ist falsch", "Current password is wrong"},
+	{"Zu viele Fehlversuche – bitte später erneut versuchen", "Too many failed attempts – please try again later"},
 	{"Passwort geändert", "Password changed"},
 
 	// Server

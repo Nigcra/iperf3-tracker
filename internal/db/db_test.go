@@ -9,7 +9,8 @@ import (
 )
 
 // TestMigrateOldUsersTable öffnet eine Datenbank im Schema früherer Versionen
-// (ohne must_change_password) und prüft, dass die Spalte ergänzt wird.
+// (ohne must_change_password und token_version) und prüft, dass die Spalten
+// ergänzt werden.
 func TestMigrateOldUsersTable(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "alt.db")
 	old, err := sql.Open("sqlite", path)
@@ -34,6 +35,10 @@ func TestMigrateOldUsersTable(t *testing.T) {
 	var must bool
 	if err := conn.QueryRow(`SELECT must_change_password FROM users WHERE username = 'a'`).Scan(&must); err != nil || must {
 		t.Fatalf("must_change_password = %v, %v", must, err)
+	}
+	var version int64
+	if err := conn.QueryRow(`SELECT token_version FROM users WHERE username = 'a'`).Scan(&version); err != nil || version != 0 {
+		t.Fatalf("token_version = %v, %v", version, err)
 	}
 	// Ein zweites Öffnen darf die Spalte nicht erneut anlegen wollen.
 	conn.Close()

@@ -10,8 +10,8 @@ import (
 func TestAdminRoutes(t *testing.T) {
 	srv := newTestServer(t)
 	admin := login(t, srv, "admin", "admin123")
-	call(t, srv, "POST", "/api/auth/register", admin, `{"username":"bob","email":"bob@example.org","password":"geheim1"}`, nil)
-	user := login(t, srv, "bob", "geheim1")
+	call(t, srv, "POST", "/api/auth/register", admin, `{"username":"bob","email":"bob@example.org","password":"geheimPasswort1"}`, nil)
+	user := login(t, srv, "bob", "geheimPasswort1")
 
 	for _, path := range []string{"/api/admin/cleanup/tests?all=true", "/api/admin/cleanup/traces?all=true"} {
 		expectStatus(t, srv, "DELETE", path, "", "", http.StatusUnauthorized)
@@ -69,8 +69,8 @@ func TestPublicServers(t *testing.T) {
 func TestInstallIperfRoute(t *testing.T) {
 	srv := newTestServer(t)
 	admin := login(t, srv, "admin", "admin123")
-	call(t, srv, "POST", "/api/auth/register", admin, `{"username":"bob","email":"bob@example.org","password":"geheim1"}`, nil)
-	user := login(t, srv, "bob", "geheim1")
+	call(t, srv, "POST", "/api/auth/register", admin, `{"username":"bob","email":"bob@example.org","password":"geheimPasswort1"}`, nil)
+	user := login(t, srv, "bob", "geheimPasswort1")
 
 	expectStatus(t, srv, "POST", "/api/iperf3/install", "", "", http.StatusUnauthorized)
 	expectStatus(t, srv, "POST", "/api/iperf3/install", user, "", http.StatusForbidden)

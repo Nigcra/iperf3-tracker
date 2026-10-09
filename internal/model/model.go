@@ -16,6 +16,9 @@ type User struct {
 	LastLogin      *time.Time `json:"last_login"`
 	// MustChangePassword erzwingt einen Passwortwechsel vor jeder weiteren Nutzung.
 	MustChangePassword bool `json:"must_change_password"`
+	// TokenVersion steht in jedem Sitzungs-Token; ist sie dort kleiner, ist das
+	// Token ungültig (nach Passwortwechsel oder „überall abmelden“).
+	TokenVersion int64 `json:"-"`
 }
 
 // Protocol ist das Transportprotokoll eines iperf3-Tests.

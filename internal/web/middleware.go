@@ -3,6 +3,7 @@ package web
 import (
 	"context"
 	"errors"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -64,11 +65,25 @@ var (
 	errMustChangePass = errors.New("Passwortwechsel erforderlich")
 )
 
+// session ist die geprüfte Sitzung einer Anfrage.
+type session struct {
+	token      string
+	claims     auth.Claims
+	fromCookie bool
+}
+
 // authenticate prüft die Sitzung der Anfrage und lädt den zugehörigen
 // Benutzer. Schlägt das fehl, ist die Fehlerantwort bereits geschrieben und
-// ok ist false.
+// ok ist false. Eine Cookie-Sitzung, deren halbe Laufzeit verstrichen ist,
+// wird dabei verlängert (gleitende Gültigkeit); Bearer-Tokens behalten ihre
+// feste Laufzeit, der Client meldet sich danach neu an.
 func (s *Server) authenticate(w http.ResponseWriter, r *http.Request, allowPending bool) (u *model.User, ok bool) {
-	u, err := s.userForRequest(r, allowPending)
+	u, sess, err := s.userForRequest(r, allowPending)
+	if err == nil && sess.fromCookie && s.tokens.NeedsRenewal(sess.claims) {
+		if token, _, rerr := s.tokens.Renew(sess.claims); rerr == nil {
+			setSessionCookie(w, r, token, s.tokens.TTL())
+		}
+	}
 	switch {
 	case errors.Is(err, errUnauthorized):
 		w.Header().Set("WWW-Authenticate", "Bearer")
@@ -87,44 +102,60 @@ func (s *Server) authenticate(w http.ResponseWriter, r *http.Request, allowPendi
 
 // userForRequest prüft Sitzung, CSRF-Token (nur bei Cookie-Anmeldung und
 // ändernden Methoden) und den Passwortwechsel-Zwang.
-func (s *Server) userForRequest(r *http.Request, allowPending bool) (*model.User, error) {
+func (s *Server) userForRequest(r *http.Request, allowPending bool) (*model.User, session, error) {
 	token, fromCookie := sessionToken(r)
-	u, err := s.userForToken(r.Context(), token)
+	u, claims, err := s.userForToken(r.Context(), token)
 	if err != nil {
-		return nil, err
+		return nil, session{}, err
 	}
 	// Bearer-Tokens schickt der Browser nie von selbst mit, Cookies schon –
 	// daher nur dort zusätzlich das CSRF-Token prüfen.
-	if fromCookie && !safeMethod(r.Method) && !s.tokens.CheckCSRF(token, r.Header.Get(csrfHeader)) {
-		return nil, errCSRF
+	if fromCookie && !safeMethod(r.Method) && !s.tokens.CheckCSRF(claims.SessionID, r.Header.Get(csrfHeader)) {
+		return nil, session{}, errCSRF
 	}
 	if u.MustChangePassword && !allowPending {
-		return nil, errMustChangePass
+		return nil, session{}, errMustChangePass
 	}
-	return u, nil
+	return u, session{token: token, claims: claims, fromCookie: fromCookie}, nil
 }
 
 // userForToken prüft token und lädt den zugehörigen, aktiven Benutzer.
-// Fehler sind errUnauthorized, errInactive oder Datenbankfehler.
-func (s *Server) userForToken(ctx context.Context, token string) (*model.User, error) {
+// Abgemeldete Sitzungen und Tokens mit veralteter Token-Version (nach
+// Passwortwechsel oder „überall abmelden“) gelten nicht. Fehler sind
+// errUnauthorized, errInactive oder Datenbankfehler.
+func (s *Server) userForToken(ctx context.Context, token string) (*model.User, auth.Claims, error) {
 	if token == "" {
-		return nil, errUnauthorized
+		return nil, auth.Claims{}, errUnauthorized
 	}
-	username, err := s.tokens.Parse(token)
-	if err != nil {
-		return nil, errUnauthorized
+	claims, err := s.tokens.Parse(token)
+	if err != nil || s.revoked.Revoked(claims.SessionID) {
+		return nil, auth.Claims{}, errUnauthorized
 	}
-	u, err := s.store.UserByUsername(ctx, username)
+	u, err := s.store.UserByUsername(ctx, claims.Username)
 	if errors.Is(err, store.ErrNotFound) {
-		return nil, errUnauthorized
+		return nil, auth.Claims{}, errUnauthorized
 	}
 	if err != nil {
-		return nil, err
+		return nil, auth.Claims{}, err
+	}
+	if claims.Version != u.TokenVersion {
+		return nil, auth.Claims{}, errUnauthorized
 	}
 	if !u.IsActive {
-		return nil, errInactive
+		return nil, auth.Claims{}, errInactive
 	}
-	return u, nil
+	return u, claims, nil
+}
+
+// clientAddr liefert die Adresse des Clients für die Bremse bei
+// Fehlanmeldungen. Bewusst nur RemoteAddr: X-Forwarded-For ließe sich ohne
+// konfigurierten vertrauenswürdigen Proxy beliebig fälschen.
+func clientAddr(r *http.Request) string {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return host
 }
 
 // sessionToken liefert das Sitzungs-Token aus dem Authorization-Header
@@ -160,8 +191,8 @@ func isTLS(r *http.Request) bool {
 }
 
 // setSessionCookie setzt das Sitzungs-Cookie (HttpOnly, SameSite=Lax, unter
-// TLS Secure mit __Host--Präfix).
-func setSessionCookie(w http.ResponseWriter, r *http.Request, token string) {
+// TLS Secure mit __Host--Präfix). maxAge ist die Sitzungsdauer.
+func setSessionCookie(w http.ResponseWriter, r *http.Request, token string, maxAge time.Duration) {
 	secure := isTLS(r)
 	name := sessionCookie
 	if secure {
@@ -171,7 +202,7 @@ func setSessionCookie(w http.ResponseWriter, r *http.Request, token string) {
 		Name:     name,
 		Value:    token,
 		Path:     "/",
-		MaxAge:   int(auth.TokenTTL / time.Second),
+		MaxAge:   int(maxAge / time.Second),
 		HttpOnly: true,
 		Secure:   secure,
 		SameSite: http.SameSiteLaxMode,

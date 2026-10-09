@@ -266,6 +266,7 @@ td strong { color: var(--heading); }
 .login-card input { width: 100%; }
 .login-note { font-size: 0.85em; color: var(--text); margin-bottom: 14px; line-height: 1.45; padding: 10px 12px; border-radius: 10px;
               background: var(--warn-bg); border: 1px solid color-mix(in srgb, var(--warn) 35%, transparent); }
+.login-foot { margin: 18px 0 0; text-align: center; font-size: 0.76em; line-height: 1.45; color: var(--faint); }
 .form-error { color: var(--crit); font-size: 0.85em; margin-bottom: 12px; }
 
 /* ---------- Dialoge & Formulare ---------- */

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sync"
 
 	"iperf3-tracker/internal/auth"
 	"iperf3-tracker/internal/store"
@@ -67,4 +68,37 @@ func FlagLegacyDefaultPassword(ctx context.Context, st *store.Store) error {
 	}
 	slog.Warn("Admin nutzt noch das frühere Standardpasswort – Wechsel bei der nächsten Anmeldung erzwungen", "user", u.Username)
 	return nil
+}
+
+// legacyPasswordCache merkt sich, ob ein Admin-Hash das frühere
+// Standardpasswort enthält. So rechnet der öffentliche Aufruf
+// /api/auth/status Argon2id nur einmal je Hash statt bei jeder Anfrage.
+type legacyPasswordCache struct {
+	mu     sync.Mutex
+	hash   string
+	legacy bool
+}
+
+func (c *legacyPasswordCache) isLegacy(hash string) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.hash != hash {
+		c.hash, c.legacy = hash, auth.CheckPassword(hash, auth.LegacyDefaultPassword)
+	}
+	return c.legacy
+}
+
+// initialPasswordPending meldet, ob der Admin noch das beim ersten Start
+// erzeugte Passwort hat: Passwortwechsel ausstehend, aber nicht wegen des
+// früheren Standardpassworts (das wurde nie erzeugt und angezeigt). Nach dem
+// Wechsel bleibt es false, weil ChangePassword must_change_password aufhebt.
+func (s *Server) initialPasswordPending(ctx context.Context) (bool, error) {
+	u, err := s.store.UserByUsername(ctx, auth.DefaultAdminUsername)
+	if errors.Is(err, store.ErrNotFound) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return u.MustChangePassword && !s.legacyAdmin.isLegacy(u.HashedPassword), nil
 }
