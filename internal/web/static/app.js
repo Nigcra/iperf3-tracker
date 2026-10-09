@@ -2,35 +2,64 @@
 
 // ---------- Theme ----------
 
-// Grid line colour used in the charts (theme-dependent, updated by applyChartTheme).
-let GRID = 'rgba(148,163,184,0.14)';
+// cssVar liest einen Gestaltungswert (Token) des aktiven Themes, z. B. '--ok'.
+// Farben stehen nur in wedigo-tokens.css; Diagramme holen sie sich von dort.
+function cssVar(name) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
 
-// applyChartTheme aligns Chart.js text and grid colours with the active theme so
-// charts stay legible on both the dark and the light background.
+// Gitterfarbe der Diagramme (aus --chart-grid, von applyChartTheme gesetzt).
+let GRID = '';
+
+// applyChartTheme übernimmt Schrift, Achsen-, Gitter- und Legendenfarbe der
+// Diagramme aus den Tokens des aktiven Themes.
 function applyChartTheme() {
-  const light = document.documentElement.getAttribute('data-theme') === 'light';
-  GRID = light ? 'rgba(15,23,42,0.10)' : 'rgba(148,163,184,0.14)';
+  GRID = cssVar('--chart-grid');
   if (window.Chart) {
-    Chart.defaults.color = light ? '#475569' : '#94a3b8';
+    Chart.defaults.color = cssVar('--chart-tick');
     Chart.defaults.borderColor = GRID;
-    Chart.defaults.font.family = "'Segoe UI', system-ui, Arial, sans-serif";
+    Chart.defaults.font.family = cssVar('--font');
     if (Chart.defaults.plugins && Chart.defaults.plugins.legend) {
-      Chart.defaults.plugins.legend.labels.color = light ? '#334155' : '#cbd5e1';
+      Chart.defaults.plugins.legend.labels.color = cssVar('--text');
     }
   }
 }
 applyChartTheme();
 
-// toggleTheme flips the light/dark theme, persists it and lets the active page
-// re-render theme-dependent parts (charts, map tiles).
-function toggleTheme() {
+// setTheme setzt hell oder dunkel und speichert die Wahl (localStorage
+// "wedigo-theme"; ohne Wahl gilt Hell, siehe theme-init.js).
+function setTheme(mode) {
+  if (mode !== 'light' && mode !== 'dark') return;
   const el = document.documentElement;
-  const next = el.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
-  el.setAttribute('data-theme', next);
-  try { localStorage.setItem('iperf-theme', next); } catch (e) {}
+  const changed = el.getAttribute('data-theme') !== mode;
+  el.setAttribute('data-theme', mode);
+  storageSet('wedigo-theme', mode);
+  markTheme();
+  if (changed) onThemeChanged();
+}
+
+// toggleTheme wechselt zwischen hell und dunkel (Umschalter der Anmeldekarte).
+function toggleTheme() {
+  setTheme(document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+}
+
+// markTheme markiert die aktive Darstellung im Benutzermenü.
+function markTheme() {
+  const cur = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+  document.querySelectorAll('[data-theme-opt]').forEach(b => {
+    const on = b.dataset.themeOpt === cur;
+    b.classList.toggle('active', on);
+    b.setAttribute('aria-pressed', String(on));
+  });
+}
+markTheme();
+
+// onThemeChanged lässt die aktive Seite themeabhängige Teile neu zeichnen
+// (Diagramme).
+function onThemeChanged() {
   applyChartTheme();
   const page = pages[currentTab];
-  if (page && page.onTheme) page.onTheme();
+  if (currentUser && page && page.onTheme) page.onTheme();
 }
 
 // ---------- Hilfsfunktionen ----------
@@ -55,22 +84,28 @@ class ApiError extends Error {
   constructor(status, message) { super(message); this.status = status; }
 }
 
-// api ruft die JSON-API auf. Bei 401 (Sitzung abgelaufen) wird abgemeldet.
-// Accept-Language sorgt für Meldungen in der gewählten Sprache.
+// Die Sitzung steckt in einem HttpOnly-Cookie, das der Browser selbst
+// mitsendet. Ändernde Anfragen tragen zusätzlich das CSRF-Token, das der
+// Server beim Login bzw. mit /auth/me (Header X-CSRF-Token) liefert.
+let csrfToken = null;
+
+// api ruft die JSON-API auf. Bei 401 (Sitzung abgelaufen) erscheint die
+// Anmeldung. Accept-Language sorgt für Meldungen in der gewählten Sprache.
 async function api(method, path, body) {
   const headers = { 'Accept-Language': LANG };
-  const token = storageGet('iperf-token');
-  if (token) headers.Authorization = 'Bearer ' + token;
-  const opts = { method, headers };
+  if (method !== 'GET' && csrfToken) headers['X-CSRF-Token'] = csrfToken;
+  const opts = { method, headers, credentials: 'same-origin' };
   if (body !== undefined) {
     headers['Content-Type'] = 'application/json';
     opts.body = JSON.stringify(body);
   }
   const res = await fetch('/api' + path, opts);
+  const csrf = res.headers.get('X-CSRF-Token');
+  if (csrf) csrfToken = csrf;
   if (res.status === 204) return null;
   const data = await res.json().catch(() => null);
   if (!res.ok) {
-    if (res.status === 401 && path !== '/auth/login') logout();
+    if (res.status === 401 && path !== '/auth/login' && currentUser) showLogin(t('login.expired'));
     throw new ApiError(res.status, (data && data.detail) || ('HTTP ' + res.status));
   }
   return data;
@@ -83,9 +118,13 @@ let currentUser = null;
 function showLogin(message) {
   currentUser = null;
   stopStatusPolling();
+  liveFeed.stop();
+  mapConfigPromise = null;
   document.getElementById('appHeader').hidden = true;
   document.getElementById('appMain').hidden = true;
   document.getElementById('loginView').hidden = false;
+  document.getElementById('loginForm').hidden = false;
+  document.getElementById('forceForm').hidden = true;
   const err = document.getElementById('loginError');
   err.textContent = message || '';
   err.hidden = !message;
@@ -102,23 +141,24 @@ function showApp(user) {
   document.getElementById('navAdmin').hidden = !user.is_admin;
   iperfSetup.reset();
   startStatusPolling();
+  liveFeed.start();
   showTab(tabFromHash());
 }
 
 async function submitLogin(ev) {
   ev.preventDefault();
   const btn = document.getElementById('loginBtn');
+  const password = document.getElementById('loginPass').value;
   btn.disabled = true;
   try {
     const res = await api('POST', '/auth/login', {
       username: document.getElementById('loginUser').value.trim(),
-      password: document.getElementById('loginPass').value,
+      password,
     });
-    const usesDefault = res.user.username === 'admin' && document.getElementById('loginPass').value === 'admin123';
-    storageSet('iperf-token', res.access_token);
+    csrfToken = res.csrf_token || null;
     document.getElementById('loginPass').value = '';
-    showApp(res.user);
-    if (usesDefault) notify(t('login.defaultPw'), 'warn');
+    if (res.user.must_change_password) forcePassword.show(res.user, password);
+    else showApp(res.user);
   } catch (e) {
     showLogin(e.status === 401 ? t('login.failed') : e.message);
   } finally {
@@ -126,11 +166,62 @@ async function submitLogin(ev) {
   }
 }
 
-function logout() {
-  storageSet('iperf-token', null);
+// logout löscht das Sitzungs-Cookie auf dem Server und zeigt die Anmeldung.
+async function logout() {
   closeMenus();
+  try {
+    await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' });
+  } catch (e) {}
+  csrfToken = null;
   showLogin();
 }
+
+// forcePassword verlangt nach der ersten Anmeldung mit dem Startpasswort
+// (oder dem früheren Standardpasswort) ein eigenes Passwort, bevor die
+// Oberfläche erscheint. Der Server sperrt bis dahin alle anderen Aufrufe.
+const forcePassword = {
+  current: '',
+
+  show(user, current) {
+    this.current = current || '';
+    document.getElementById('forceUser').value = user.username;
+    document.getElementById('loginView').hidden = false;
+    document.getElementById('appHeader').hidden = true;
+    document.getElementById('appMain').hidden = true;
+    document.getElementById('loginForm').hidden = true;
+    document.getElementById('forceForm').hidden = false;
+    // Nach dem Login ist das aktuelle Passwort bekannt; nach einem Neuladen nicht.
+    document.getElementById('forceCurrentField').hidden = !!this.current;
+    ['forceCurrent', 'forceNew', 'forceRepeat'].forEach(id => { document.getElementById(id).value = ''; });
+    this.error('');
+    document.getElementById(this.current ? 'forceNew' : 'forceCurrent').focus();
+  },
+
+  error(msg) {
+    const el = document.getElementById('forceError');
+    el.textContent = msg;
+    el.hidden = !msg;
+  },
+
+  async save(ev) {
+    ev.preventDefault();
+    const current = this.current || document.getElementById('forceCurrent').value;
+    const next = document.getElementById('forceNew').value;
+    if (next !== document.getElementById('forceRepeat').value) { this.error(t('pw.mismatch')); return; }
+    const btn = document.getElementById('forceSave');
+    btn.disabled = true;
+    try {
+      await api('POST', '/auth/change-password', { current_password: current, new_password: next });
+      this.current = '';
+      notify(t('pw.changed'));
+      showApp(await apiGet('/auth/me'));
+    } catch (e) {
+      this.error(e.message);
+    } finally {
+      btn.disabled = false;
+    }
+  },
+};
 
 // ---------- Navigation ----------
 
@@ -165,8 +256,7 @@ function showTab(tab) {
 window.addEventListener('hashchange', () => { if (currentUser) showTab(tabFromHash()); });
 
 // ---------- Menüs ----------
-function toggleMenu(ev, id) {
-  ev.stopPropagation();
+function toggleMenu(id) {
   const panel = document.getElementById(id);
   const open = panel.hidden;
   closeMenus();
@@ -178,6 +268,58 @@ function closeMenus() {
 document.addEventListener('click', ev => {
   if (!ev.target.closest('.menu')) closeMenus();
 });
+
+// Kleine Aktionen aus Kopfzeile und Menüs.
+function chooseLang(lang) { closeMenus(); setLang(lang); }
+function chooseTheme(mode) { closeMenus(); setTheme(mode); }
+function openPasswordDialog() { closeMenus(); passwordDialog.open(); }
+function startTestShortcut() { showTab('tests'); document.getElementById('tfServer').focus(); }
+
+// ---------- Aktionen ----------
+
+// Die CSP erlaubt keine Inline-Handler (onclick="…"). Stattdessen tragen
+// Elemente data-click / data-change / data-input / data-submit mit dem Namen
+// einer Funktion ("showTab") oder Methode ("serversPage.openForm"); ein
+// Handler je Ereignistyp auf document ruft sie auf. Argumente:
+//   data-arg="…"     erstes Argument (nur Ziffern = Zahl)
+//   data-with-value  hängt den Wert des Elements (this.value) an
+//   data-self        nur auslösen, wenn das Element selbst geklickt wurde
+//                    (Hintergrund eines Dialogs)
+// submit-Handler erhalten das Ereignis.
+function actionRoots() {
+  return { dashboard, testsPage, peering, serversPage, adminPage, passwordDialog, forcePassword, iperfSetup };
+}
+function resolveAction(name) {
+  const [obj, method] = name.split('.');
+  if (method) {
+    const o = actionRoots()[obj];
+    return o && typeof o[method] === 'function' ? o[method].bind(o) : null;
+  }
+  return typeof window[obj] === 'function' ? window[obj] : null;
+}
+['click', 'change', 'input', 'submit'].forEach(type => {
+  document.addEventListener(type, ev => {
+    const attr = 'data-' + type;
+    const el = ev.target.closest && ev.target.closest('[' + attr + ']');
+    if (!el || (el.hasAttribute('data-self') && ev.target !== el)) return;
+    const fn = resolveAction(el.getAttribute(attr));
+    if (!fn) return;
+    if (type === 'submit') { fn(ev); return; }
+    if (el.tagName === 'A') ev.preventDefault();
+    const args = [];
+    if (el.dataset.arg !== undefined) args.push(/^-?\d+$/.test(el.dataset.arg) ? Number(el.dataset.arg) : el.dataset.arg);
+    if (el.hasAttribute('data-with-value')) args.push(el.value);
+    fn(...args);
+  });
+});
+
+// applyDynamic setzt Werte, die früher als style-Attribut im HTML standen
+// (die CSP verbietet Inline-Styles): data-pct → Breite in %, data-color →
+// Hintergrundfarbe. Über das CSSOM gesetzte Styles sind erlaubt.
+function applyDynamic(root) {
+  root.querySelectorAll('[data-pct]').forEach(el => { el.style.width = el.dataset.pct + '%'; });
+  root.querySelectorAll('[data-color]').forEach(el => { el.style.background = el.dataset.color; });
+}
 
 // ---------- Sprache ----------
 
@@ -192,6 +334,10 @@ window.addEventListener('langchange', () => {
 
 // ---------- Status ----------
 let statusTimer = null;
+
+// Statussymbole als Inline-SVG (statt ●/⚠).
+const ICON_DOT = '<svg class="status-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="6" fill="currentColor"/></svg>';
+const ICON_ALERT = '<svg class="status-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>';
 
 // loadStatus fasst Dienstzustand, Scheduler und laufende Tests im Statuspunkt zusammen.
 async function loadStatus() {
@@ -217,19 +363,19 @@ async function loadStatus() {
          + `<div class="sp-row"><span class="sp-label">${t('status.running')}</span> ${running.length}`
          + (pending.length ? ' ' + t('status.waiting', { n: pending.length }) : '') + '</div>';
     if (ip.installable && !ip.installing && currentUser && currentUser.is_admin) {
-      rows += '<button class="btn" style="width:100%;margin-top:10px" onclick="iperfSetup.prompt()">' + t('status.install') + '</button>';
+      rows += '<button class="btn" data-click="iperfSetup.prompt">' + t('status.install') + '</button>';
     }
     iperfSetup.update(ip);
     const broken = !ip.available && !ip.installing;
-    if (broken) { cls = 'status-dot-err'; sym = '&#9888;'; title = t('status.titleBroken'); }
-    else if (ip.installing) { cls = 'status-dot-warn'; sym = '&#9679;'; title = t('status.titleInstall'); }
-    else if (active) { cls = 'status-dot-warn'; sym = '&#9679;'; title = t('status.titleTest'); }
-    else { cls = 'status-dot-ok'; sym = '&#9679;'; title = t('status.titleOk'); }
+    if (broken) { cls = 'status-dot-err'; sym = ICON_ALERT; title = t('status.titleBroken'); }
+    else if (ip.installing) { cls = 'status-dot-warn'; sym = ICON_DOT; title = t('status.titleInstall'); }
+    else if (active) { cls = 'status-dot-warn'; sym = ICON_DOT; title = t('status.titleTest'); }
+    else { cls = 'status-dot-ok'; sym = ICON_DOT; title = t('status.titleOk'); }
     btn.classList.toggle('has-error', broken);
   } catch (e) {
     if (e instanceof ApiError && e.status === 401) return;
-    cls = 'status-dot-err'; sym = '&#9888;'; title = t('status.down');
-    rows = '<div class="sp-row sp-err">&#9888; ' + t('status.down') + '</div>';
+    cls = 'status-dot-err'; sym = ICON_ALERT; title = t('status.down');
+    rows = '<div class="sp-row sp-err">' + ICON_ALERT + t('status.down') + '</div>';
     btn.classList.add('has-error');
   }
   icon.className = cls;
@@ -299,6 +445,16 @@ function stopStatusPolling() {
   statusTimer = null;
 }
 
+// mapConfig liefert die Kartenkonfiguration (eigener Kachelserver oder leer
+// für die eingebettete Weltkarte); einmal je Anmeldung von /api/status geholt.
+let mapConfigPromise = null;
+function mapConfig() {
+  if (!mapConfigPromise) {
+    mapConfigPromise = apiGet('/status').then(s => s.map || {}).catch(() => { mapConfigPromise = null; return {}; });
+  }
+  return mapConfigPromise;
+}
+
 async function loadInfo() {
   try {
     const info = await fetch('/api/info').then(r => r.json());
@@ -360,11 +516,47 @@ function syncCards(container, cards, cls = 'ds-card') {
       el.dataset.key = key;
     }
     existing.delete(key);
-    if (el._html !== html) { el.innerHTML = html; el._html = html; }
+    if (el._html !== html) { el.innerHTML = html; el._html = html; applyDynamic(el); }
     if (container.children[i] !== el) container.insertBefore(el, container.children[i] || null);
   });
   existing.forEach(el => el.remove());
 }
+
+// ---------- Live-Status der Tests (Server-Sent Events) ----------
+
+// liveFeed hält eine EventSource-Verbindung zu /api/tests/live/stream. Der
+// Server meldet sofort und bei jeder Änderung alle wartenden, laufenden und
+// gerade beendeten Tests (ersetzt das frühere Abfragen alle 0,7 bzw. 1,5 s).
+// Bricht die Verbindung ab, verbindet EventSource sich selbst neu.
+const liveFeed = {
+  source: null,
+  tests: [],
+  listeners: new Set(),
+
+  start() {
+    if (this.source && this.source.readyState !== EventSource.CLOSED) return;
+    const source = new EventSource('/api/tests/live/stream');
+    this.source = source;
+    source.onmessage = ev => {
+      let msg;
+      try { msg = JSON.parse(ev.data); } catch (e) { return; }
+      if (msg.type !== 'live' || this.source !== source) return;
+      this.tests = msg.tests || [];
+      this.listeners.forEach(fn => fn(this.tests));
+    };
+  },
+  stop() {
+    if (this.source) this.source.close();
+    this.source = null;
+    this.tests = [];
+  },
+  // subscribe ruft fn sofort und bei jeder Änderung auf; liefert die Abmeldung.
+  subscribe(fn) {
+    this.listeners.add(fn);
+    fn(this.tests);
+    return () => this.listeners.delete(fn);
+  },
+};
 
 // openPeering wechselt zur Peering-Map und wählt dort den Server vor.
 let pendingPeeringServer = null;
@@ -390,10 +582,11 @@ const dashboard = {
   servers: [],
   stats: [],
   tests: [],
-  liveIds: new Map(),      // Test-ID → Server-ID der verfolgten Tests
+  liveIds: new Set(),      // Test-IDs im letzten Live-Stand
   liveByServer: new Map(), // Server-ID → Live-Status
   charts: {},
   timers: [],
+  unsubscribe: null,
 
   enter() {
     if (!RANGE_HOURS[this.range]) this.range = '24h';
@@ -401,12 +594,14 @@ const dashboard = {
     document.getElementById('thrUp').value = this.thrUp;
     this.markRange();
     this.load();
-    this.pollLive();
-    this.timers = [setInterval(() => this.load(), 30000), setInterval(() => this.pollLive(), 1500)];
+    this.unsubscribe = liveFeed.subscribe(tests => this.onLive(tests));
+    this.timers = [setInterval(() => this.load(), 30000)];
   },
   leave() {
     this.timers.forEach(clearInterval);
     this.timers = [];
+    if (this.unsubscribe) this.unsubscribe();
+    this.unsubscribe = null;
   },
   onTheme() { this.renderCharts(); },
   onLang() {
@@ -474,11 +669,15 @@ const dashboard = {
   },
 
   renderCharts() {
-    this.renderChart('chartDown', 'download_bandwidth_mbps', this.thrDown, '#ef4444');
-    this.renderChart('chartUp', 'upload_bandwidth_mbps', this.thrUp, '#f59e0b');
+    this.renderChart('chartDown', 'download_bandwidth_mbps', this.thrDown);
+    this.renderChart('chartUp', 'upload_bandwidth_mbps', this.thrUp);
   },
 
-  renderChart(canvasId, key, threshold, thresholdColor) {
+  // renderChart zeichnet den Verlauf je Server in der Serienfarbe. Schwellwert
+  // (--warn) und Messpunkte darunter (--crit) nutzen die Statusfarben des Themes.
+  renderChart(canvasId, key, threshold) {
+    const thresholdColor = cssVar('--warn');
+    const belowColor = cssVar('--crit');
     const canvas = document.getElementById(canvasId);
     const wrap = canvas.parentElement;
     if (this.charts[canvasId]) { this.charts[canvasId].destroy(); delete this.charts[canvasId]; }
@@ -505,8 +704,8 @@ const dashboard = {
         data: data.sort((a, b) => a.x - b.x),
         borderColor: color,
         backgroundColor: color,
-        pointBackgroundColor: ctx => (ctx.raw && ctx.raw.y < threshold ? '#ef4444' : color),
-        pointBorderColor: ctx => (ctx.raw && ctx.raw.y < threshold ? '#ef4444' : color),
+        pointBackgroundColor: ctx => (ctx.raw && ctx.raw.y < threshold ? belowColor : color),
+        pointBorderColor: ctx => (ctx.raw && ctx.raw.y < threshold ? belowColor : color),
         pointRadius: 3.5, pointHoverRadius: 6, borderWidth: 2, tension: 0.3,
       };
     });
@@ -562,8 +761,8 @@ const dashboard = {
   renderServers() {
     const grid = document.getElementById('dashServers');
     if (!this.servers.length) {
-      grid.innerHTML = `<div class="ds-card"><p class="muted" style="margin-bottom:12px">${t('dash.noServers')}</p>`
-        + `<button class="btn" onclick="showTab('servers')">${t('dash.createServer')}</button></div>`;
+      grid.innerHTML = `<div class="ds-card"><p class="muted spaced">${t('dash.noServers')}</p>`
+        + `<button class="btn" data-click="showTab" data-arg="servers">${t('dash.createServer')}</button></div>`;
       return;
     }
     const byId = new Map(this.stats.map(s => [s.server_id, s]));
@@ -587,7 +786,7 @@ const dashboard = {
         const state = statusLabel(live.status);
         const time = live.status === 'running' ? ` · ${live.elapsed_seconds} / ${live.total_seconds} s` : '';
         liveBlock = `<div class="live-line"><span class="${live.status === 'running' ? 'pulse' : ''}">${state}${time}</span><span>${live.progress} %</span></div>`
-          + `<div class="bar-bg"><div class="bar-fill ${live.status === 'failed' ? 'failed' : ''}" style="width:${live.status === 'failed' ? 100 : live.progress}%"></div></div>`;
+          + `<div class="bar-bg"><div class="bar-fill ${live.status === 'failed' ? 'failed' : ''}" data-pct="${live.status === 'failed' ? 100 : Number(live.progress) || 0}"></div></div>`;
       }
       const showLive = live && live.status !== 'failed' && live.status !== 'pending';
       const down = showLive ? live.current_download_mbps : st.avg_download_mbps;
@@ -597,11 +796,11 @@ const dashboard = {
 
       return [sv.id, `
         <div class="ds-header">
-          <span style="width:10px;height:10px;border-radius:50%;background:${color};flex:none"></span>
+          <span class="series-dot" data-color="${color}"></span>
           <span class="ds-name">${esc(sv.name)}</span>
           <div class="card-actions">
-            <button class="icon-btn" title="${t('dash.toMap')}" onclick="openPeering(${sv.id})">${ICON_MAP}</button>
-            <button class="icon-btn" title="${t('dash.quickTest')}" onclick="dashboard.quickTest(${sv.id})" ${live || !sv.enabled ? 'disabled' : ''}>${ICON_PLAY}</button>
+            <button class="icon-btn" title="${t('dash.toMap')}" data-click="openPeering" data-arg="${sv.id}">${ICON_MAP}</button>
+            <button class="icon-btn" title="${t('dash.quickTest')}" data-click="dashboard.quickTest" data-arg="${sv.id}" ${live || !sv.enabled ? 'disabled' : ''}>${ICON_PLAY}</button>
           </div>
         </div>
         <div class="ds-badges">${badges}</div>
@@ -617,31 +816,24 @@ const dashboard = {
     }));
   },
 
-  // pollLive verfolgt wartende und laufende Tests. Der Server meldet einen Test
-  // noch 10 s nach Ende als laufend, so bleiben die Endwerte kurz sichtbar.
-  async pollLive() {
-    try {
-      const [running, pending] = await Promise.all([
-        apiGet('/tests?status=running&limit=50'),
-        apiGet('/tests?status=pending&limit=50'),
-      ]);
-      for (const x of [...running, ...pending]) this.liveIds.set(x.id, x.server_id);
-      if (!this.liveIds.size && !this.liveByServer.size) return;
-
-      const results = await Promise.all([...this.liveIds].map(([id, sid]) =>
-        apiGet(`/tests/${id}/live`).then(l => [id, sid, l]).catch(() => [id, sid, null])));
-      const byServer = new Map();
-      let finished = false;
-      for (const [id, sid, l] of results) {
-        if (!l || !l.is_running) { this.liveIds.delete(id); finished = true; continue; }
-        // Bei mehreren Tests eines Servers hat der laufende Vorrang vor wartenden.
-        const prev = byServer.get(sid);
-        if (!prev || prev.status === 'pending') byServer.set(sid, l);
-      }
-      this.liveByServer = byServer;
-      this.renderServers();
-      if (finished) this.load();
-    } catch (e) {}
+  // onLive übernimmt den Live-Stand aus liveFeed. Der Server meldet einen Test
+  // noch 10 s nach Ende, so bleiben die Endwerte kurz sichtbar; fällt er aus
+  // der Liste, werden Kennzahlen und Diagramme neu geladen.
+  onLive(tests) {
+    const byServer = new Map();
+    const ids = new Set();
+    for (const l of tests) {
+      ids.add(l.test_id);
+      // Bei mehreren Tests eines Servers hat der laufende Vorrang vor wartenden.
+      const prev = byServer.get(l.server_id);
+      if (!prev || prev.status === 'pending') byServer.set(l.server_id, l);
+    }
+    const finished = [...this.liveIds].some(id => !ids.has(id));
+    if (!ids.size && !this.liveIds.size && !this.liveByServer.size) return;
+    this.liveIds = ids;
+    this.liveByServer = byServer;
+    this.renderServers();
+    if (finished) this.load();
   },
 
   async quickTest(serverId) {
@@ -655,9 +847,7 @@ const dashboard = {
         duration: sv.default_duration,
         parallel_streams: sv.default_parallel,
       });
-      this.liveIds.set(test.id, sv.id);
       notify(t('dash.testStarted', { name: sv.name }));
-      this.pollLive();
     } catch (e) {
       notify(t('test.startFailed', { msg: e.message }), 'err');
     }
@@ -737,12 +927,12 @@ const serversPage = {
         ? row(t('udp.rate'), sv.default_udp_bandwidth_mbps ? fmt(sv.default_udp_bandwidth_mbps, 1) + ' Mbit/s' : t('udp.default')) : '';
       return [sv.id, `
         <div class="ds-header">
-          <span style="width:10px;height:10px;border-radius:50%;background:${color};flex:none"></span>
+          <span class="series-dot" data-color="${color}"></span>
           <span class="ds-name">${esc(sv.name)}</span>
           <div class="card-actions">
-            <button class="icon-btn" title="${t('servers.edit')}" onclick="serversPage.openForm(${sv.id})">${ICON_EDIT}</button>
-            <button class="icon-btn" title="${sv.enabled ? t('servers.disable') : t('servers.enable')}" onclick="serversPage.toggle(${sv.id})">${ICON_POWER}</button>
-            <button class="icon-btn" title="${t('delete')}" onclick="serversPage.remove(${sv.id})">${ICON_TRASH}</button>
+            <button class="icon-btn" title="${t('servers.edit')}" data-click="serversPage.openForm" data-arg="${sv.id}">${ICON_EDIT}</button>
+            <button class="icon-btn" title="${sv.enabled ? t('servers.disable') : t('servers.enable')}" data-click="serversPage.toggle" data-arg="${sv.id}">${ICON_POWER}</button>
+            <button class="icon-btn" title="${t('delete')}" data-click="serversPage.remove" data-arg="${sv.id}">${ICON_TRASH}</button>
           </div>
         </div>
         <div class="host">${esc(sv.host)}:${sv.port}</div>
@@ -928,29 +1118,28 @@ const testsPage = {
   hasMore: false,
   // Live-Panel: verfolgter Test, sein Verlauf und das Ergebnis des letzten Tests.
   liveId: null,
+  liveSeen: false,     // verfolgter Test war schon im Live-Strom
   liveData: null,
   liveStart: 0,
   series: [],
   final: null,
   spark: null,
-  timer: null,
-  busy: false,
+  unsubscribe: null,
 
   async enter() {
     const panel = document.getElementById('livePanel');
     if (!panel.firstChild) {
-      panel.innerHTML = '<div id="liveInfo" style="display:flex;flex-direction:column;flex:1"></div>'
+      panel.innerHTML = '<div id="liveInfo" class="live-info"></div>'
         + '<div class="live-spark" id="liveSparkWrap" hidden><canvas id="liveSpark"></canvas></div>';
     }
     this.renderLive();
     await this.loadServers();
     this.reloadList();
-    this.tick();
-    this.timer = setInterval(() => this.tick(), 700);
+    if (currentTab === 'tests' && !this.unsubscribe) this.unsubscribe = liveFeed.subscribe(tests => this.onLive(tests));
   },
   leave() {
-    clearInterval(this.timer);
-    this.timer = null;
+    if (this.unsubscribe) this.unsubscribe();
+    this.unsubscribe = null;
   },
   onTheme() {
     if (this.spark) { this.spark.destroy(); this.spark = null; }
@@ -1043,51 +1232,54 @@ const testsPage = {
   // ----- Live-Panel -----
   adopt(id) {
     this.liveId = id;
+    this.liveSeen = false;
     this.liveData = null;
     this.final = null;
     this.series = [];
     this.liveStart = Date.now();
     if (this.spark) { this.spark.destroy(); this.spark = null; }
-    this.tick();
+    this.onLive(liveFeed.tests);
   },
 
-  // tick verfolgt den aktuellen Test. Ohne eigenen Test wird ein laufender
-  // oder wartender Test übernommen (z. B. vom Scheduler gestartet).
-  async tick() {
-    if (this.busy) return;
-    this.busy = true;
-    try {
-      if (!this.liveId) {
-        const [running, pending] = await Promise.all([
-          apiGet('/tests?status=running&limit=1'),
-          apiGet('/tests?status=pending&limit=1'),
-        ]);
-        const next = running[0] || pending[0];
-        if (!next) return;
-        this.liveId = next.id;
-        this.liveData = null;
-        this.final = null;
-        this.series = [];
-        this.liveStart = Date.now();
-        if (this.spark) { this.spark.destroy(); this.spark = null; }
-      }
-      const id = this.liveId;
-      const l = await apiGet(`/tests/${id}/live`);
-      this.liveData = l;
-      if (l.status === 'running') {
-        this.series.push({ x: (Date.now() - this.liveStart) / 1000, down: l.current_download_mbps, up: l.current_upload_mbps });
-      }
-      if (l.status === 'completed' || l.status === 'failed') {
-        this.final = await apiGet('/tests/' + id);
-        this.liveId = null;
-        this.reloadList();
-      }
-      this.renderLive();
-    } catch (e) {
-      if (e.status === 404) this.liveId = null;
-    } finally {
-      this.busy = false;
+  // onLive verfolgt den aktuellen Test über liveFeed. Ohne eigenen Test wird
+  // ein laufender oder wartender übernommen (z. B. vom Scheduler gestartet).
+  onLive(tests) {
+    if (!this.liveId) {
+      const next = tests.find(x => x.status === 'running') || tests.find(x => x.status === 'pending');
+      if (!next) return;
+      this.adopt(next.test_id);
+      return;
     }
+    const id = this.liveId;
+    const l = tests.find(x => x.test_id === id);
+    if (!l) {
+      // Noch nicht im Strom (gerade gestartet) – oder schon wieder heraus.
+      if (this.liveSeen) this.finish(id);
+      return;
+    }
+    this.liveSeen = true;
+    this.liveData = l;
+    if (l.status === 'running') {
+      this.series.push({ x: (Date.now() - this.liveStart) / 1000, down: l.current_download_mbps, up: l.current_upload_mbps });
+    }
+    if (l.status === 'completed' || l.status === 'failed') {
+      this.finish(id);
+      return;
+    }
+    this.renderLive();
+  },
+
+  // finish lädt das gespeicherte Ergebnis des verfolgten Tests.
+  async finish(id) {
+    if (this.liveId !== id) return;
+    this.liveId = null;
+    try {
+      this.final = await apiGet('/tests/' + id);
+    } catch (e) {
+      this.final = null;
+    }
+    this.reloadList();
+    this.renderLive();
   },
 
   renderLive() {
@@ -1106,10 +1298,10 @@ const testsPage = {
       info.innerHTML = `
         <div class="live-head"><span class="live-title">${t('tests.result', { name: esc(sv ? sv.name : 'Server ' + f.server_id) })}</span>
           <span class="live-badge ${failed ? 'failed' : 'done'}">${failed ? t('tests.badgeFailed') : t('tests.badgeDone')}</span></div>
-        <div class="bar-bg"><div class="bar-fill ${failed ? 'failed' : ''}" style="width:100%"></div></div>
+        <div class="bar-bg"><div class="bar-fill ${failed ? 'failed' : ''}" data-pct="100"></div></div>
         ${failed ? `<div class="error-box">${esc(f.error_message || t('unknownError'))}</div>` : metrics(f.download_bandwidth_mbps, f.upload_bandwidth_mbps)}
         <div class="live-line"><span>${fmtDate(f.completed_at || f.created_at)}</span>
-          <a href="#" onclick="testsPage.openDetail(${f.id}); return false">${t('tests.details')}</a></div>`;
+          <a href="#" data-click="testsPage.openDetail" data-arg="${f.id}">${t('tests.details')}</a></div>`;
     } else if (l) {
       const pending = l.status === 'pending';
       const remaining = Math.max(0, l.total_seconds - l.elapsed_seconds);
@@ -1117,14 +1309,15 @@ const testsPage = {
         <div class="live-head"><span class="live-title">${pending ? t('tests.waitingSlot') : t('tests.runningAgainst', { name: esc(l.server_name) })}</span>
           <span class="live-badge ${pending ? 'idle' : ''}">${pending ? t('tests.badgeWaiting') : 'LIVE'}</span></div>
         <div class="live-line"><span>${t('tests.elapsed', { e: l.elapsed_seconds, r: remaining })}</span><span>${l.progress} %</span></div>
-        <div class="bar-bg"><div class="bar-fill" style="width:${l.progress}%"></div></div>
+        <div class="bar-bg"><div class="bar-fill" data-pct="${Number(l.progress) || 0}"></div></div>
         ${metrics(pending ? null : l.current_download_mbps, pending ? null : l.current_upload_mbps)}`;
     } else {
       info.innerHTML = `
         <div class="live-head"><span class="live-title">${t('tests.liveTitle')}</span><span class="live-badge idle">${t('tests.badgeReady')}</span></div>
         <div class="live-empty"><div>${t('tests.noTest')}</div>
-          <div style="font-size:.85em">${t('tests.noTestHint')}</div></div>`;
+          <div class="small">${t('tests.noTestHint')}</div></div>`;
     }
+    applyDynamic(info);
     this.renderSpark();
   },
 
@@ -1141,10 +1334,11 @@ const testsPage = {
       this.spark.update('none');
       return;
     }
+    // Farben wie die Live-Kacheln: Download --accent, Upload --ok.
     const line = (label, data, color) => ({ label, data, borderColor: color, backgroundColor: color, borderWidth: 2, pointRadius: 0, tension: 0.3 });
     this.spark = new Chart(document.getElementById('liveSpark'), {
       type: 'line',
-      data: { datasets: [line(t('dir.download'), down, '#3b82f6'), line(t('dir.upload'), up, '#10b981')] },
+      data: { datasets: [line(t('dir.download'), down, cssVar('--accent')), line(t('dir.upload'), up, cssVar('--ok'))] },
       options: {
         responsive: true, maintainAspectRatio: false, animation: false,
         scales: {
@@ -1186,12 +1380,12 @@ const testsPage = {
   renderList() {
     const name = id => { const s = this.servers.find(x => x.id === id); return s ? s.name : 'Server ' + id; };
     document.getElementById('testRows').innerHTML = this.tests.length
-      ? this.tests.map(x => `<tr onclick="testsPage.openDetail(${x.id})">
+      ? this.tests.map(x => `<tr data-click="testsPage.openDetail" data-arg="${x.id}">
           <td>${fmtDate(x.created_at)}</td><td>${esc(name(x.server_id))}</td><td>${protocolLabel(x.protocol)}</td>
           <td>${directionLabel(x.direction)}</td><td>${x.parallel_streams}</td>
           <td class="num">${fmtMbps(x.download_bandwidth_mbps)}</td><td class="num">${fmtMbps(x.upload_bandwidth_mbps)}</td>
           <td>${statusBadge(x.status)}</td></tr>`).join('')
-      : `<tr><td colspan="8" class="muted" style="text-align:center;padding:24px">${t('tests.none')}</td></tr>`;
+      : `<tr><td colspan="8" class="muted empty">${t('tests.none')}</td></tr>`;
     document.getElementById('tlMore').hidden = !this.hasMore;
   },
 
@@ -1268,16 +1462,29 @@ pages.tests = testsPage;
 
 // ---------- Peering-Map ----------
 
-// OpenStreetMap-Standardkacheln (ohne API-Schlüssel; CARTO verlangt inzwischen
-// einen). Die dunkle Darstellung entsteht per CSS-Filter auf der Kachelebene.
-const TILE_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
-const tileAttribution = () => '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+// Kartenhintergrund: standardmäßig die eingebettete Weltkarte (Natural Earth
+// 1:110m als Vektor, gemeinfrei) – ohne jeden Abruf von fremden Servern. Ihre
+// Farben setzt das CSS (.map-land), sie folgen so dem Theme. Wer einen eigenen
+// Kachelserver hat, trägt ihn als map.tile_url in die Konfiguration ein.
+const WORLD_URL = '/static/vendor/naturalearth/world-110m.geojson';
+const naturalEarthAttribution = () => (LANG === 'de' ? 'Kartendaten: ' : 'Map data: ')
+  + '<a href="https://www.naturalearthdata.com/" rel="noopener">Natural Earth</a>';
+const osmAttribution = () => '&copy; <a href="https://www.openstreetmap.org/copyright" rel="noopener">OpenStreetMap</a>'
   + (LANG === 'de' ? '-Mitwirkende' : ' contributors');
-const HOP_COLORS = { first: '#10b981', dest: '#ef4444', est: '#f59e0b', hop: '#3b82f6' };
+let worldPromise = null;
+function worldGeoJSON() {
+  if (!worldPromise) {
+    worldPromise = fetch(WORLD_URL).then(r => {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    }).catch(e => { worldPromise = null; throw e; });
+  }
+  return worldPromise;
+}
 
 const peering = {
   map: null,
-  tiles: null,
+  base: null,          // Hintergrund: Weltkarte (GeoJSON) oder Kachelebene
   layer: null,
   servers: [],
   traces: [],
@@ -1302,26 +1509,45 @@ const peering = {
       return;
     }
     if (!this.map) {
-      this.map = L.map('pmMap', { worldCopyJump: true }).setView([50.5, 10], 4);
+      this.map = L.map('pmMap', { worldCopyJump: true, minZoom: 2 }).setView([50.5, 10], 4);
+      // Eigene Ebene unter Routen und Markern für den Kartenhintergrund.
+      this.map.createPane('basemap').style.zIndex = 250;
       this.layer = L.layerGroup().addTo(this.map);
-      this.setTiles();
+      this.setBase();
     }
     setTimeout(() => this.map.invalidateSize(), 0);
   },
 
   onLang() {
     this.setRunning(!!this.live);
-    // Die Kartenquelle steht in der Attribution; Kachelebene neu anlegen.
-    if (this.tiles) { this.tiles.remove(); this.tiles = null; }
-    this.setTiles();
+    // Die Kartenquelle steht in der Attribution; Hintergrund neu anlegen.
+    if (this.base) { this.base.remove(); this.base = null; }
+    this.setBase();
     if (!window.L) this.mapMessage(t('peering.noLeaflet'));
     if (this.live) this.show();
     this.load();
   },
 
-  setTiles() {
-    if (!this.map || this.tiles) return;
-    this.tiles = L.tileLayer(TILE_URL, { attribution: tileAttribution(), maxZoom: 19 }).addTo(this.map);
+  async setBase() {
+    if (!this.map || this.base) return;
+    const cfg = await mapConfig();
+    if (this.base) return;
+    if (cfg.tile_url) {
+      this.base = L.tileLayer(cfg.tile_url, { attribution: cfg.tile_attribution || osmAttribution(), maxZoom: 19 }).addTo(this.map);
+      return;
+    }
+    let world;
+    try {
+      world = await worldGeoJSON();
+    } catch (e) {
+      this.mapMessage(t('peering.noWorld'));
+      return;
+    }
+    if (this.base) return;
+    this.base = L.geoJSON(world, {
+      pane: 'basemap', interactive: false, attribution: naturalEarthAttribution(),
+      style: { className: 'map-land', weight: 0.7, fillOpacity: 1 },
+    }).addTo(this.map);
   },
 
   mapMessage(text) {
@@ -1380,9 +1606,9 @@ const peering = {
     if (!this.server()) { list.innerHTML = `<p class="muted">${t('peering.addFirst')}</p>`; return; }
     if (!traces.length) { list.innerHTML = `<p class="muted">${t('peering.noTraces')}</p>`; return; }
     list.innerHTML = traces.map(tr => `
-      <button class="trace-item ${this.trace && this.trace.id === tr.id && !this.live ? 'active' : ''}" onclick="peering.selectTrace(${tr.id})" ${this.live ? 'disabled' : ''}>
+      <button class="trace-item ${this.trace && this.trace.id === tr.id && !this.live ? 'active' : ''}" data-click="peering.selectTrace" data-arg="${tr.id}" ${this.live ? 'disabled' : ''}>
         <div class="t">${fmtDate(tr.created_at)}</div>
-        <div class="m">${t('peering.hops', { n: tr.total_hops })}${tr.total_rtt_ms != null ? ' · ' + fmt(tr.total_rtt_ms, 1) + ' ms' : ''}${tr.test_id ? ' · Test #' + tr.test_id : ''}${tr.completed ? '' : ` · <span style="color:var(--crit)">${t('peering.incomplete')}</span>`}</div>
+        <div class="m">${t('peering.hops', { n: tr.total_hops })}${tr.total_rtt_ms != null ? ' · ' + fmt(tr.total_rtt_ms, 1) + ' ms' : ''}${tr.test_id ? ' · Test #' + tr.test_id : ''}${tr.completed ? '' : ` · <span class="text-crit">${t('peering.incomplete')}</span>`}</div>
       </button>`).join('');
   },
 
@@ -1415,16 +1641,18 @@ const peering = {
     }
     this.mapMessage('');
     const coords = geo.map(([h]) => [h.latitude, h.longitude]);
-    L.polyline(coords, { color: '#3b82f6', weight: 3, opacity: 0.75, dashArray: '10, 6' }).addTo(this.layer);
+    // Route in der Akzentfarbe, Marker nach Art: erster Hop --ok, Ziel --crit,
+    // geschätzter Standort --warn (Klassen in app.css).
+    L.polyline(coords, { className: 'hop-route', color: cssVar('--accent'), weight: 3, opacity: 0.75, dashArray: '10, 6' }).addTo(this.layer);
     for (const [h, i] of geo) {
       const kind = this.hopKind(h, i, hops);
       const icon = L.divIcon({
         className: 'hop-icon', iconSize: [26, 26], iconAnchor: [13, 13],
-        html: `<div class="hop-marker" style="background:${HOP_COLORS[kind] || HOP_COLORS.hop}">${h.hop_number}</div>`,
+        html: `<div class="hop-marker ${kind}">${h.hop_number}</div>`,
       });
       const place = [h.city, h.country].filter(Boolean).join(', ') || t('unknown');
       L.marker([h.latitude, h.longitude], { icon }).bindPopup(
-        `<strong>${t('peering.hop', { n: h.hop_number })}</strong>${h.geoip_interpolated ? ` <span style="color:#f59e0b">${t('peering.estimated')}</span>` : ''}<br>`
+        `<strong>${t('peering.hop', { n: h.hop_number })}</strong>${h.geoip_interpolated ? ` <span class="text-warn">${t('peering.estimated')}</span>` : ''}<br>`
         + `${esc(h.ip_address)}${h.hostname ? '<br>' + esc(h.hostname) : ''}<br>`
         + `RTT: ${h.rtt_ms != null ? fmt(h.rtt_ms, 1) + ' ms' : '–'}<br>${t('peering.locationRow', { place: esc(place) })}`).addTo(this.layer);
     }
@@ -1450,7 +1678,7 @@ const peering = {
       ? t('peering.liveTitle', { host: this.live.host })
       : t('peering.traceFrom', { date: fmtDate(tr.created_at) });
     document.getElementById('pmDetailActions').innerHTML = tr
-      ? `<button class="btn btn-secondary" onclick="peering.deleteTrace(${tr.id})">${ICON_TRASH} ${t('peering.deleteTrace')}</button>` : '';
+      ? `<button class="btn btn-secondary" data-click="peering.deleteTrace" data-arg="${tr.id}">${ICON_TRASH} ${t('peering.deleteTrace')}</button>` : '';
 
     const stat = (label, val) => `<div class="stat"><span class="stat-label">${label}</span><span class="stat-val">${val}</span></div>`;
     const lastRtt = [...hops].reverse().find(h => h.rtt_ms != null);
@@ -1459,7 +1687,7 @@ const peering = {
       tr && tr.source_ip ? stat(t('peering.source'), esc(tr.source_ip)) : '',
       stat(t('peering.hopsLabel'), hops.length),
       stat(t('peering.rttDest'), tr && tr.total_rtt_ms != null ? fmt(tr.total_rtt_ms, 1) + ' ms' : (lastRtt ? fmt(lastRtt.rtt_ms, 1) + ' ms' : '–')),
-      stat(t('peering.status'), this.live ? t('peering.running') : tr.completed ? t('peering.complete') : `<span style="color:var(--crit)">${esc(tr.error_message || t('peering.incomplete'))}</span>`),
+      stat(t('peering.status'), this.live ? t('peering.running') : tr.completed ? t('peering.complete') : `<span class="text-crit">${esc(tr.error_message || t('peering.incomplete'))}</span>`),
       tr && tr.test_id ? stat(t('peering.test'), '#' + tr.test_id) : '',
     ].join('');
 
@@ -1478,7 +1706,7 @@ const peering = {
         <td class="num">${h.rtt_ms != null ? fmt(h.rtt_ms, 1) + ' ms' : '–'}</td>
         <td>${place ? esc(place) : '–'}${h.geoip_interpolated ? ` <span class="sev-badge sev-warn">${t('peering.kindEst')}</span>` : ''}</td>
       </tr>`;
-    }).join('') || `<tr><td colspan="5" class="muted" style="text-align:center;padding:20px">${t('peering.noHops')}</td></tr>`;
+    }).join('') || `<tr><td colspan="5" class="muted empty">${t('peering.noHops')}</td></tr>`;
   },
 
   // ----- Live-Traceroute (Server-Sent Events) -----
@@ -1490,7 +1718,8 @@ const peering = {
   startLive() {
     const sv = this.server();
     if (!sv) return;
-    const url = `/api/live-trace/stream/${encodeURIComponent(sv.host)}?token=${encodeURIComponent(storageGet('iperf-token') || '')}&lang=${LANG}`;
+    // Angemeldet wird über das Sitzungs-Cookie, das EventSource mitsendet.
+    const url = `/api/live-trace/stream/${encodeURIComponent(sv.host)}?lang=${LANG}`;
     const source = new EventSource(url);
     this.live = { source, host: sv.host, hops: [], done: false };
     this.setRunning(true);
@@ -1661,12 +1890,12 @@ const adminPage = {
     document.getElementById('userRows').innerHTML = this.users.map(u => {
       const self = currentUser && u.id === currentUser.id;
       return `<tr>
-        <td><strong style="color:var(--heading)">${esc(u.username)}</strong>${self ? ` <span class="sev-badge sev-info">${t('admin.signedIn')}</span>` : ''}</td>
+        <td><strong>${esc(u.username)}</strong>${self ? ` <span class="sev-badge sev-info">${t('admin.signedIn')}</span>` : ''}${u.must_change_password ? ` <span class="sev-badge sev-warn">${t('admin.mustChange')}</span>` : ''}</td>
         <td>${esc(u.email)}</td>
         <td>${u.is_admin ? `<span class="badge-type">${t('admin.administrator')}</span>` : t('admin.user')}${u.is_active ? '' : ` <span class="sev-badge sev-crit">${t('admin.locked')}</span>`}</td>
         <td>${fmtDate(u.created_at)}</td>
         <td>${u.last_login ? fmtDate(u.last_login) : '–'}</td>
-        <td style="text-align:right">${self ? '' : `<button class="icon-btn" title="${t('admin.deleteUser')}" onclick="adminPage.deleteUser(${u.id})">${ICON_TRASH}</button>`}</td>
+        <td class="right">${self ? '' : `<button class="icon-btn" title="${t('admin.deleteUser')}" data-click="adminPage.deleteUser" data-arg="${u.id}">${ICON_TRASH}</button>`}</td>
       </tr>`;
     }).join('');
   },
@@ -1789,9 +2018,12 @@ pages.admin = adminPage;
 // ---------- Start ----------
 (async function init() {
   loadInfo();
-  if (!storageGet('iperf-token')) { showLogin(); return; }
+  // Frühere Versionen hielten das Token im localStorage; jetzt HttpOnly-Cookie.
+  storageSet('iperf-token', null);
   try {
-    showApp(await apiGet('/auth/me'));
+    const me = await apiGet('/auth/me');
+    if (me.must_change_password) forcePassword.show(me, '');
+    else showApp(me);
   } catch (e) {
     showLogin(e.status === 401 ? '' : t('login.unreachable', { msg: e.message }));
   }

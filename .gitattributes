@@ -1,3 +1,6 @@
 # Windows scripts need CRLF line endings
 *.cmd text eol=crlf
 *.bat text eol=crlf
+
+# Vendored libraries byte-for-byte (SHA-256 in internal/web/static/vendor/README.md)
+internal/web/static/vendor/** -text

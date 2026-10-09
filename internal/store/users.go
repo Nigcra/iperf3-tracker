@@ -10,12 +10,12 @@ import (
 	"iperf3-tracker/internal/model"
 )
 
-const userColumns = `id, username, email, hashed_password, is_active, is_admin, created_at, last_login`
+const userColumns = `id, username, email, hashed_password, is_active, is_admin, created_at, last_login, must_change_password`
 
 func scanUser(row rowScanner) (*model.User, error) {
 	var u model.User
 	err := row.Scan(&u.ID, &u.Username, &u.Email, &u.HashedPassword, &u.IsActive, &u.IsAdmin,
-		db.Time(&u.CreatedAt), db.NullTime(&u.LastLogin))
+		db.Time(&u.CreatedAt), db.NullTime(&u.LastLogin), &u.MustChangePassword)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -70,9 +70,9 @@ func (s *Store) CountUsers(ctx context.Context) (int, error) {
 func (s *Store) CreateUser(ctx context.Context, u *model.User) error {
 	u.CreatedAt = db.Now()
 	res, err := s.db.ExecContext(noCancel(ctx),
-		`INSERT INTO users (username, email, hashed_password, is_active, is_admin, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?)`,
-		u.Username, u.Email, u.HashedPassword, u.IsActive, u.IsAdmin, db.FormatTime(u.CreatedAt))
+		`INSERT INTO users (username, email, hashed_password, is_active, is_admin, created_at, must_change_password)
+		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		u.Username, u.Email, u.HashedPassword, u.IsActive, u.IsAdmin, db.FormatTime(u.CreatedAt), u.MustChangePassword)
 	if err != nil {
 		return err
 	}
@@ -94,4 +94,16 @@ func (s *Store) SetLastLogin(ctx context.Context, id int64, t time.Time) error {
 // SetPassword ersetzt den Passwort-Hash eines Benutzers.
 func (s *Store) SetPassword(ctx context.Context, id int64, hash string) error {
 	return affectedOne(s.db.ExecContext(noCancel(ctx), `UPDATE users SET hashed_password = ? WHERE id = ?`, hash, id))
+}
+
+// ChangePassword setzt ein neues Passwort und hebt einen erzwungenen
+// Passwortwechsel auf.
+func (s *Store) ChangePassword(ctx context.Context, id int64, hash string) error {
+	return affectedOne(s.db.ExecContext(noCancel(ctx),
+		`UPDATE users SET hashed_password = ?, must_change_password = 0 WHERE id = ?`, hash, id))
+}
+
+// SetMustChangePassword erzwingt (oder erlässt) den Passwortwechsel bei der nächsten Anmeldung.
+func (s *Store) SetMustChangePassword(ctx context.Context, id int64, must bool) error {
+	return affectedOne(s.db.ExecContext(noCancel(ctx), `UPDATE users SET must_change_password = ? WHERE id = ?`, must, id))
 }

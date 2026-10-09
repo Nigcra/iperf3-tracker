@@ -58,7 +58,7 @@ func (s *Scheduler) Start(ctx context.Context) error {
 			n++
 		}
 	}
-	slog.Info("Scheduler gestartet", "server_mit_zeitplan", n)
+	slog.Info("Scheduler gestartet", "scheduled_servers", n)
 	return nil
 }
 
@@ -112,7 +112,7 @@ func (s *Scheduler) Update(sv *model.Server) bool {
 		defer s.wg.Done()
 		s.loop(ctx, id, interval)
 	}()
-	slog.Info("Zeitplan aktiv", "server", sv.Name, "intervall", interval)
+	slog.Info("Zeitplan aktiv", "server", sv.Name, "interval", interval)
 	return true
 }
 
@@ -155,7 +155,7 @@ func (s *Scheduler) runOnce(ctx context.Context, serverID int64) {
 	}
 	test := model.NewTestFromDefaults(sv)
 	if err := s.store.CreateTest(ctx, test); err != nil {
-		slog.Error("Geplanter Test konnte nicht angelegt werden", "server", sv.Name, "fehler", err)
+		slog.Error("Geplanter Test konnte nicht angelegt werden", "server", sv.Name, "error", err)
 		return
 	}
 	slog.Info("Geplanter Test", "server", sv.Name, "test", test.ID)
@@ -174,7 +174,7 @@ func (s *Scheduler) runOnce(ctx context.Context, serverID int64) {
 	}
 	tr.TestID = &test.ID
 	if err := s.store.CreateTrace(ctx, tr); err != nil {
-		slog.Error("Auto-Trace konnte nicht gespeichert werden", "server", sv.Name, "fehler", err)
+		slog.Error("Auto-Trace konnte nicht gespeichert werden", "server", sv.Name, "error", err)
 		return
 	}
 	slog.Info("Auto-Trace abgeschlossen", "server", sv.Name, "test", test.ID, "hops", tr.TotalHops)

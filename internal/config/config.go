@@ -1,5 +1,7 @@
-// Package config lädt die Anwendungskonfiguration aus config.yaml. Einzelne
-// Werte lassen sich per Umgebungsvariable überschreiben (für Docker).
+// Package config lädt die Anwendungskonfiguration aus config.yaml. Jeder
+// Schlüssel lässt sich per Umgebungsvariable IPERF3_<ABSCHNITT>_<SCHLÜSSEL>
+// überschreiben (z. B. IPERF3_WEB_LISTEN, IPERF3_STORAGE_PATH); die früheren
+// Namen ohne Präfix gelten weiter als veraltete Aliase (siehe env.go).
 package config
 
 import (
@@ -7,12 +9,18 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"os"
 	"path/filepath"
-	"strconv"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
+
+// DefaultListen ist die Adresse, wenn web.listen weder in der Datei noch per
+// Umgebung gesetzt ist: nur lokal erreichbar. Die beim ersten Start erzeugte
+// config.yaml und das Docker-Image setzen ausdrücklich 0.0.0.0:8000.
+const DefaultListen = "127.0.0.1:8000"
 
 // Config bündelt die gesamte Anwendungskonfiguration.
 type Config struct {
@@ -22,10 +30,14 @@ type Config struct {
 	Scheduler SchedulerConfig `yaml:"scheduler"`
 	Iperf     IperfConfig     `yaml:"iperf"`
 	GeoIP     GeoIPConfig     `yaml:"geoip"`
+	Map       MapConfig       `yaml:"map"`
 	Log       LogConfig       `yaml:"log"`
 
 	// Dir ist das Verzeichnis der Config-Datei; relative Pfade beziehen sich darauf.
 	Dir string `yaml:"-"`
+	// Warnings sammelt Hinweise beim Laden (z. B. veraltete Umgebungsvariablen),
+	// die erst nach dem Einrichten des Loggers ausgegeben werden können.
+	Warnings []string `yaml:"-"`
 }
 
 // WebConfig konfiguriert den HTTP-Server.
@@ -40,7 +52,7 @@ type StorageConfig struct {
 
 // AuthConfig konfiguriert die Anmeldung.
 type AuthConfig struct {
-	// SecretKey signiert die Login-Tokens (JWT, HS256).
+	// SecretKey signiert die Sitzungen (JWT, HS256) und leitet die CSRF-Tokens ab.
 	SecretKey string `yaml:"secret_key"`
 	// SecretGenerated ist true, wenn kein Schlüssel konfiguriert war und für
 	// diese Laufzeit ein zufälliger erzeugt wurde.
@@ -68,9 +80,43 @@ type GeoIPConfig struct {
 	Path string `yaml:"path"`
 }
 
+// MapConfig konfiguriert den Kartenhintergrund der Peering-Map.
+type MapConfig struct {
+	// TileURL ist eine Kachel-URL mit {z}, {x} und {y} (z. B. eines eigenen
+	// Kachelservers). Leer = eingebettete Weltkarte (Natural Earth), ohne
+	// jeden Abruf von fremden Servern.
+	TileURL string `yaml:"tile_url"`
+	// TileAttribution ist der Quellenhinweis für die Kacheln (HTML erlaubt).
+	// Leer = OpenStreetMap-Hinweis.
+	TileAttribution string `yaml:"tile_attribution"`
+}
+
+// tilePlaceholders ersetzt die Leaflet-Platzhalter für die URL-Prüfung.
+var tilePlaceholders = strings.NewReplacer("{s}", "a", "{z}", "0", "{x}", "0", "{y}", "0", "{r}", "")
+
+// TileOrigin liefert Schema und Host der Kachel-URL (für die CSP) oder "".
+func (m MapConfig) TileOrigin() string {
+	if m.TileURL == "" {
+		return ""
+	}
+	u, err := url.Parse(tilePlaceholders.Replace(m.TileURL))
+	if err != nil || u.Host == "" {
+		return ""
+	}
+	// Platzhalter für Subdomains ({s}.tile.example.org) als Wildcard erlauben.
+	host := u.Host
+	if strings.HasPrefix(m.TileURL, u.Scheme+"://{s}.") {
+		host = "*." + strings.TrimPrefix(host, "a.")
+	}
+	return u.Scheme + "://" + host
+}
+
 // LogConfig steuert die Protokollierung.
 type LogConfig struct {
+	// Level: debug, info, warn oder error.
 	Level string `yaml:"level"`
+	// Format: text (Standard) oder json.
+	Format string `yaml:"format"`
 }
 
 // SlogLevel liefert das konfigurierte Log-Level (debug, info, warn, error).
@@ -85,17 +131,20 @@ func (l LogConfig) SlogLevel() slog.Level {
 // defaultYAML ist der Inhalt einer neu erzeugten config.yaml; %s ist der
 // zufällig erzeugte Token-Schlüssel.
 const defaultYAML = `# iperf3-Tracker – configuration
-# Individual values can be overridden with environment variables:
-#   LISTEN_ADDR, DB_PATH, SECRET_KEY, SCHEDULER_ENABLED, IPERF3_PATH, IPERF3_AUTO_INSTALL, GEOIP_PATH, LOG_LEVEL
+# Every key can be overridden with an environment variable
+# IPERF3_<SECTION>_<KEY>, e.g. IPERF3_WEB_LISTEN, IPERF3_STORAGE_PATH,
+# IPERF3_AUTH_SECRET_KEY, IPERF3_SCHEDULER_ENABLED, IPERF3_LOG_LEVEL.
 
 web:
+  # 0.0.0.0 = reachable from the network. Without this key the service only
+  # listens on 127.0.0.1:8000.
   listen: "0.0.0.0:8000"
 
 storage:
   path: "data/iperf3-tracker.db"
 
 auth:
-  # Key used to sign login tokens. Generated randomly on first start;
+  # Key used to sign login sessions. Generated randomly on first start;
   # changing it invalidates all existing logins.
   secret_key: "%s"
 
@@ -113,14 +162,29 @@ geoip:
   # GeoLite2-City database for the locations on the map (relative to this file).
   path: "geoip/GeoLite2-City.mmdb"
 
+map:
+  # Empty = embedded offline world map (Natural Earth), no external requests.
+  # Optional own tile server, e.g. "https://tiles.example.org/{z}/{x}/{y}.png"
+  tile_url: ""
+  # Attribution shown for the tiles (HTML allowed); empty = OpenStreetMap notice.
+  tile_attribution: ""
+
 log:
+  # debug | info | warn | error
   level: "info"
+  # text | json
+  format: "text"
 `
 
 // CreateDefault schreibt eine Standard-config.yaml mit frisch erzeugtem
 // Token-Schlüssel nach path und gibt die geparste Konfiguration zurück.
 func CreateDefault(path string) (*Config, error) {
 	content := fmt.Sprintf(defaultYAML, newSecret())
+	if dir := filepath.Dir(path); dir != "" {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return nil, fmt.Errorf("Standard-Konfiguration konnte nicht erstellt werden (%s): %w", path, err)
+		}
+	}
 	if err := os.WriteFile(path, []byte(content), 0600); err != nil {
 		return nil, fmt.Errorf("Standard-Konfiguration konnte nicht erstellt werden (%s): %w", path, err)
 	}
@@ -139,7 +203,7 @@ func Load(path string) (*Config, error) {
 	if err := yaml.Unmarshal(data, cfg); err != nil {
 		return nil, fmt.Errorf("Konfiguration ist ungültig: %w", err)
 	}
-	if err := cfg.applyEnv(); err != nil {
+	if err := cfg.applyEnv(os.LookupEnv); err != nil {
 		return nil, err
 	}
 
@@ -164,48 +228,12 @@ func Load(path string) (*Config, error) {
 
 func defaults() *Config {
 	return &Config{
-		Web:       WebConfig{Listen: "0.0.0.0:8000"},
+		Web:       WebConfig{Listen: DefaultListen},
 		Storage:   StorageConfig{Path: "data/iperf3-tracker.db"},
 		GeoIP:     GeoIPConfig{Path: "geoip/GeoLite2-City.mmdb"},
 		Scheduler: SchedulerConfig{Enabled: true},
-		Log:       LogConfig{Level: "info"},
+		Log:       LogConfig{Level: "info", Format: "text"},
 	}
-}
-
-func (c *Config) applyEnv() error {
-	if v := os.Getenv("LISTEN_ADDR"); v != "" {
-		c.Web.Listen = v
-	}
-	if v := os.Getenv("DB_PATH"); v != "" {
-		c.Storage.Path = v
-	}
-	if v := os.Getenv("SECRET_KEY"); v != "" {
-		c.Auth.SecretKey = v
-	}
-	if v := os.Getenv("SCHEDULER_ENABLED"); v != "" {
-		b, err := strconv.ParseBool(v)
-		if err != nil {
-			return fmt.Errorf("SCHEDULER_ENABLED ist ungültig: %q", v)
-		}
-		c.Scheduler.Enabled = b
-	}
-	if v := os.Getenv("IPERF3_PATH"); v != "" {
-		c.Iperf.Path = v
-	}
-	if v := os.Getenv("IPERF3_AUTO_INSTALL"); v != "" {
-		b, err := strconv.ParseBool(v)
-		if err != nil {
-			return fmt.Errorf("IPERF3_AUTO_INSTALL ist ungültig: %q", v)
-		}
-		c.Iperf.AutoInstall = b
-	}
-	if v := os.Getenv("GEOIP_PATH"); v != "" {
-		c.GeoIP.Path = v
-	}
-	if v := os.Getenv("LOG_LEVEL"); v != "" {
-		c.Log.Level = v
-	}
-	return nil
 }
 
 func (c *Config) validate() error {
@@ -215,6 +243,18 @@ func (c *Config) validate() error {
 	var lvl slog.Level
 	if err := lvl.UnmarshalText([]byte(c.Log.Level)); err != nil {
 		return fmt.Errorf("log.level ist ungültig: %q", c.Log.Level)
+	}
+	switch c.Log.Format {
+	case "", "text", "json":
+	default:
+		return fmt.Errorf("log.format muss text oder json sein: %q", c.Log.Format)
+	}
+	if c.Map.TileURL != "" {
+		u, err := url.Parse(tilePlaceholders.Replace(c.Map.TileURL))
+		if err != nil || (u.Scheme != "http" && u.Scheme != "https") ||
+			!strings.Contains(c.Map.TileURL, "{z}") || !strings.Contains(c.Map.TileURL, "{x}") || !strings.Contains(c.Map.TileURL, "{y}") {
+			return fmt.Errorf("map.tile_url muss eine http(s)-URL mit {z}, {x} und {y} sein: %q", c.Map.TileURL)
+		}
 	}
 	return nil
 }

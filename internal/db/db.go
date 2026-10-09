@@ -35,5 +35,31 @@ func Open(path string) (*sql.DB, error) {
 		conn.Close()
 		return nil, fmt.Errorf("Datenbankschema konnte nicht angelegt werden: %w", err)
 	}
+	if err := migrate(conn); err != nil {
+		conn.Close()
+		return nil, fmt.Errorf("Datenbankschema konnte nicht aktualisiert werden: %w", err)
+	}
 	return conn, nil
+}
+
+// columnMigrations ergänzt Spalten, die in älteren Datenbanken fehlen
+// (CREATE TABLE IF NOT EXISTS ändert bestehende Tabellen nicht).
+var columnMigrations = []struct{ table, column, ddl string }{
+	{"users", "must_change_password", `ALTER TABLE users ADD COLUMN must_change_password BOOLEAN NOT NULL DEFAULT 0`},
+}
+
+func migrate(conn *sql.DB) error {
+	for _, m := range columnMigrations {
+		var n int
+		if err := conn.QueryRow(`SELECT COUNT(*) FROM pragma_table_info(?) WHERE name = ?`, m.table, m.column).Scan(&n); err != nil {
+			return err
+		}
+		if n > 0 {
+			continue
+		}
+		if _, err := conn.Exec(m.ddl); err != nil {
+			return fmt.Errorf("%s.%s: %w", m.table, m.column, err)
+		}
+	}
+	return nil
 }

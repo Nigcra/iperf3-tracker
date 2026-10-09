@@ -33,7 +33,7 @@ func newTestServerWithTracer(t *testing.T, tracer *trace.Tracer) *httptest.Serve
 	t.Cleanup(func() { conn.Close() })
 
 	st := store.New(conn)
-	admin, err := auth.DefaultAdmin()
+	admin, err := auth.NewAdmin("admin", auth.DefaultAdminEmail, "admin123", false)
 	if err != nil {
 		t.Fatal(err)
 	}

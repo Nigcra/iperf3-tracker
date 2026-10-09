@@ -15,17 +15,19 @@ const STRINGS = {
   'unknown':              ['unbekannt', 'unknown'],
   'unknownError':         ['Unbekannter Fehler', 'Unknown error'],
   'lang.choose':          ['Sprache wählen', 'Choose language'],
+  'lang.label':           ['Sprache', 'Language'],
 
   // Anmeldung und Benutzermenü
   'login.user':           ['Benutzername', 'Username'],
   'login.pass':           ['Passwort', 'Password'],
   'login.submit':         ['Anmelden', 'Sign in'],
   'login.failed':         ['Benutzername oder Passwort falsch.', 'Wrong username or password.'],
-  'login.defaultPw':      ['Das Standardpasswort ist noch aktiv – bitte über das Benutzermenü ändern.',
-                           'The default password is still active – please change it via the user menu.'],
+  'login.expired':        ['Sitzung abgelaufen – bitte erneut anmelden.', 'Session expired – please sign in again.'],
   'login.unreachable':    ['Dienst nicht erreichbar: {msg}', 'Service unreachable: {msg}'],
-  'user.title':           ['Benutzer', 'User'],
-  'user.menu':            ['Benutzermenü', 'User menu'],
+  'force.note':           ['Bitte jetzt ein eigenes Passwort festlegen. Das Startpasswort gilt nur für die erste Anmeldung.',
+                           'Please set your own password now. The initial password is only valid for the first sign-in.'],
+  'force.submit':         ['Passwort speichern', 'Save password'],
+  'user.menu':            ['Benutzer & Einstellungen', 'User & settings'],
   'user.changePassword':  ['Passwort ändern', 'Change password'],
   'user.logout':          ['Abmelden', 'Sign out'],
 
@@ -37,6 +39,9 @@ const STRINGS = {
   'nav.admin':            ['Admin', 'Admin'],
   'theme.title':          ['Hell / Dunkel umschalten', 'Toggle light / dark'],
   'theme.aria':           ['Theme umschalten', 'Toggle theme'],
+  'theme.label':          ['Darstellung', 'Appearance'],
+  'theme.light':          ['Hell', 'Light'],
+  'theme.dark':           ['Dunkel', 'Dark'],
   'test.start':           ['Test starten', 'Start test'],
   'test.startNew':        ['Neuen Test starten', 'Start a new test'],
 
@@ -162,7 +167,7 @@ const STRINGS = {
   'servers.deleted':      ['„{name}“ gelöscht', '“{name}” deleted'],
 
   // Tests
-  'tests.parallelHint':   ['⚠ Viele öffentliche Server erlauben höchstens 4 parallele Streams.', '⚠ Many public servers allow at most 4 parallel streams.'],
+  'tests.parallelHint':   ['Viele öffentliche Server erlauben höchstens 4 parallele Streams.', 'Many public servers allow at most 4 parallel streams.'],
   'tests.history':        ['Testverlauf', 'Test history'],
   'tests.allServers':     ['Alle Server', 'All servers'],
   'tests.allStatus':      ['Alle Status', 'All statuses'],
@@ -212,6 +217,8 @@ const STRINGS = {
   'peering.location':     ['Standort', 'Location'],
   'peering.noLeaflet':    ['Karte nicht verfügbar (Leaflet konnte nicht geladen werden). Der Pfad wird unten angezeigt.',
                            'Map not available (Leaflet could not be loaded). The path is shown below.'],
+  'peering.noWorld':      ['Weltkarte konnte nicht geladen werden. Der Pfad wird unten angezeigt.',
+                           'World map could not be loaded. The path is shown below.'],
   'peering.loadFailed':   ['Traces konnten nicht geladen werden: {msg}', 'Could not load traces: {msg}'],
   'peering.traceCount':   ['{name} ({n} Traces)', '{name} ({n} traces)'],
   'peering.noServers':    ['Keine Server angelegt', 'No servers yet'],
@@ -287,6 +294,7 @@ const STRINGS = {
   'admin.administrator':  ['Administrator', 'Administrator'],
   'admin.user':           ['Benutzer', 'User'],
   'admin.locked':         ['gesperrt', 'locked'],
+  'admin.mustChange':     ['Passwortwechsel offen', 'password change pending'],
   'admin.deleteUser':     ['Benutzer löschen', 'Delete user'],
   'admin.createUser':     ['Benutzer anlegen', 'Create user'],
   'admin.ufName':         ['Benutzername *', 'Username *'],
@@ -312,14 +320,29 @@ const STRINGS = {
   'admin.tracesDeleted':  ['{traces} Trace(s) und {hops} Hop(s) gelöscht', '{traces} trace(s) and {hops} hop(s) deleted'],
 };
 
-// detectLang wählt die gespeicherte Sprache, sonst die des Browsers (Deutsch
-// nur bei deutscher Browsersprache, sonst Englisch).
+// LANG_KEY ist der gemeinsame localStorage-Schlüssel der wedigo-Produkte.
+const LANG_KEY = 'wedigo-lang';
+
+// detectLang wählt die gespeicherte Sprache, sonst die erste unterstützte
+// Browsersprache, sonst Deutsch. Der frühere Schlüssel "iperf-lang" wird
+// einmalig übernommen.
 function detectLang() {
   let saved = null;
-  try { saved = localStorage.getItem('iperf-lang'); } catch (e) {}
+  try {
+    saved = localStorage.getItem(LANG_KEY);
+    const old = localStorage.getItem('iperf-lang');
+    if (old !== null) {
+      if (!LANGS.includes(saved) && LANGS.includes(old)) { saved = old; localStorage.setItem(LANG_KEY, old); }
+      localStorage.removeItem('iperf-lang');
+    }
+  } catch (e) {}
   if (LANGS.includes(saved)) return saved;
-  const nav = (navigator.languages && navigator.languages[0]) || navigator.language || '';
-  return nav.toLowerCase().startsWith('de') ? 'de' : 'en';
+  const prefs = navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language || ''];
+  for (const p of prefs) {
+    const base = String(p).toLowerCase().slice(0, 2);
+    if (LANGS.includes(base)) return base;
+  }
+  return 'de';
 }
 let LANG = detectLang();
 
@@ -356,7 +379,7 @@ function setLang(lang) {
   if (!LANGS.includes(lang)) return;
   const changed = lang !== LANG;
   LANG = lang;
-  try { localStorage.setItem('iperf-lang', lang); } catch (e) {}
+  try { localStorage.setItem(LANG_KEY, lang); } catch (e) {}
   applyI18n();
   if (changed) window.dispatchEvent(new Event('langchange'));
 }

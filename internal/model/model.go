@@ -14,6 +14,8 @@ type User struct {
 	IsAdmin        bool       `json:"is_admin"`
 	CreatedAt      time.Time  `json:"created_at"`
 	LastLogin      *time.Time `json:"last_login"`
+	// MustChangePassword erzwingt einen Passwortwechsel vor jeder weiteren Nutzung.
+	MustChangePassword bool `json:"must_change_password"`
 }
 
 // Protocol ist das Transportprotokoll eines iperf3-Tests.

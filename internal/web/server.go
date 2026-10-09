@@ -8,7 +8,10 @@ import (
 	"io"
 	"io/fs"
 	"log/slog"
+	"mime"
 	"net/http"
+	"strconv"
+	"time"
 	"unicode/utf8"
 
 	"iperf3-tracker/internal/auth"
@@ -31,6 +34,16 @@ type Deps struct {
 	Runner    *iperf.Runner
 	Tracer    *trace.Tracer
 	Scheduler *scheduler.Scheduler
+	// Map ist die Kartenkonfiguration der Peering-Map (leer = eingebettete Weltkarte).
+	Map MapSettings
+}
+
+// MapSettings beschreibt den Kartenhintergrund für die Oberfläche.
+type MapSettings struct {
+	TileURL         string `json:"tile_url"`
+	TileAttribution string `json:"tile_attribution"`
+	// TileOrigin ist Schema und Host des Kachelservers für die CSP (img-src).
+	TileOrigin string `json:"-"`
 }
 
 // Server bündelt die HTTP-Handler.
@@ -40,7 +53,9 @@ type Server struct {
 	runner    *iperf.Runner
 	tracer    *trace.Tracer
 	scheduler *scheduler.Scheduler
+	mapCfg    MapSettings
 	mux       *http.ServeMux
+	handler   http.Handler
 
 	testTraces testTraces
 }
@@ -53,28 +68,37 @@ func NewServer(d Deps) *Server {
 		runner:     d.Runner,
 		tracer:     d.Tracer,
 		scheduler:  d.Scheduler,
+		mapCfg:     d.Map,
 		mux:        http.NewServeMux(),
 		testTraces: testTraces{running: map[int64]bool{}},
 	}
 	s.routes()
+	imgSrc := ""
+	if d.Map.TileOrigin != "" {
+		imgSrc = " " + d.Map.TileOrigin
+	}
+	s.handler = securityHeaders(crossOriginGuard(s.mux), imgSrc)
 	return s
 }
 
 // Handler liefert den HTTP-Handler.
-func (s *Server) Handler() http.Handler { return s.mux }
+func (s *Server) Handler() http.Handler { return s.handler }
 
 func (s *Server) routes() {
 	// Oberfläche: index.html unter "/", Skripte und Styles unter /static/.
 	s.mux.HandleFunc("GET /{$}", handleIndex)
 	s.mux.Handle("GET /static/", noCache(http.FileServerFS(static)))
+	// Fremdbibliotheken ändern sich nur mit neuen Versionen: einen Tag zwischenspeichern.
+	s.mux.Handle("GET /static/vendor/", cacheFor(24*time.Hour, http.FileServerFS(static)))
 	s.mux.HandleFunc("GET /api/info", s.handleInfo)
 	s.mux.HandleFunc("GET /health", s.handleHealth)
 	s.mux.Handle("GET /api/status", s.requireUser(s.handleStatus))
 
 	s.mux.HandleFunc("POST /api/auth/login", s.handleLogin)
+	s.mux.HandleFunc("POST /api/auth/logout", s.handleLogout)
 	s.mux.HandleFunc("POST /api/auth/init-admin", s.handleInitAdmin)
-	s.mux.Handle("GET /api/auth/me", s.requireUser(s.handleMe))
-	s.mux.Handle("POST /api/auth/change-password", s.requireUser(s.handleChangePassword))
+	s.mux.Handle("GET /api/auth/me", s.requireUserPending(s.handleMe))
+	s.mux.Handle("POST /api/auth/change-password", s.requireUserPending(s.handleChangePassword))
 	s.mux.Handle("POST /api/auth/register", s.requireAdmin(s.handleRegister))
 	s.mux.Handle("GET /api/auth/users", s.requireAdmin(s.handleListUsers))
 	s.mux.Handle("DELETE /api/auth/users/{user_id}", s.requireAdmin(s.handleDeleteUser))
@@ -90,6 +114,7 @@ func (s *Server) routes() {
 	s.mux.Handle("GET /api/tests/{test_id}", s.requireUser(s.handleGetTest))
 	s.mux.Handle("DELETE /api/tests/{test_id}", s.requireUser(s.handleDeleteTest))
 	s.mux.Handle("GET /api/tests/{test_id}/live", s.requireUser(s.handleTestLive))
+	s.mux.Handle("GET /api/tests/live/stream", s.requireUser(s.handleLiveTestsStream))
 	s.mux.Handle("GET /api/tests/server/{server_id}/latest", s.requireUser(s.handleLatestTest))
 
 	s.mux.Handle("GET /api/stats/dashboard", s.requireUser(s.handleDashboardStats))
@@ -105,7 +130,7 @@ func (s *Server) routes() {
 	s.mux.Handle("GET /api/traces/test/{test_id}", s.requireUser(s.handleTracesByTest))
 	s.mux.Handle("DELETE /api/traces/{trace_id}", s.requireUser(s.handleDeleteTrace))
 
-	// Anmeldung über ?token=, da EventSource keine Header setzen kann.
+	// Anmeldung per Sitzungs-Cookie (EventSource) oder Bearer-Token; Fehler als SSE-Event.
 	s.mux.HandleFunc("GET /api/live-trace/stream/{destination}", s.handleLiveTrace)
 
 	s.mux.Handle("DELETE /api/admin/cleanup/tests", s.requireAdmin(s.handleCleanupTests))
@@ -132,6 +157,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request, _ *model.U
 	writeJSON(w, r, http.StatusOK, map[string]any{
 		"scheduler_running": s.scheduler.Running(),
 		"iperf3":            s.runner.Status(),
+		"map":               s.mapCfg,
 	})
 }
 
@@ -201,7 +227,7 @@ func writeError(w http.ResponseWriter, r *http.Request, status int, detail strin
 
 // writeInternal protokolliert err und antwortet mit 500, ohne Interna preiszugeben.
 func writeInternal(w http.ResponseWriter, r *http.Request, err error) {
-	slog.Error("Interner Fehler", "methode", r.Method, "pfad", r.URL.Path, "fehler", err)
+	slog.Error("Interner Fehler", "method", r.Method, "path", r.URL.Path, "error", err)
 	writeError(w, r, http.StatusInternalServerError, "Interner Serverfehler")
 }
 
@@ -235,6 +261,20 @@ func handleIndex(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Write(data)
+}
+
+// cacheFor erlaubt dem Browser, die Antwort für d zwischenzuspeichern.
+func cacheFor(d time.Duration, next http.Handler) http.Handler {
+	v := "public, max-age=" + strconv.Itoa(int(d/time.Second))
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", v)
+		next.ServeHTTP(w, r)
+	})
+}
+
+func init() {
+	// Die eingebettete Weltkarte (GeoJSON) mit passendem Typ ausliefern.
+	_ = mime.AddExtensionType(".geojson", "application/geo+json")
 }
 
 // noCache lässt den Browser eingebettete Dateien bei jedem Laden prüfen, damit

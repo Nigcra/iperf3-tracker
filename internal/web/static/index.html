@@ -1,411 +1,53 @@
 <!DOCTYPE html>
-<html lang="de">
+<html lang="de" data-theme="light">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>iperf3-Tracker</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='44' fill='none' stroke='%234b5563' stroke-width='12'/%3E%3Cpath d='M50 94A44 44 0 0 1 50 6' fill='none' stroke='%23f97316' stroke-width='12'/%3E%3Cpath d='M50 50L71 20' stroke='%23f97316' stroke-width='10' stroke-linecap='round'/%3E%3Ccircle cx='50' cy='50' r='11' fill='%23f97316'/%3E%3C/svg%3E">
-<script>
-  // Apply the saved theme before first paint to avoid a flash.
-  (function () {
-    try { document.documentElement.setAttribute('data-theme', localStorage.getItem('iperf-theme') || 'dark'); }
-    catch (e) { document.documentElement.setAttribute('data-theme', 'dark'); }
-  })();
-</script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
-<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
-<style>
-  /* Designsprache des Spherifyer: semantische Tokens, zwei Themes (Navy dunkel
-     als Standard, hell) über das data-theme-Attribut. */
-  :root {
-    --accent: #3b82f6; --accent-light: #60a5fa; --accent-rgb: 59 130 246;
-    --ok: #34d399; --warn: #fbbf24; --crit: #f87171; --purple: #a78bfa;
-    --bg: #060b18;
-    --bg-grad:
-      radial-gradient(1100px 560px at 82% -12%, rgb(var(--accent-rgb) / .18), transparent 62%),
-      radial-gradient(900px 520px at -12% 28%, rgb(var(--accent-rgb) / .08), transparent 58%),
-      radial-gradient(700px 420px at 55% 115%, rgb(var(--accent-rgb) / .10), transparent 60%),
-      linear-gradient(180deg, #0b1b3a 0%, #081226 45%, #060b18 100%);
-    --surface: rgb(255 255 255 / .055); --surface-2: rgb(255 255 255 / .06);
-    --border: rgb(255 255 255 / .10); --track: rgb(255 255 255 / .08);
-    --heading: #fff; --text: #cbd5e1; --muted: #94a3b8; --faint: #64748b;
-    --header-bg: rgb(11 27 58 / .7); --nav-bg: rgb(8 18 38 / .6); --thead-bg: rgb(8 18 38 / .7);
-    --menu-bg: #0b1b3a; --card-shadow: 0 12px 32px -16px rgb(0 0 0 / .55);
-    --grid: rgba(148,163,184,.14);
-    color-scheme: dark;
-  }
-  :root[data-theme="light"] {
-    --bg: #eef2f8;
-    --bg-grad:
-      radial-gradient(1100px 560px at 85% -10%, rgb(var(--accent-rgb) / .12), transparent 60%),
-      radial-gradient(900px 520px at -10% 20%, rgb(var(--accent-rgb) / .07), transparent 55%),
-      linear-gradient(180deg, #f2f6fc 0%, #e9eef6 100%);
-    --surface: #ffffff; --surface-2: #ffffff;
-    --border: #e2e8f0; --track: rgb(15 23 42 / .06);
-    --heading: #0f172a; --text: #334155; --muted: #64748b; --faint: #94a3b8;
-    --header-bg: rgb(255 255 255 / .85); --nav-bg: rgb(255 255 255 / .8); --thead-bg: rgb(241 245 251 / .9);
-    --menu-bg: #ffffff; --card-shadow: 0 8px 24px -14px rgb(15 23 42 / .18);
-    --grid: rgba(15,23,42,.08);
-    color-scheme: light;
-  }
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
-    font-family: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
-    color: var(--text); font-size: 14px; min-height: 100vh; background-color: var(--bg);
-    -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; text-rendering: optimizeLegibility;
-    display: flex; flex-direction: column;
-  }
-  body::before { content: ""; position: fixed; inset: 0; z-index: -1; background: var(--bg-grad); }
-  * { scrollbar-width: thin; scrollbar-color: rgb(148 163 184 / .25) transparent; }
-  a { color: var(--accent-light); text-underline-offset: 2px; }
-  :root[data-theme="light"] a { color: var(--accent); }
-  code, .mono { font-family: ui-monospace, 'Cascadia Code', Consolas, monospace; }
-  [hidden] { display: none !important; }
-
-  /* ---------- Kopfzeile ---------- */
-  .header { position: sticky; top: 0; z-index: 30; padding: 12px 0;
-            background: var(--header-bg); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
-            border-bottom: 1px solid var(--border); box-shadow: 0 8px 24px -12px rgba(0,0,0,.35); }
-  .header-inner { max-width: 1152px; margin: 0 auto; width: 100%; padding: 0 24px;
-                  display: flex; align-items: center; gap: 20px; flex-wrap: nowrap; min-width: 0; }
-  .brand { display: flex; align-items: center; gap: 12px; flex: none; }
-  /* Logo des früheren React-Frontends (Logo.tsx), unverändert portiert: Tacho
-     aus Rahmen-Ringen, Zeiger schnellt beim Einblenden hoch und federt nach.
-     --s ist die Kantenlänge (size im Original). */
-  .logo { --s: 40px; display: flex; flex-direction: column; align-items: center; gap: 0; flex: none; }
-  .logo-gauge { width: var(--s); height: var(--s); position: relative; display: flex; align-items: center; justify-content: center;
-                filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.15)); }
-  .logo-ring { width: 100%; height: 100%; border-radius: 50%; border: calc(var(--s) * 0.1) solid #4B5563; position: absolute;
-               box-sizing: border-box; box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.1); }
-  .logo-arc { width: 100%; height: 100%; border-radius: 50%; border: calc(var(--s) * 0.1) solid transparent;
-              border-top-color: #F97316; border-left-color: #FB923C; position: absolute; transform: rotate(-45deg);
-              box-sizing: border-box; filter: drop-shadow(0 0 8px rgba(249, 115, 22, 0.4)); }
-  .logo-needle { width: calc(var(--s) * 0.45); height: 2.5px; background: linear-gradient(90deg, rgba(249, 115, 22, 0.3), #F97316);
-                 position: absolute; transform-origin: left center; transform: rotate(-55deg); left: 50%; top: 50%;
-                 border-radius: 2px; box-shadow: 0 2px 6px rgba(249, 115, 22, 0.3); animation: needleSweep 2s ease-out forwards; }
-  .logo-hub { width: calc(var(--s) * 0.16); height: calc(var(--s) * 0.16); background: linear-gradient(135deg, #FB923C 0%, #F97316 100%);
-              border-radius: 50%; position: absolute; border: calc(var(--s) * 0.02) solid #1e293b; box-sizing: border-box; z-index: 10;
-              box-shadow: 0 2px 8px rgba(249, 115, 22, 0.4), inset 0 1px 2px rgba(255, 255, 255, 0.3); }
-  .logo-text { text-align: center; font-family: "Inter", "SF Pro Display", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-  .logo-t1 { font-size: calc(var(--s) * 0.22); font-weight: 600; color: white; letter-spacing: 1px; line-height: 1.1;
-             text-shadow: 0 2px 8px rgba(0,0,0,0.3), 0 4px 16px rgba(0,0,0,0.2); text-transform: uppercase; }
-  .logo-t2 { font-size: calc(var(--s) * 0.16); font-weight: 500; color: rgba(255,255,255,0.85); letter-spacing: 1.5px; margin-top: 2px;
-             text-shadow: 0 2px 8px rgba(0,0,0,0.3), 0 4px 16px rgba(0,0,0,0.2); text-transform: uppercase; }
-  /* Weiße Schrift wäre auf der hellen Karte unsichtbar. */
-  :root[data-theme="light"] .logo-t1 { color: var(--heading); text-shadow: none; }
-  :root[data-theme="light"] .logo-t2 { color: var(--muted); text-shadow: none; }
-  .logo-lg { --s: 126px; gap: 12px; }
-  @keyframes needleSweep {
-    0% { transform: rotate(-135deg); }
-    60% { transform: rotate(-55deg); }
-    70% { transform: rotate(-60deg); }
-    80% { transform: rotate(-55deg); }
-    100% { transform: rotate(-55deg); }
-  }
-  .brand-title { font-size: 1.15em; font-weight: 600; letter-spacing: .2px; color: var(--heading); white-space: nowrap; }
-  .nav-ico { width: 16px; height: 16px; flex: none; }
-  .header .actions { display: flex; align-items: center; gap: 10px; margin-left: auto; flex-wrap: nowrap; }
-
-  .nav { display: flex; gap: 4px; min-width: 0; overflow-x: auto; }
-  .nav button { background: none; border: none; color: var(--muted); padding: 8px 14px; font-size: 0.875rem; font-weight: 400;
-                cursor: pointer; border-radius: 8px; font-family: inherit; transition: all .15s; display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
-  .nav button:hover { color: var(--heading); background: var(--surface-2); }
-  .nav button.active { color: var(--heading); font-weight: 600; background: rgb(var(--accent-rgb) / .16);
-                       box-shadow: inset 0 0 0 1px rgb(var(--accent-rgb) / .35); }
-
-  .btn { color: #fff; border: none; padding: 9px 16px; border-radius: 8px; cursor: pointer; white-space: nowrap;
-         font-size: 0.85em; font-weight: 500; font-family: inherit; display: inline-flex; align-items: center; gap: 7px; justify-content: center;
-         background-image: linear-gradient(135deg, rgb(var(--accent-rgb)) 0%, rgb(var(--accent-rgb) / .75) 100%);
-         box-shadow: 0 8px 24px -8px rgb(var(--accent-rgb) / .55), inset 0 1px 0 rgb(255 255 255 / .15); transition: filter .15s; }
-  .btn:hover { filter: brightness(1.12); }
-  .btn:disabled { background: rgba(148,163,184,.2); box-shadow: none; color: var(--muted); cursor: default; filter: none; }
-  .btn-secondary { color: var(--text); background: var(--surface-2); background-image: none; border: 1px solid var(--border); box-shadow: none; }
-  .btn-secondary:hover { color: var(--heading); filter: none; background: var(--surface); }
-  .btn-danger { background-image: linear-gradient(135deg, #ef4444 0%, rgb(239 68 68 / .75) 100%); box-shadow: 0 8px 24px -8px rgb(239 68 68 / .55); }
-  .icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; flex: none;
-              border-radius: 8px; cursor: pointer; color: var(--text); background: var(--surface-2);
-              border: 1px solid var(--border); transition: all .15s; font-family: inherit; }
-  .icon-btn:hover { color: var(--heading); background: var(--surface); }
-
-  /* Klapp-Menüs in der Kopfzeile (Status, Benutzer). */
-  .menu { position: relative; display: inline-flex; }
-  .menu-panel { position: absolute; right: 0; top: calc(100% + 8px); z-index: 40;
-                min-width: 240px; max-width: 360px; padding: 12px 14px; border-radius: 12px;
-                background: var(--menu-bg); border: 1px solid var(--border); box-shadow: var(--card-shadow);
-                font-size: 0.82em; color: var(--text); }
-  .menu-panel .sp-row { margin-bottom: 5px; }
-  .menu-panel .sp-row:last-child { margin-bottom: 0; }
-  .sp-label { color: var(--muted); }
-  .sp-err { color: #fca5a5; word-break: break-word; }
-  :root[data-theme="light"] .sp-err { color: #dc2626; }
-  #statusIcon { font-size: 1.05em; line-height: 1; }
-  .status-dot-ok { color: var(--ok); } .status-dot-warn { color: var(--warn); } .status-dot-err { color: var(--crit); }
-  #statusBtn.has-error { border-color: rgb(248 113 113 / .5); background: rgb(248 113 113 / .12); }
-  .user-head { display: flex; align-items: center; gap: 8px; padding-bottom: 10px; margin-bottom: 10px; border-bottom: 1px solid var(--border); }
-  .user-name { font-weight: 600; color: var(--heading); font-size: 1.1em; }
-  .menu-item { display: flex; align-items: center; gap: 8px; width: 100%; background: none; border: none; color: var(--text);
-               padding: 7px 8px; border-radius: 8px; cursor: pointer; font: inherit; text-align: left; }
-  .menu-item:hover { background: var(--surface-2); color: var(--heading); }
-
-  /* Sprachwahl: Globus mit Kürzel in der Kopfzeile, Umschalter auf der Anmeldekarte. */
-  .lang-btn { width: auto; padding: 0 9px; gap: 5px; font-size: 0.74em; font-weight: 700; letter-spacing: .4px; }
-  .lang-panel { min-width: 170px; padding: 6px; }
-  .lang-panel .menu-item { justify-content: space-between; }
-  .lang-panel .lang-code { color: var(--faint); font-size: .85em; font-weight: 600; }
-  .lang-panel .menu-item.active { color: var(--heading); font-weight: 600; background: rgb(var(--accent-rgb) / .14); }
-  .lang-panel .menu-item.active .lang-code { color: var(--accent); }
-  .login-card { position: relative; }
-  .login-lang { position: absolute; top: 14px; right: 14px; display: inline-flex; align-items: center; gap: 2px; padding: 3px;
-                border-radius: 9px; background: var(--surface-2); border: 1px solid var(--border); color: var(--muted); }
-  .login-lang svg { margin: 0 4px 0 5px; flex: none; }
-  .login-lang button { background: none; border: none; color: var(--muted); font: inherit; font-size: .72em; font-weight: 700;
-                       letter-spacing: .4px; padding: 4px 8px; border-radius: 6px; cursor: pointer; }
-  .login-lang button:hover { color: var(--heading); }
-  .login-lang button.active { color: var(--heading); background: rgb(var(--accent-rgb) / .2); }
-
-  .theme-icon-light { display: none; }
-  :root[data-theme="light"] .theme-icon-dark { display: none; }
-  :root[data-theme="light"] .theme-icon-light { display: inline; }
-
-  /* ---------- Seiten & Bausteine ---------- */
-  /* Inhalt fluchtet mit der Kopfzeile (gleiche Breite und Innenabstände). */
-  main { flex: 1; width: 100%; max-width: 1152px; margin: 0 auto; }
-  .page { display: none; } .page.active { display: block; }
-  .section { padding: 24px; }
-  .section-title { font-size: 1.1em; font-weight: 700; color: var(--heading); padding-left: 12px; margin-bottom: 18px;
-                   border-left: 4px solid var(--accent); }
-  .summary { display: flex; flex-wrap: wrap; gap: 14px; padding: 22px 24px 0; }
-  .sum-card { flex: 1; min-width: 140px; border-radius: 16px; padding: 16px 18px; text-align: center;
-              background: var(--surface); border: 1px solid var(--border); border-top: 3px solid var(--accent);
-              box-shadow: var(--card-shadow); }
-  .sum-card .val { font-size: 1.6em; font-weight: 700; color: var(--accent); font-variant-numeric: tabular-nums; }
-  .sum-card .lbl { font-size: 0.75em; color: var(--muted); margin-top: 4px; }
-  .sum-card .sub { font-size: 0.72em; color: var(--faint); margin-top: 2px; }
-  .sum-card.warn { border-top-color: var(--warn); } .sum-card.warn .val { color: var(--warn); }
-  .sum-card.ok { border-top-color: var(--ok); } .sum-card.ok .val { color: var(--ok); }
-
-  /* Karten mit Kopf, Kennzahlen und Fortschrittsbalken (wie Datastore-Karten im Spherifyer). */
-  .ds-header { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
-  .ds-name { font-weight: 700; color: var(--heading); flex: 1; min-width: 100px; word-break: break-all; }
-  .ds-badges { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
-  .ds-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; }
-  .stat { display: flex; flex-direction: column; }
-  .stat-label { font-size: 0.75em; color: var(--muted); }
-  .stat-val { font-size: 0.95em; font-weight: 600; color: var(--heading); font-variant-numeric: tabular-nums; }
-  .stat-val.down { color: var(--accent-light); } .stat-val.up { color: var(--ok); }
-  :root[data-theme="light"] .stat-val.down { color: var(--accent); } :root[data-theme="light"] .stat-val.up { color: #059669; }
-  .card-actions { display: flex; gap: 6px; }
-  .card-actions .icon-btn { width: 32px; height: 32px; }
-  .bar-bg { background: var(--track); border-radius: 999px; height: 8px; overflow: hidden; margin: 2px 0 12px; }
-  .bar-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--accent), var(--accent-light)); transition: width .4s ease; }
-  .bar-fill.failed { background: var(--crit); }
-  .live-line { display: flex; justify-content: space-between; font-size: 0.78em; color: var(--muted); margin-bottom: 4px; }
-  .hist-controls { display: flex; gap: 14px; align-items: center; margin-bottom: 18px; flex-wrap: wrap; color: var(--text); }
-  .hist-controls .spacer { flex: 1; }
-  .ds-toggle-label { display: inline-flex; align-items: center; gap: 8px; font-size: 0.86em;
-                     color: var(--text); padding: 7px 14px; background: var(--surface-2); border-radius: 10px;
-                     border: 1px solid var(--border); user-select: none; }
-  .ds-toggle-label input[type=number] { width: 80px; padding: 3px 6px; text-align: right; }
-  .chart-wrap { position: relative; height: 300px; }
-  .chart-empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--faint); font-style: italic; font-size: 0.9em; }
-  @keyframes pulse { 50% { opacity: .45; } }
-  .pulse { animation: pulse 1.4s ease-in-out infinite; }
-  .ds-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(340px, 100%), 1fr)); gap: 18px; }
-  .ds-card, .chart-box { background: var(--surface); border-radius: 16px; border: 1px solid var(--border); box-shadow: var(--card-shadow); }
-  .ds-card { padding: 18px 20px; }
-  .chart-box { padding: 18px; margin-bottom: 20px; }
-  .chart-box h3 { font-size: 0.95em; margin-bottom: 14px; color: var(--heading); font-weight: 600; }
-  .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(420px, 100%), 1fr)); gap: 20px; }
-  /* Grid-Zellen dürfen schmaler als ihr Inhalt (Canvas) werden, sonst läuft die Seite mobil über. */
-  .ds-grid > *, .grid-2 > * { min-width: 0; }
-  .muted { color: var(--faint); font-style: italic; }
-  .view-switch { display: inline-flex; gap: 4px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 4px; }
-  .view-btn { background: none; border: none; color: var(--muted); padding: 7px 18px; font-size: 0.85em;
-              font-weight: 500; cursor: pointer; border-radius: 7px; font-family: inherit; transition: all .15s; }
-  .view-btn:hover { color: var(--heading); }
-  .view-btn.active { color: var(--heading); font-weight: 600; background: rgb(var(--accent-rgb) / .18);
-                     box-shadow: inset 0 0 0 1px rgb(var(--accent-rgb) / .35); }
-
-  input, select, textarea { color: var(--heading); background: var(--surface-2); border: 1px solid var(--border);
-                  padding: 8px 12px; border-radius: 8px; font-size: 0.88em; font-family: inherit; outline: none; transition: border-color .15s, box-shadow .15s; }
-  input:focus, select:focus, textarea:focus { border-color: rgb(var(--accent-rgb) / .6); box-shadow: 0 0 0 3px rgb(var(--accent-rgb) / .2); }
-  input::placeholder { color: var(--faint); }
-  option, optgroup { background: var(--menu-bg); color: var(--heading); }
-  .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
-  .field label { font-size: 0.8em; color: var(--muted); font-weight: 500; }
-
-  .tbl-wrap { overflow-x: auto; border-radius: 16px; border: 1px solid var(--border); }
-  table { width: 100%; border-collapse: collapse; background: var(--surface); }
-  thead th { background: var(--thead-bg); color: var(--text); padding: 11px 14px; text-align: left; font-size: 0.74em;
-             font-weight: 600; text-transform: uppercase; letter-spacing: .05em; white-space: nowrap; }
-  tbody td { padding: 9px 14px; border-bottom: 1px solid var(--border); font-size: 0.86em; color: var(--text); }
-  tbody tr:last-child td { border-bottom: none; }
-  tbody tr:hover td { background: rgb(var(--accent-rgb) / .10); }
-  .badge-type { background: rgb(var(--accent-rgb) / .16); color: var(--accent); padding: 2px 9px; border-radius: 999px; font-size: 0.75em; font-weight: 600; }
-  .sev-badge { padding: 2px 9px; border-radius: 999px; font-size: 0.8em; font-weight: 700; white-space: nowrap; }
-  .sev-crit { background: rgb(239 68 68 / .16); color: #dc2626; } .sev-warn { background: rgb(217 119 6 / .16); color: #b45309; }
-  .sev-info { background: rgb(148 163 184 / .16); color: var(--text); } .sev-ok { background: rgb(52 211 153 / .16); color: #059669; }
-
-  /* ---------- Anmeldung ---------- */
-  .login-wrap { flex: 1; display: flex; align-items: center; justify-content: center; padding: 40px 16px; }
-  .login-card { width: 100%; max-width: 380px; padding: 32px 30px; }
-  .login-card .brand { flex-direction: column; gap: 14px; margin-bottom: 26px; }
-
-  .login-card .brand-title { font-size: 1.5em; }
-  .login-card .btn { width: 100%; padding: 11px 16px; margin-top: 6px; }
-  .login-card input { width: 100%; }
-  .form-error { color: #fca5a5; font-size: 0.85em; margin-bottom: 12px; }
-  :root[data-theme="light"] .form-error { color: #dc2626; }
-
-  /* ---------- Dialoge & Formulare ---------- */
-  .modal-backdrop { position: fixed; inset: 0; z-index: 90; display: flex; align-items: flex-start; justify-content: center;
-                    padding: 6vh 16px; overflow-y: auto; background: rgb(2 6 23 / .6); backdrop-filter: blur(4px); }
-  .modal { width: 100%; max-width: 620px; background: var(--menu-bg); border: 1px solid var(--border); border-radius: 16px;
-           box-shadow: 0 24px 64px -24px rgb(0 0 0 / .6); }
-  .modal.small { max-width: 440px; }
-  .modal-head { display: flex; align-items: center; justify-content: space-between; padding: 18px 22px; border-bottom: 1px solid var(--border); }
-  .modal-head h2 { font-size: 1.05em; color: var(--heading); font-weight: 700; }
-  .modal-body { padding: 20px 22px; }
-  .modal-foot { display: flex; justify-content: flex-end; gap: 10px; padding: 14px 22px 18px; border-top: 1px solid var(--border); }
-  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
-  .form-grid .full { grid-column: 1 / -1; }
-  .form-grid input, .form-grid select, .form-grid textarea { width: 100%; }
-  .form-section { font-size: 0.72em; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .06em;
-                  margin: 6px 0 12px; grid-column: 1 / -1; }
-  .check-row { display: flex; align-items: center; gap: 9px; font-size: 0.88em; color: var(--text); margin-bottom: 12px; cursor: pointer; }
-  .check-row input { width: 16px; height: 16px; accent-color: var(--accent); }
-  .check-row.disabled { opacity: .5; cursor: default; }
-  .hint { font-size: 0.76em; color: var(--faint); margin-top: -8px; margin-bottom: 12px; }
-  .section-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
-  .section-head .section-title { margin-bottom: 0; }
-  .host { font-family: ui-monospace, 'Cascadia Code', Consolas, monospace; font-size: 0.84em; color: var(--muted); margin: -6px 0 10px; word-break: break-all; }
-  .desc { font-size: 0.84em; color: var(--text); margin-bottom: 12px; }
-  .ds-card.inactive { opacity: .62; }
-  @media (max-width: 560px) { .form-grid { grid-template-columns: 1fr; } }
-
-  /* ---------- Tests ---------- */
-  .live-panel { display: flex; flex-direction: column; min-height: 100%; }
-  .live-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 14px; }
-  .live-title { font-weight: 700; color: var(--heading); }
-  .live-badge { display: inline-flex; align-items: center; gap: 6px; font-size: 0.72em; font-weight: 700; letter-spacing: .06em;
-                padding: 3px 10px; border-radius: 999px; background: rgb(248 113 113 / .16); color: var(--crit); }
-  .live-badge::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; animation: pulse 1.2s infinite; }
-  .live-badge.done { background: rgb(52 211 153 / .16); color: var(--ok); } .live-badge.done::before { animation: none; }
-  .live-badge.failed { background: rgb(248 113 113 / .16); color: var(--crit); } .live-badge.failed::before { animation: none; }
-  .live-badge.idle { background: rgb(148 163 184 / .16); color: var(--muted); } .live-badge.idle::before { animation: none; }
-  .live-panel .bar-bg { height: 12px; }
-  .live-metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 6px 0 12px; }
-  .live-metric { border-radius: 12px; padding: 12px 14px; background: var(--surface-2); border: 1px solid var(--border); min-width: 0; }
-  .live-metric .lbl { font-size: 0.75em; color: var(--muted); }
-  .live-metric .num { font-size: clamp(1.15em, 4.6vw, 1.7em); white-space: nowrap; font-weight: 700; font-variant-numeric: tabular-nums; }
-  .live-metric .num small { font-size: 0.5em; font-weight: 500; color: var(--muted); margin-left: 4px; }
-  .live-metric.down .num { color: var(--accent-light); } .live-metric.up .num { color: var(--ok); }
-  :root[data-theme="light"] .live-metric.down .num { color: var(--accent); } :root[data-theme="light"] .live-metric.up .num { color: #059669; }
-  .live-spark { position: relative; height: 120px; margin-top: auto; }
-  .live-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; color: var(--faint); text-align: center; padding: 30px 10px; }
-  table.clickable tbody tr { cursor: pointer; }
-  td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
-  .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 18px; margin-bottom: 16px; }
-  .detail-grid .stat-val { font-size: 0.9em; }
-  .error-box { border-radius: 10px; padding: 10px 12px; margin-bottom: 14px; font-size: 0.85em; word-break: break-word;
-               background: rgb(248 113 113 / .10); border: 1px solid rgb(248 113 113 / .35); color: #fca5a5; }
-  :root[data-theme="light"] .error-box { color: #b91c1c; }
-  details.raw summary { cursor: pointer; font-size: 0.82em; color: var(--muted); margin-bottom: 8px; }
-  details.raw pre { max-height: 260px; overflow: auto; font-size: 0.72em; padding: 10px 12px; border-radius: 10px;
-                    background: var(--surface-2); border: 1px solid var(--border); color: var(--text); white-space: pre-wrap; word-break: break-all; }
-
-  /* ---------- Peering-Map ---------- */
-  .peering-grid { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 20px; }
-  /* Eigener Stacking-Kontext: Leaflet und die Overlays nutzen z-index bis 1000,
-     das darf nicht über Dialoge und Menüs der Seite hinausreichen. */
-  .map-box { position: relative; isolation: isolate; padding: 0; margin: 0; height: 540px; overflow: hidden; }
-  #pmMap { position: absolute; inset: 0; background: var(--surface-2); }
-  .map-empty { z-index: 500; padding: 30px; text-align: center; background: var(--surface); }
-  .map-overlay { position: absolute; top: 12px; left: 56px; right: 12px; z-index: 600; display: flex; align-items: center; flex-wrap: wrap; gap: 10px;
-                 width: fit-content; max-width: calc(100% - 68px); padding: 9px 14px; border-radius: 10px; font-size: 0.84em;
-                 background: var(--header-bg); backdrop-filter: blur(10px); border: 1px solid var(--border); color: var(--text); box-shadow: var(--card-shadow); }
-  .map-overlay .sep { color: var(--faint); }
-  .trace-side { display: flex; flex-direction: column; max-height: 540px; padding: 16px; }
-  .side-title { font-size: 0.78em; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 10px; }
-  .trace-list { overflow-y: auto; display: flex; flex-direction: column; gap: 6px; margin: 0 -4px; padding: 0 4px; }
-  .trace-item { text-align: left; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 9px 12px;
-                cursor: pointer; color: var(--text); font: inherit; font-size: 0.84em; transition: all .15s; }
-  .trace-item:hover { border-color: rgb(var(--accent-rgb) / .45); }
-  .trace-item.active { background: rgb(var(--accent-rgb) / .16); border-color: rgb(var(--accent-rgb) / .5); color: var(--heading); }
-  .trace-item .t { font-weight: 600; color: var(--heading); }
-  .trace-item .m { font-size: 0.86em; color: var(--muted); margin-top: 2px; }
-  .path-chain { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-  .hop-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px 4px 4px; border-radius: 999px; font-size: 0.78em;
-              background: var(--surface-2); border: 1px solid var(--border); color: var(--text); font-family: ui-monospace, 'Cascadia Code', Consolas, monospace; }
-  .hop-chip .n { width: 20px; height: 20px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
-                 background: var(--accent); color: #fff; font-size: 0.85em; font-weight: 700; font-family: inherit; }
-  .hop-chip.timeout { border-style: dashed; color: var(--faint); } .hop-chip.timeout .n { background: var(--faint); }
-  .hop-chip.est .n { background: var(--warn); } .hop-chip.first .n { background: var(--ok); } .hop-chip.dest .n { background: var(--crit); }
-  .path-arrow { color: var(--faint); font-size: 0.8em; }
-  /* Dunkle Karte ohne eigenen Kachelstil: OSM-Kacheln invertieren und den Farbton zurückdrehen. */
-  :root:not([data-theme="light"]) .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(.9) contrast(.9) saturate(.6); }
-  .leaflet-container { background: var(--surface-2); }
-  .hop-icon { background: none; border: none; }
-  .hop-marker { width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
-                color: #fff; font-size: 11px; font-weight: 700; border: 2px solid #fff; box-shadow: 0 2px 8px rgb(0 0 0 / .45); }
-  .leaflet-popup-content-wrapper, .leaflet-popup-tip { background: var(--menu-bg); color: var(--text); box-shadow: var(--card-shadow); }
-  .leaflet-popup-content { font-family: inherit; font-size: 12.5px; line-height: 1.5; }
-  .leaflet-container a.leaflet-popup-close-button { color: var(--muted); }
-  .leaflet-control-attribution { background: var(--header-bg) !important; color: var(--faint) !important; }
-  .leaflet-control-attribution a { color: var(--muted) !important; }
-  .leaflet-bar a { background: var(--menu-bg); color: var(--text); border-color: var(--border); }
-  .leaflet-bar a:hover { background: var(--surface-2); color: var(--heading); }
-  @media (max-width: 900px) {
-    .peering-grid { grid-template-columns: minmax(0, 1fr); }
-    .map-box { height: 380px; }
-    .trace-side { max-height: 320px; }
-  }
-
-  #toasts { position: fixed; right: 20px; bottom: 20px; z-index: 100; display: flex; flex-direction: column; gap: 8px; max-width: min(420px, calc(100vw - 40px)); }
-  .toast { padding: 11px 16px; border-radius: 10px; font-size: 0.86em; color: var(--heading);
-           background: var(--menu-bg); border: 1px solid var(--border); border-left: 4px solid var(--ok); box-shadow: var(--card-shadow); }
-  .toast-err { border-left-color: var(--crit); }
-  .toast-warn { border-left-color: var(--warn); }
-  .icon-btn:disabled { opacity: .4; cursor: default; }
-
-  footer { text-align: center; color: var(--faint); font-size: 0.76em; padding: 18px 0 28px; }
-
-  @media (max-width: 760px) {
-    /* Navigation in eigener Zeile über die volle Breite, nur Icons. */
-    .header-inner { padding: 0 16px; gap: 10px; flex-wrap: wrap; }
-    .nav { order: 3; width: 100%; justify-content: space-between; }
-    .nav button { padding: 8px 12px; }
-    .nav button span, .btn-label { display: none; }
-    .header .actions { gap: 6px; }
-    .lang-btn { width: 36px; padding: 0; }
-    .lang-btn [data-lang-current] { display: none; }
-    .section, .summary { padding-left: 16px; padding-right: 16px; }
-    .grid-2 { grid-template-columns: 1fr; }
-  }
-  /* Auf Telefonen passen Logo und alle Aktionen nur ohne Schriftzug in eine Zeile. */
-  @media (max-width: 480px) {
-    .header .brand-title { display: none; }
-  }
-</style>
+<meta name="color-scheme" content="dark light">
+<!-- Keine externen Abrufe: alle Skripte, Styles und die Weltkarte sind eingebettet (CSP default-src 'self'). -->
+<script src="/static/theme-init.js"></script>
+<link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css">
+<link rel="stylesheet" href="/static/wedigo-tokens.css">
+<link rel="stylesheet" href="/static/app.css">
 </head>
 <body>
 
 
 <!-- Anmeldung -->
 <div class="login-wrap" id="loginView" hidden>
-  <form class="ds-card login-card" id="loginForm" onsubmit="submitLogin(event)">
-    <div class="login-lang" role="group" data-i18n-aria="lang.choose" data-i18n-title="lang.choose">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
-      <button type="button" data-lang="de" lang="de" title="Deutsch" onclick="setLang('de')">DE</button>
-      <button type="button" data-lang="en" lang="en" title="English" onclick="setLang('en')">EN</button>
+  <div class="ds-card login-card">
+    <div class="login-tools">
+      <div class="login-lang" role="group" data-i18n-aria="lang.choose" data-i18n-title="lang.choose">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
+        <button type="button" data-lang="de" lang="de" title="Deutsch" data-click="setLang" data-arg="de">DE</button>
+        <button type="button" data-lang="en" lang="en" title="English" data-click="setLang" data-arg="en">EN</button>
+      </div>
+      <button type="button" class="icon-btn" title="Hell / Dunkel umschalten" aria-label="Theme umschalten" data-i18n-title="theme.title" data-i18n-aria="theme.aria" data-click="toggleTheme"><svg class="ico theme-icon-dark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg><svg class="ico theme-icon-light" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+</button>
     </div>
     <div class="brand"><div class="logo logo-lg" role="img" aria-label="iperf3-Tracker"><div class="logo-gauge"><div class="logo-ring"></div><div class="logo-arc"></div><div class="logo-needle"></div><div class="logo-hub"></div></div><div class="logo-text"><div class="logo-t1">iPerf3</div><div class="logo-t2">Tracker</div></div></div></div>
-    <div class="form-error" id="loginError" hidden></div>
-    <div class="field"><label for="loginUser" data-i18n="login.user">Benutzername</label><input id="loginUser" autocomplete="username" required autofocus></div>
-    <div class="field"><label for="loginPass" data-i18n="login.pass">Passwort</label><input id="loginPass" type="password" autocomplete="current-password" required></div>
-    <button class="btn" id="loginBtn" type="submit" data-i18n="login.submit">Anmelden</button>
-  </form>
+
+    <form id="loginForm" data-submit="submitLogin">
+      <div class="form-error" id="loginError" role="alert" hidden></div>
+      <div class="field"><label for="loginUser" data-i18n="login.user">Benutzername</label><input id="loginUser" autocomplete="username" required autofocus></div>
+      <div class="field"><label for="loginPass" data-i18n="login.pass">Passwort</label><input id="loginPass" type="password" autocomplete="current-password" required></div>
+      <button class="btn" id="loginBtn" type="submit" data-i18n="login.submit">Anmelden</button>
+    </form>
+
+    <!-- Erzwungener Passwortwechsel (erstes Login mit Startpasswort) -->
+    <form id="forceForm" data-submit="forcePassword.save" hidden novalidate>
+      <div class="login-note" data-i18n="force.note">Bitte jetzt ein eigenes Passwort festlegen. Das Startpasswort gilt nur für die erste Anmeldung.</div>
+      <div class="form-error" id="forceError" role="alert" hidden></div>
+      <input id="forceUser" autocomplete="username" hidden>
+      <div class="field" id="forceCurrentField"><label for="forceCurrent" data-i18n="pw.current">Aktuelles Passwort</label><input id="forceCurrent" type="password" autocomplete="current-password"></div>
+      <div class="field"><label for="forceNew" data-i18n="pw.new">Neues Passwort (mind. 6 Zeichen)</label><input id="forceNew" type="password" autocomplete="new-password"></div>
+      <div class="field"><label for="forceRepeat" data-i18n="pw.repeat">Neues Passwort wiederholen</label><input id="forceRepeat" type="password" autocomplete="new-password"></div>
+      <button class="btn" id="forceSave" type="submit" data-i18n="force.submit">Passwort speichern</button>
+      <button class="btn btn-secondary" type="button" data-click="logout" data-i18n="user.logout">Abmelden</button>
+    </form>
+  </div>
 </div>
 
 <!-- Anwendung -->
@@ -413,65 +55,74 @@
   <div class="header-inner">
     <div class="brand"><div class="logo" aria-hidden="true"><div class="logo-gauge"><div class="logo-ring"></div><div class="logo-arc"></div><div class="logo-needle"></div><div class="logo-hub"></div></div></div><span class="brand-title">iperf3-Tracker</span></div>
     <nav class="nav" id="nav">
-      <button data-tab="dashboard" onclick="showTab('dashboard')">
+      <button data-tab="dashboard" data-click="showTab" data-arg="dashboard">
         <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>
         <span data-i18n="nav.dashboard">Dashboard</span>
       </button>
-      <button data-tab="tests" onclick="showTab('tests')">
+      <button data-tab="tests" data-click="showTab" data-arg="tests">
         <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/></svg>
         <span data-i18n="nav.tests">Tests</span>
       </button>
-      <button data-tab="peering" onclick="showTab('peering')">
+      <button data-tab="peering" data-click="showTab" data-arg="peering">
         <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.106 5.553a2 2 0 0 0 1.788 0l3.659-1.83A1 1 0 0 1 21 4.619v12.764a1 1 0 0 1-.553.894l-4.553 2.277a2 2 0 0 1-1.788 0l-4.212-2.106a2 2 0 0 0-1.788 0l-3.659 1.83A1 1 0 0 1 3 19.381V6.618a1 1 0 0 1 .553-.894l4.553-2.277a2 2 0 0 1 1.788 0z"/><path d="M15 5.764v15"/><path d="M9 3.236v15"/></svg>
         <span data-i18n="nav.peering">Peering-Map</span>
       </button>
-      <button data-tab="servers" onclick="showTab('servers')">
+      <button data-tab="servers" data-click="showTab" data-arg="servers">
         <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="20" height="8" x="2" y="2" rx="2"/><rect width="20" height="8" x="2" y="14" rx="2"/><line x1="6" x2="6.01" y1="6" y2="6"/><line x1="6" x2="6.01" y1="18" y2="18"/></svg>
         <span data-i18n="nav.servers">Server</span>
       </button>
-      <button data-tab="admin" onclick="showTab('admin')" id="navAdmin" hidden>
+      <button data-tab="admin" data-click="showTab" data-arg="admin" id="navAdmin" hidden>
         <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
         <span data-i18n="nav.admin">Admin</span>
       </button>
     </nav>
     <div class="actions">
       <div class="menu" id="statusMenu">
-        <button class="icon-btn" id="statusBtn" title="Status anzeigen" aria-label="Status" data-i18n-title="status.show" data-i18n-aria="tests.status" onclick="toggleMenu(event, 'statusPanel')">
-          <span id="statusIcon" class="status-dot-ok">&#9679;</span>
+        <button class="icon-btn" id="statusBtn" title="Status anzeigen" aria-label="Status" data-i18n-title="status.show" data-i18n-aria="tests.status" aria-haspopup="true" data-click="toggleMenu" data-arg="statusPanel">
+          <span id="statusIcon" class="status-dot-ok"></span>
         </button>
         <div class="menu-panel" id="statusPanel" hidden></div>
       </div>
-      <button class="icon-btn" id="themeBtn" title="Hell / Dunkel umschalten" aria-label="Theme umschalten" data-i18n-title="theme.title" data-i18n-aria="theme.aria" onclick="toggleTheme()">
-        <span class="theme-icon-dark" aria-hidden="true">☀</span>
-        <span class="theme-icon-light" aria-hidden="true">🌙</span>
-      </button>
-      <div class="menu" id="langMenu">
-        <button class="icon-btn lang-btn" id="langBtn" title="Sprache wählen" aria-label="Sprache wählen" data-i18n-title="lang.choose" data-i18n-aria="lang.choose" aria-haspopup="true" onclick="toggleMenu(event, 'langPanel')">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
-          <span data-lang-current>DE</span>
-        </button>
-        <div class="menu-panel lang-panel" id="langPanel" hidden>
-          <button class="menu-item" data-lang="de" lang="de" onclick="closeMenus(); setLang('de')">Deutsch <span class="lang-code">DE</span></button>
-          <button class="menu-item" data-lang="en" lang="en" onclick="closeMenus(); setLang('en')">English <span class="lang-code">EN</span></button>
-        </div>
-      </div>
       <div class="menu" id="userMenu">
-        <button class="icon-btn" title="Benutzer" aria-label="Benutzermenü" data-i18n-title="user.title" data-i18n-aria="user.menu" onclick="toggleMenu(event, 'userPanel')">
+        <button class="icon-btn" title="Benutzer &amp; Einstellungen" aria-label="Benutzer &amp; Einstellungen" data-i18n-title="user.menu" data-i18n-aria="user.menu" aria-haspopup="true" data-click="toggleMenu" data-arg="userPanel">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="10" r="3"/><path d="M7 20.662V19a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v1.662"/></svg>
         </button>
-        <div class="menu-panel" id="userPanel" hidden>
+        <!-- Benutzermenü mit Einstellungen: Kopf mit Benutzername, Abschnitte Sprache und Darstellung, darunter die Konto-Einträge.
+             Die Kopfzeile erscheint erst nach der Anmeldung (showApp), der Konto-Teil ist hier also immer gültig. -->
+        <div class="menu-panel user-panel" id="userPanel" hidden>
           <div class="user-head"><span class="user-name" id="userName"></span><span class="badge-type" id="userAdminBadge" hidden>Admin</span></div>
-          <button class="menu-item" onclick="closeMenus(); passwordDialog.open()">
+          <div class="menu-section">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
+            <span data-i18n="lang.label">Sprache</span>
+          </div>
+          <div class="lang-options" role="group" aria-label="Sprache wählen" data-i18n-aria="lang.choose">
+            <button class="menu-item lang-opt" data-lang="de" lang="de" data-click="chooseLang" data-arg="de">Deutsch <span class="lang-code">DE</span></button>
+            <button class="menu-item lang-opt" data-lang="en" lang="en" data-click="chooseLang" data-arg="en">English <span class="lang-code">EN</span></button>
+          </div>
+          <div class="menu-section">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 2v20"/><path d="M12 2a10 10 0 0 1 0 20" fill="currentColor"/></svg>
+            <span data-i18n="theme.label">Darstellung</span>
+          </div>
+          <div class="lang-options" role="group" aria-label="Darstellung" data-i18n-aria="theme.label">
+            <button class="menu-item lang-opt" data-theme-opt="light" aria-pressed="true" data-click="chooseTheme" data-arg="light">
+              <span class="opt-label"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg><span data-i18n="theme.light">Hell</span></span>
+            </button>
+            <button class="menu-item lang-opt" data-theme-opt="dark" aria-pressed="false" data-click="chooseTheme" data-arg="dark">
+              <span class="opt-label"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg><span data-i18n="theme.dark">Dunkel</span></span>
+            </button>
+          </div>
+          <div class="menu-sep"></div>
+          <button class="menu-item" data-click="openPasswordDialog">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
             <span data-i18n="user.changePassword">Passwort ändern</span>
           </button>
-          <button class="menu-item" onclick="logout()">
+          <button class="menu-item" data-click="logout">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>
             <span data-i18n="user.logout">Abmelden</span>
           </button>
         </div>
       </div>
-      <button class="btn" onclick="showTab('tests'); document.getElementById('tfServer').focus()" title="Neuen Test starten" data-i18n-title="test.startNew">
+      <button class="btn" data-click="startTestShortcut" title="Neuen Test starten" data-i18n-title="test.startNew">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="6 3 20 12 6 21 6 3"/></svg>
         <span class="btn-label" data-i18n="test.start">Test starten</span>
       </button>
@@ -488,15 +139,15 @@
       <div class="section-title" data-i18n="dash.history">Bandbreite im Verlauf</div>
       <div class="hist-controls">
         <label class="ds-toggle-label"><span data-i18n="dash.minDown">Min. Download</span>
-          <input type="number" id="thrDown" min="0" step="1" onchange="dashboard.setThreshold('down', this.value)"> Mbit/s</label>
+          <input type="number" id="thrDown" min="0" step="1" data-change="dashboard.setThreshold" data-arg="down" data-with-value> Mbit/s</label>
         <label class="ds-toggle-label"><span data-i18n="dash.minUp">Min. Upload</span>
-          <input type="number" id="thrUp" min="0" step="1" onchange="dashboard.setThreshold('up', this.value)"> Mbit/s</label>
+          <input type="number" id="thrUp" min="0" step="1" data-change="dashboard.setThreshold" data-arg="up" data-with-value> Mbit/s</label>
         <span class="spacer"></span>
         <div class="view-switch" id="dashRange">
-          <button class="view-btn" data-range="1h" onclick="dashboard.setRange('1h')">1 h</button>
-          <button class="view-btn" data-range="24h" onclick="dashboard.setRange('24h')">24 h</button>
-          <button class="view-btn" data-range="7d" onclick="dashboard.setRange('7d')" data-i18n="dash.range7d">7 Tage</button>
-          <button class="view-btn" data-range="30d" onclick="dashboard.setRange('30d')" data-i18n="dash.range30d">30 Tage</button>
+          <button class="view-btn" data-range="1h" data-click="dashboard.setRange" data-arg="1h">1 h</button>
+          <button class="view-btn" data-range="24h" data-click="dashboard.setRange" data-arg="24h">24 h</button>
+          <button class="view-btn" data-range="7d" data-click="dashboard.setRange" data-arg="7d" data-i18n="dash.range7d">7 Tage</button>
+          <button class="view-btn" data-range="30d" data-click="dashboard.setRange" data-arg="30d" data-i18n="dash.range30d">30 Tage</button>
         </div>
       </div>
       <div class="grid-2">
@@ -516,21 +167,21 @@
     <div class="section">
       <div class="section-title" data-i18n="test.start">Test starten</div>
       <div class="grid-2">
-        <form class="ds-card" id="testForm" onsubmit="testsPage.start(event)">
+        <form class="ds-card" id="testForm" data-submit="testsPage.start">
           <div class="form-grid">
             <div class="field full"><label for="tfServer" data-i18n="f.server">Server</label>
-              <select id="tfServer" onchange="testsPage.applyServerDefaults()"></select></div>
+              <select id="tfServer" data-change="testsPage.applyServerDefaults"></select></div>
             <div class="field"><label for="tfProto" data-i18n="f.protocol">Protokoll</label>
-              <select id="tfProto" onchange="testsPage.syncForm()"><option value="tcp">TCP</option><option value="udp">UDP</option></select></div>
+              <select id="tfProto" data-change="testsPage.syncForm"><option value="tcp">TCP</option><option value="udp">UDP</option></select></div>
             <div class="field"><label for="tfDir" data-i18n="f.direction">Richtung</label>
               <select id="tfDir"><option value="download">Download</option><option value="upload">Upload</option><option value="bidirectional" data-i18n="dir.bidirectional">Bidirektional</option></select></div>
             <div class="field"><label for="tfDuration" data-i18n="f.duration">Testdauer (s)</label><input id="tfDuration" type="number" min="1" max="300"></div>
-            <div class="field"><label for="tfParallel" data-i18n="f.parallel">Parallele Streams</label><input id="tfParallel" type="number" min="1" max="128" oninput="testsPage.syncForm()"></div>
-            <div class="hint full" id="tfParallelHint" hidden data-i18n="tests.parallelHint">⚠ Viele öffentliche Server erlauben höchstens 4 parallele Streams.</div>
+            <div class="field"><label for="tfParallel" data-i18n="f.parallel">Parallele Streams</label><input id="tfParallel" type="number" min="1" max="128" data-input="testsPage.syncForm"></div>
+            <div class="hint full" id="tfParallelHint" hidden><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg><span data-i18n="tests.parallelHint">Viele öffentliche Server erlauben höchstens 4 parallele Streams.</span></div>
             <div class="field full" id="tfUdpField"><label for="tfUdp" data-i18n="f.udp">UDP-Zielbandbreite (Mbit/s)</label>
               <input id="tfUdp" type="number" min="0.1" max="100000" step="any" placeholder="leer = iperf3-Standard (1 Mbit/s)" data-i18n-placeholder="f.udpPlaceholder"></div>
           </div>
-          <button class="btn" id="tfStart" type="submit" style="width:100%" data-i18n="test.start">Test starten</button>
+          <button class="btn btn-block" id="tfStart" type="submit" data-i18n="test.start">Test starten</button>
         </form>
 
         <div class="ds-card live-panel" id="livePanel"></div>
@@ -540,9 +191,9 @@
     <div class="section">
       <div class="section-head">
         <div class="section-title" data-i18n="tests.history">Testverlauf</div>
-        <div class="hist-controls" style="margin:0">
-          <select id="tlServer" onchange="testsPage.reloadList()"><option value="" data-i18n="tests.allServers">Alle Server</option></select>
-          <select id="tlStatus" onchange="testsPage.reloadList()">
+        <div class="hist-controls inline">
+          <select id="tlServer" data-change="testsPage.reloadList"><option value="" data-i18n="tests.allServers">Alle Server</option></select>
+          <select id="tlStatus" data-change="testsPage.reloadList">
             <option value="" data-i18n="tests.allStatus">Alle Status</option><option value="completed" data-i18n="st.completed">Abgeschlossen</option><option value="failed" data-i18n="st.failed">Fehlgeschlagen</option>
             <option value="running" data-i18n="st.running">Läuft</option><option value="pending" data-i18n="st.pending">Wartet</option>
           </select>
@@ -550,11 +201,11 @@
       </div>
       <div class="tbl-wrap">
         <table class="clickable">
-          <thead><tr><th data-i18n="tests.time">Zeitpunkt</th><th data-i18n="f.server">Server</th><th data-i18n="f.protocol">Protokoll</th><th data-i18n="f.direction">Richtung</th><th data-i18n="servers.streams">Streams</th><th style="text-align:right">Download</th><th style="text-align:right">Upload</th><th data-i18n="tests.status">Status</th></tr></thead>
+          <thead><tr><th data-i18n="tests.time">Zeitpunkt</th><th data-i18n="f.server">Server</th><th data-i18n="f.protocol">Protokoll</th><th data-i18n="f.direction">Richtung</th><th data-i18n="servers.streams">Streams</th><th class="num">Download</th><th class="num">Upload</th><th data-i18n="tests.status">Status</th></tr></thead>
           <tbody id="testRows"></tbody>
         </table>
       </div>
-      <div style="text-align:center;margin-top:14px"><button class="btn btn-secondary" id="tlMore" onclick="testsPage.loadMore()" hidden data-i18n="tests.loadMore">Mehr laden</button></div>
+      <div class="center-row"><button class="btn btn-secondary" id="tlMore" data-click="testsPage.loadMore" hidden data-i18n="tests.loadMore">Mehr laden</button></div>
     </div>
   </div>
 
@@ -563,9 +214,9 @@
     <div class="section">
       <div class="section-head">
         <div class="section-title" data-i18n="nav.peering">Peering-Map</div>
-        <div class="hist-controls" style="margin:0">
-          <select id="pmServer" onchange="peering.selectServer(this.value)"></select>
-          <button class="btn" id="pmStart" onclick="peering.toggleLive()" data-i18n="peering.start">Traceroute starten</button>
+        <div class="hist-controls inline">
+          <select id="pmServer" data-change="peering.selectServer" data-with-value></select>
+          <button class="btn" id="pmStart" data-click="peering.toggleLive" data-i18n="peering.start">Traceroute starten</button>
         </div>
       </div>
       <div class="peering-grid">
@@ -586,13 +237,13 @@
         <div class="section-title" id="pmDetailTitle">Pfad</div>
         <div id="pmDetailActions"></div>
       </div>
-      <div class="ds-card" style="margin-bottom:18px">
-        <div class="detail-grid" id="pmSummary" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin-bottom:14px"></div>
+      <div class="ds-card spaced">
+        <div class="detail-grid auto" id="pmSummary"></div>
         <div class="path-chain" id="pmChain"></div>
       </div>
       <div class="tbl-wrap">
         <table>
-          <thead><tr><th>#</th><th data-i18n="peering.ip">IP-Adresse</th><th data-i18n="peering.hostname">Hostname</th><th style="text-align:right">RTT</th><th data-i18n="peering.location">Standort</th></tr></thead>
+          <thead><tr><th>#</th><th data-i18n="peering.ip">IP-Adresse</th><th data-i18n="peering.hostname">Hostname</th><th class="num">RTT</th><th data-i18n="peering.location">Standort</th></tr></thead>
           <tbody id="pmHops"></tbody>
         </table>
       </div>
@@ -604,7 +255,7 @@
     <div class="section">
       <div class="section-head">
         <div class="section-title" data-i18n="servers.title">Server-Profile</div>
-        <button class="btn" onclick="serversPage.openForm()" data-i18n="servers.add">+ Server hinzufügen</button>
+        <button class="btn" data-click="serversPage.openForm" data-i18n="servers.add">+ Server hinzufügen</button>
       </div>
       <div class="ds-grid" id="serverGrid"></div>
     </div>
@@ -617,7 +268,7 @@
     <div class="section">
       <div class="section-head">
         <div class="section-title" data-i18n="admin.users">Benutzer</div>
-        <button class="btn" onclick="adminPage.openUserForm()" data-i18n="admin.addUser">+ Benutzer anlegen</button>
+        <button class="btn" data-click="adminPage.openUserForm" data-i18n="admin.addUser">+ Benutzer anlegen</button>
       </div>
       <div class="tbl-wrap">
         <table>
@@ -635,21 +286,21 @@
           <p class="desc" data-i18n="admin.deleteTestsDesc">Mit den Tests werden auch ihre Traces gelöscht.</p>
           <div class="form-grid">
             <div class="field"><label for="ctScope" data-i18n="admin.scope">Umfang</label>
-              <select id="ctScope" onchange="adminPage.syncCleanup()"><option value="days" data-i18n="admin.olderThan">älter als … Tage</option><option value="all" data-i18n="admin.all">alle</option></select></div>
+              <select id="ctScope" data-change="adminPage.syncCleanup"><option value="days" data-i18n="admin.olderThan">älter als … Tage</option><option value="all" data-i18n="admin.all">alle</option></select></div>
             <div class="field" id="ctDaysField"><label for="ctDays" data-i18n="admin.days">Tage</label><input id="ctDays" type="number" min="0" value="30"></div>
             <div class="field full"><label for="ctServer" data-i18n="f.server">Server</label><select id="ctServer"><option value="" data-i18n="admin.allServers">alle Server</option></select></div>
           </div>
-          <button class="btn btn-danger" onclick="adminPage.cleanupTests()" data-i18n="admin.deleteTests">Tests löschen</button>
+          <button class="btn btn-danger" data-click="adminPage.cleanupTests" data-i18n="admin.deleteTests">Tests löschen</button>
         </div>
         <div class="ds-card">
           <div class="ds-header"><span class="ds-name" data-i18n="admin.deleteTraces">Traces löschen</span></div>
           <p class="desc" data-i18n="admin.deleteTracesDesc">Betrifft gespeicherte und Live-Traces samt ihrer Hops.</p>
           <div class="form-grid">
             <div class="field"><label for="crScope" data-i18n="admin.scope">Umfang</label>
-              <select id="crScope" onchange="adminPage.syncCleanup()"><option value="days" data-i18n="admin.olderThan">älter als … Tage</option><option value="all" data-i18n="admin.all">alle</option></select></div>
+              <select id="crScope" data-change="adminPage.syncCleanup"><option value="days" data-i18n="admin.olderThan">älter als … Tage</option><option value="all" data-i18n="admin.all">alle</option></select></div>
             <div class="field" id="crDaysField"><label for="crDays" data-i18n="admin.days">Tage</label><input id="crDays" type="number" min="0" value="30"></div>
           </div>
-          <button class="btn btn-danger" onclick="adminPage.cleanupTraces()" data-i18n="admin.deleteTraces">Traces löschen</button>
+          <button class="btn btn-danger" data-click="adminPage.cleanupTraces" data-i18n="admin.deleteTraces">Traces löschen</button>
         </div>
       </div>
     </div>
@@ -657,18 +308,18 @@
 </main>
 
 <!-- Dialog: Server anlegen/bearbeiten -->
-<div class="modal-backdrop" id="serverModal" hidden onclick="if (event.target === this) serversPage.closeForm()">
-  <form class="modal" id="serverForm" onsubmit="serversPage.save(event)" novalidate>
+<div class="modal-backdrop" id="serverModal" hidden data-click="serversPage.closeForm" data-self>
+  <form class="modal" id="serverForm" data-submit="serversPage.save" novalidate>
     <div class="modal-head">
       <h2 id="serverFormTitle">Server hinzufügen</h2>
-      <button type="button" class="icon-btn" aria-label="Schließen" data-i18n-aria="close" onclick="serversPage.closeForm()">✕</button>
+      <button type="button" class="icon-btn" aria-label="Schließen" data-i18n-aria="close" data-click="serversPage.closeForm"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"
     </div>
     <div class="modal-body">
       <div class="form-error" id="serverFormError" hidden></div>
       <div class="form-grid">
         <div class="field full" id="publicPick">
           <label for="sfPublic" data-i18n="servers.public">Öffentlichen Server übernehmen</label>
-          <select id="sfPublic" onchange="serversPage.applyPublic(this.value)"><option value="" data-i18n="servers.own">– eigenen Server eintragen –</option></select>
+          <select id="sfPublic" data-change="serversPage.applyPublic" data-with-value><option value="" data-i18n="servers.own">– eigenen Server eintragen –</option></select>
         </div>
         <div class="field"><label for="sfName" data-i18n="servers.name">Name *</label><input id="sfName" maxlength="100" required></div>
         <div class="field"><label for="sfHost" data-i18n="servers.host">Host *</label><input id="sfHost" maxlength="255" required placeholder="iperf.example.org"></div>
@@ -677,7 +328,7 @@
 
         <div class="form-section" data-i18n="servers.defaults">Testvorgaben</div>
         <div class="field"><label for="sfProto" data-i18n="f.protocol">Protokoll</label>
-          <select id="sfProto" onchange="serversPage.syncForm()"><option value="tcp">TCP</option><option value="udp">UDP</option></select></div>
+          <select id="sfProto" data-change="serversPage.syncForm"><option value="tcp">TCP</option><option value="udp">UDP</option></select></div>
         <div class="field"><label for="sfDir" data-i18n="f.direction">Richtung</label>
           <select id="sfDir"><option value="download">Download</option><option value="upload">Upload</option><option value="bidirectional" data-i18n="dir.bidirectional">Bidirektional</option></select></div>
         <div class="field"><label for="sfDuration" data-i18n="f.duration">Testdauer (s)</label><input id="sfDuration" type="number" min="1" max="300"></div>
@@ -686,40 +337,40 @@
           <input id="sfUdp" type="number" min="0.1" max="100000" step="any" placeholder="leer = iperf3-Standard (1 Mbit/s)" data-i18n-placeholder="f.udpPlaceholder"></div>
 
         <div class="form-section" data-i18n="servers.schedule">Zeitplan</div>
-        <label class="check-row"><input type="checkbox" id="sfSchedule" onchange="serversPage.syncForm()"> <span data-i18n="servers.scheduleCheck">Regelmäßig testen</span></label>
+        <label class="check-row"><input type="checkbox" id="sfSchedule" data-change="serversPage.syncForm"> <span data-i18n="servers.scheduleCheck">Regelmäßig testen</span></label>
         <div class="field"><label for="sfInterval" data-i18n="servers.interval">Intervall (min)</label><input id="sfInterval" type="number" min="1"></div>
         <label class="check-row full" id="sfAutoTraceRow"><input type="checkbox" id="sfAutoTrace"> <span data-i18n="servers.autoTraceCheck">Nach jedem geplanten Test eine Traceroute aufzeichnen</span></label>
         <label class="check-row full"><input type="checkbox" id="sfEnabled"> <span data-i18n="servers.enabledCheck">Server aktiv (inaktive Server werden weder geplant noch getestet)</span></label>
       </div>
     </div>
     <div class="modal-foot">
-      <button type="button" class="btn btn-secondary" onclick="serversPage.closeForm()" data-i18n="cancel">Abbrechen</button>
+      <button type="button" class="btn btn-secondary" data-click="serversPage.closeForm" data-i18n="cancel">Abbrechen</button>
       <button type="submit" class="btn" id="serverFormSave" data-i18n="save">Speichern</button>
     </div>
   </form>
 </div>
 
 <!-- Dialog: Testdetails -->
-<div class="modal-backdrop" id="testModal" hidden onclick="if (event.target === this) testsPage.closeDetail()">
+<div class="modal-backdrop" id="testModal" hidden data-click="testsPage.closeDetail" data-self>
   <div class="modal">
     <div class="modal-head">
       <h2 id="testModalTitle">Test</h2>
-      <button type="button" class="icon-btn" aria-label="Schließen" data-i18n-aria="close" onclick="testsPage.closeDetail()">✕</button>
+      <button type="button" class="icon-btn" aria-label="Schließen" data-i18n-aria="close" data-click="testsPage.closeDetail"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"
     </div>
     <div class="modal-body" id="testModalBody"></div>
     <div class="modal-foot">
       <button type="button" class="btn btn-danger" id="testModalDelete" data-i18n="tests.delete">Test löschen</button>
-      <button type="button" class="btn btn-secondary" onclick="testsPage.closeDetail()" data-i18n="close">Schließen</button>
+      <button type="button" class="btn btn-secondary" data-click="testsPage.closeDetail" data-i18n="close">Schließen</button>
     </div>
   </div>
 </div>
 
 <!-- Dialog: Benutzer anlegen -->
-<div class="modal-backdrop" id="userModal" hidden onclick="if (event.target === this) adminPage.closeUserForm()">
-  <form class="modal small" onsubmit="adminPage.saveUser(event)" novalidate>
+<div class="modal-backdrop" id="userModal" hidden data-click="adminPage.closeUserForm" data-self>
+  <form class="modal small" data-submit="adminPage.saveUser" novalidate>
     <div class="modal-head">
       <h2 data-i18n="admin.createUser">Benutzer anlegen</h2>
-      <button type="button" class="icon-btn" aria-label="Schließen" data-i18n-aria="close" onclick="adminPage.closeUserForm()">✕</button>
+      <button type="button" class="icon-btn" aria-label="Schließen" data-i18n-aria="close" data-click="adminPage.closeUserForm"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"
     </div>
     <div class="modal-body">
       <div class="form-error" id="userFormError" hidden></div>
@@ -729,18 +380,18 @@
       <label class="check-row"><input type="checkbox" id="ufAdmin"> <span data-i18n="admin.ufAdmin">Administrator (darf Benutzer verwalten und Daten bereinigen)</span></label>
     </div>
     <div class="modal-foot">
-      <button type="button" class="btn btn-secondary" onclick="adminPage.closeUserForm()" data-i18n="cancel">Abbrechen</button>
+      <button type="button" class="btn btn-secondary" data-click="adminPage.closeUserForm" data-i18n="cancel">Abbrechen</button>
       <button type="submit" class="btn" id="userFormSave" data-i18n="admin.create">Anlegen</button>
     </div>
   </form>
 </div>
 
 <!-- Dialog: Passwort ändern -->
-<div class="modal-backdrop" id="passwordModal" hidden onclick="if (event.target === this) passwordDialog.close()">
-  <form class="modal small" onsubmit="passwordDialog.save(event)" novalidate>
+<div class="modal-backdrop" id="passwordModal" hidden data-click="passwordDialog.close" data-self>
+  <form class="modal small" data-submit="passwordDialog.save" novalidate>
     <div class="modal-head">
       <h2 data-i18n="user.changePassword">Passwort ändern</h2>
-      <button type="button" class="icon-btn" aria-label="Schließen" data-i18n-aria="close" onclick="passwordDialog.close()">✕</button>
+      <button type="button" class="icon-btn" aria-label="Schließen" data-i18n-aria="close" data-click="passwordDialog.close"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"
     </div>
     <div class="modal-body">
       <div class="form-error" id="passwordError" hidden></div>
@@ -749,7 +400,7 @@
       <div class="field"><label for="pwRepeat" data-i18n="pw.repeat">Neues Passwort wiederholen</label><input id="pwRepeat" type="password" autocomplete="new-password"></div>
     </div>
     <div class="modal-foot">
-      <button type="button" class="btn btn-secondary" onclick="passwordDialog.close()" data-i18n="cancel">Abbrechen</button>
+      <button type="button" class="btn btn-secondary" data-click="passwordDialog.close" data-i18n="cancel">Abbrechen</button>
       <button type="submit" class="btn" id="passwordSave" data-i18n="pw.change">Ändern</button>
     </div>
   </form>
@@ -759,7 +410,7 @@
 <div class="modal-backdrop" id="confirmModal" hidden>
   <div class="modal small">
     <div class="modal-head"><h2 id="confirmTitle"></h2></div>
-    <div class="modal-body"><p id="confirmText" style="font-size:.9em;line-height:1.5;white-space:pre-line;word-break:break-word"></p></div>
+    <div class="modal-body"><p id="confirmText" class="confirm-text"></p></div>
     <div class="modal-foot">
       <button type="button" class="btn btn-secondary" id="confirmCancel">Abbrechen</button>
       <button type="button" class="btn btn-danger" id="confirmOk"></button>
@@ -771,6 +422,8 @@
   iperf3-Tracker <span id="appVersion"></span> · Build <span id="buildDate">–</span>
 </footer>
 
+<script src="/static/vendor/chartjs/chart.umd.js"></script>
+<script src="/static/vendor/leaflet/leaflet.js"></script>
 <script src="/static/i18n.js"></script>
 <script src="/static/app.js"></script>
 </body>

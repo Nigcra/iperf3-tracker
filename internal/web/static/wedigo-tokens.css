@@ -1,0 +1,100 @@
+/* wedigo-tokens.css — gemeinsame Gestaltungswerte aller wedigo-Produkte
+   Version: 2026.10.09 · Referenz: Spherifyer
+   Einbinden VOR dem produkteigenen CSS. Hex-Farben gehören nur in diese Datei.
+   Theme: <html data-theme="dark|light">; ohne Attribut gilt prefers-color-scheme.
+   Lizenz-Akzent: Produkte dürfen --accent-rgb per /theme.css überschreiben. */
+
+:root {
+  /* Form */
+  --r-sm: 8px;      /* Buttons, Eingaben, Nav-Tabs */
+  --r-md: 12px;     /* Menüs, Dialog-Innenteile, Chips */
+  --r-lg: 16px;     /* Karten, Tabellenrahmen, Chart-Boxen, Dialoge */
+  --r-pill: 999px;  /* Pills, Fortschrittsbalken */
+  --font: ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+  --mono: ui-monospace, "Cascadia Code", Consolas, "SF Mono", monospace;
+  --fs-base: 14px;
+  --fs-kpi: 1.6em;      /* KPI-Wert, 700, tabular-nums */
+  --fs-title: 1.1em;    /* Abschnittstitel, 700, 4px Akzentbalken links */
+  --fs-th: .74em;       /* Tabellenkopf, Versalien */
+  --max: 1152px;
+  --blur: 16px;
+  --accent-rgb: 59 130 246;          /* #3b82f6 */
+  --accent: rgb(var(--accent-rgb));
+  --accent-light: #60a5fa;
+  --brand: #f2a93b;                  /* wedigo-Gold: nur Marke/Marketing, kein UI-Akzent */
+}
+
+/* Dunkel (Standard, wenn das System dunkel ist oder data-theme="dark") */
+:root, :root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #060b18;
+  --bg-grad-1: #0b1b3a;
+  --bg-grad-2: #081226;
+  --surface: rgb(255 255 255 / .055);
+  --surface-2: rgb(255 255 255 / .08);
+  --border: rgb(255 255 255 / .10);
+  --border-strong: rgb(255 255 255 / .20);
+  --menu: #0b1b3a;
+  --heading: #ffffff;
+  --text: #cbd5e1;
+  --muted: #94a3b8;
+  --faint: #64748b;
+  --ok: #34d399;
+  --warn: #fbbf24;
+  --crit: #f87171;
+  --info: #60a5fa;
+  --ok-bg: rgb(52 211 153 / .16);
+  --warn-bg: rgb(251 191 36 / .16);
+  --crit-bg: rgb(248 113 113 / .16);
+  --info-bg: rgb(96 165 250 / .16);
+  --chart-tick: #94a3b8;
+  --chart-grid: rgb(148 163 184 / .14);
+  --card-shadow: 0 12px 32px -16px rgb(0 0 0 / .55);
+  --focus-ring: 0 0 0 3px rgb(var(--accent-rgb) / .22);
+}
+
+/* Hell */
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #eef2f8;
+  --bg-grad-1: #eef2f8;
+  --bg-grad-2: #e6ecf5;
+  --surface: #ffffff;
+  --surface-2: #f8fafc;
+  --border: #e2e8f0;
+  --border-strong: #cbd5e1;
+  --menu: #ffffff;
+  --heading: #0f172a;
+  --text: #334155;
+  --muted: #56657b;
+  --faint: #94a3b8;
+  --ok: #059669;
+  --warn: #b45309;
+  --crit: #dc2626;
+  --info: #2563eb;
+  --ok-bg: rgb(5 150 105 / .12);
+  --warn-bg: rgb(180 83 9 / .12);
+  --crit-bg: rgb(220 38 38 / .12);
+  --info-bg: rgb(37 99 235 / .12);
+  --chart-tick: #475569;
+  --chart-grid: rgb(15 23 42 / .10);
+  --card-shadow: 0 8px 24px -14px rgb(15 23 42 / .18);
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) {
+    color-scheme: light;
+    --bg: #eef2f8; --bg-grad-1: #eef2f8; --bg-grad-2: #e6ecf5;
+    --surface: #ffffff; --surface-2: #f8fafc; --border: #e2e8f0; --border-strong: #cbd5e1; --menu: #ffffff;
+    --heading: #0f172a; --text: #334155; --muted: #56657b; --faint: #94a3b8;
+    --ok: #059669; --warn: #b45309; --crit: #dc2626; --info: #2563eb;
+    --ok-bg: rgb(5 150 105 / .12); --warn-bg: rgb(180 83 9 / .12); --crit-bg: rgb(220 38 38 / .12); --info-bg: rgb(37 99 235 / .12);
+    --chart-tick: #475569; --chart-grid: rgb(15 23 42 / .10);
+    --card-shadow: 0 8px 24px -14px rgb(15 23 42 / .18);
+  }
+}
+
+/* Gemeinsame Breakpoints (als Konvention, CSS-Variablen gehen in @media nicht):
+   900px  zweispaltige Raster -> einspaltig
+   760px  Navigation nur noch Icons, eigene Zeile
+   560px  KPI-Kacheln zweispaltig
+   480px  Kopfzeile kompakt */

@@ -99,7 +99,7 @@ func (r *Runner) Prepare(configured string, autoInstall bool) {
 	binary := FindBinary(configured)
 	err := r.refresh(binary)
 	if err == nil {
-		slog.Info("iperf3 gefunden", "pfad", binary, "version", r.Status().Version)
+		slog.Info("iperf3 gefunden", "path", binary, "version", r.Status().Version)
 		return
 	}
 	if autoInstall && r.Status().Installable {
@@ -107,8 +107,8 @@ func (r *Runner) Prepare(configured string, autoInstall bool) {
 		r.InstallAsync()
 		return
 	}
-	slog.Warn("iperf3 nicht nutzbar – Tests werden fehlschlagen", "pfad", binary, "fehler", err,
-		"installierbar", r.Status().Installable)
+	slog.Warn("iperf3 nicht nutzbar – Tests werden fehlschlagen", "path", binary, "error", err,
+		"installable", r.Status().Installable)
 }
 
 // InstallAsync installiert iperf3 im Hintergrund über den Paketmanager und
@@ -126,7 +126,7 @@ func (r *Runner) InstallAsync() error {
 	r.status.Installing = true
 	r.status.Error = ""
 	r.cmdMu.Unlock()
-	slog.Info("Installiere iperf3", "befehl", r.Status().InstallCommand)
+	slog.Info("Installiere iperf3", "command", r.Status().InstallCommand)
 
 	r.wg.Add(1)
 	go func() {
@@ -149,10 +149,10 @@ func (r *Runner) InstallAsync() error {
 			r.cmdMu.Lock()
 			r.status.Error = err.Error()
 			r.cmdMu.Unlock()
-			slog.Error("iperf3 konnte nicht installiert werden", "fehler", err)
+			slog.Error("iperf3 konnte nicht installiert werden", "error", err)
 			return
 		}
-		slog.Info("iperf3 installiert", "pfad", binary, "version", r.Status().Version)
+		slog.Info("iperf3 installiert", "path", binary, "version", r.Status().Version)
 	}()
 	return nil
 }

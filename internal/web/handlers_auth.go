@@ -2,6 +2,7 @@ package web
 
 import (
 	"errors"
+	"log/slog"
 	"net/http"
 	"unicode/utf8"
 
@@ -34,6 +35,16 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusBadRequest, "Benutzer ist deaktiviert")
 		return
 	}
+	// Ältere bcrypt-Hashes bei erfolgreicher Anmeldung transparent auf Argon2id umstellen.
+	if auth.NeedsRehash(u.HashedPassword) {
+		if hash, err := auth.HashPassword(req.Password); err == nil {
+			if err := s.store.SetPassword(r.Context(), u.ID, hash); err != nil {
+				slog.Warn("Passwort-Hash konnte nicht aktualisiert werden", "user", u.Username, "error", err)
+			} else {
+				slog.Info("Passwort-Hash auf Argon2id umgestellt", "user", u.Username)
+			}
+		}
+	}
 
 	now := db.Now()
 	if err := s.store.SetLastLogin(r.Context(), u.ID, now); err != nil {
@@ -47,14 +58,30 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		writeInternal(w, r, err)
 		return
 	}
+	// Die Oberfläche nutzt das HttpOnly-Cookie; access_token bleibt für API-Clients
+	// (Authorization: Bearer) erhalten.
+	setSessionCookie(w, r, token)
 	writeJSON(w, r, http.StatusOK, map[string]any{
 		"access_token": token,
 		"token_type":   "bearer",
+		"csrf_token":   s.tokens.CSRF(token),
 		"user":         u,
 	})
 }
 
+// handleLogout löscht das Sitzungs-Cookie. Das Token selbst bleibt bis zum
+// Ablauf gültig (zustandslos), ist aber im Browser nicht mehr vorhanden.
+func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
+	clearSessionCookies(w, r)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// handleMe liefert den angemeldeten Benutzer und im Header X-CSRF-Token das
+// CSRF-Token der Sitzung (nach einem Neuladen der Seite).
 func (s *Server) handleMe(w http.ResponseWriter, r *http.Request, u *model.User) {
+	if token, _ := sessionToken(r); token != "" {
+		w.Header().Set(csrfHeader, s.tokens.CSRF(token))
+	}
 	writeJSON(w, r, http.StatusOK, u)
 }
 
@@ -117,7 +144,7 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request, _ *model
 	writeJSON(w, r, http.StatusOK, u)
 }
 
-// validateNewUser prüft die Feldlängen; bcrypt begrenzt das Passwort zusätzlich auf 72 Byte.
+// validateNewUser prüft die Feldlängen.
 func validateNewUser(username, email, password string) string {
 	switch {
 	case utf8.RuneCountInString(username) < 3 || utf8.RuneCountInString(username) > 50:
@@ -128,13 +155,13 @@ func validateNewUser(username, email, password string) string {
 	return validatePassword(password)
 }
 
-// validatePassword prüft die Passwortlänge; bcrypt verarbeitet höchstens 72 Byte.
+// validatePassword prüft die Passwortlänge.
 func validatePassword(password string) string {
 	switch {
 	case utf8.RuneCountInString(password) < 6:
 		return "Passwort muss mindestens 6 Zeichen lang sein"
-	case len(password) > 72:
-		return "Passwort darf höchstens 72 Byte lang sein"
+	case len(password) > auth.MaxPasswordBytes:
+		return "Passwort darf höchstens 256 Byte lang sein"
 	}
 	return ""
 }
@@ -158,34 +185,28 @@ func (s *Server) handleDeleteUser(w http.ResponseWriter, r *http.Request, curren
 	writeJSON(w, r, http.StatusOK, map[string]string{"message": "Benutzer gelöscht"})
 }
 
+// handleInitAdmin legt den ersten Admin an, solange kein Benutzer existiert.
+// Das zufällige Passwort steht nur im Server-Log, nicht in der Antwort – der
+// Aufruf ist ohne Anmeldung möglich.
 func (s *Server) handleInitAdmin(w http.ResponseWriter, r *http.Request) {
-	n, err := s.store.CountUsers(r.Context())
+	created, err := EnsureAdmin(r.Context(), s.store)
 	if err != nil {
 		writeInternal(w, r, err)
 		return
 	}
-	if n > 0 {
+	if !created {
 		writeError(w, r, http.StatusBadRequest, "Es existieren bereits Benutzer. Neue Benutzer über /auth/register anlegen.")
 		return
 	}
-	admin, err := auth.DefaultAdmin()
-	if err == nil {
-		err = s.store.CreateUser(r.Context(), admin)
-	}
-	if err != nil {
-		writeInternal(w, r, err)
-		return
-	}
 	writeJSON(w, r, http.StatusOK, map[string]string{
-		"message":  "Standard-Admin angelegt",
+		"message":  "Admin angelegt – das Passwort steht im Server-Log",
 		"username": auth.DefaultAdminUsername,
-		"password": auth.DefaultAdminPassword,
-		"warning":  "Bitte das Passwort umgehend ändern!",
+		"warning":  "Das Passwort muss bei der ersten Anmeldung geändert werden",
 	})
 }
 
 // handleChangePassword ändert das Passwort des angemeldeten Benutzers. Das
-// aktuelle Passwort muss angegeben werden.
+// aktuelle Passwort muss angegeben werden; ein erzwungener Wechsel ist danach erledigt.
 func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request, u *model.User) {
 	var req struct {
 		CurrentPassword string `json:"current_password"`
@@ -202,9 +223,13 @@ func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request, u 
 		writeError(w, r, http.StatusUnprocessableEntity, msg)
 		return
 	}
+	if req.NewPassword == req.CurrentPassword {
+		writeError(w, r, http.StatusUnprocessableEntity, "Das neue Passwort muss sich vom bisherigen unterscheiden")
+		return
+	}
 	hash, err := auth.HashPassword(req.NewPassword)
 	if err == nil {
-		err = s.store.SetPassword(r.Context(), u.ID, hash)
+		err = s.store.ChangePassword(r.Context(), u.ID, hash)
 	}
 	if err != nil {
 		writeInternal(w, r, err)

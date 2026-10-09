@@ -28,6 +28,7 @@ const liveRetention = 10 * time.Second
 
 // LiveStatus ist der Zwischenstand eines wartenden oder laufenden Tests.
 type LiveStatus struct {
+	ServerID            int64
 	Status              model.TestStatus
 	Progress            int
 	ElapsedSeconds      int
@@ -70,7 +71,7 @@ func NewRunner(st *store.Store, command ...string) *Runner {
 // Submit reiht einen gespeicherten, wartenden Test zur Ausführung ein. Der
 // zurückgegebene Kanal wird geschlossen, sobald das Ergebnis gespeichert ist.
 func (r *Runner) Submit(t *model.Test) <-chan struct{} {
-	r.setLive(t.ID, &LiveStatus{Status: model.StatusPending, TotalSeconds: t.Duration})
+	r.setLive(t.ID, &LiveStatus{ServerID: t.ServerID, Status: model.StatusPending, TotalSeconds: t.Duration})
 	done := make(chan struct{})
 	r.wg.Add(1)
 	go func() {
@@ -97,6 +98,18 @@ func (r *Runner) Live(id int64) (LiveStatus, bool) {
 		return LiveStatus{}, false
 	}
 	return *l, true
+}
+
+// LiveAll liefert den Live-Status aller wartenden, laufenden und gerade
+// beendeten Tests (Test-ID → Status).
+func (r *Runner) LiveAll() map[int64]LiveStatus {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	out := make(map[int64]LiveStatus, len(r.live))
+	for id, l := range r.live {
+		out[id] = *l
+	}
+	return out
 }
 
 func (r *Runner) setLive(id int64, l *LiveStatus) {
@@ -137,7 +150,7 @@ func (r *Runner) process(id int64) {
 	if err != nil {
 		// Test wurde zwischenzeitlich gelöscht (oder DB-Fehler): nichts mehr zu tun.
 		if !errors.Is(err, store.ErrNotFound) {
-			slog.Error("Test konnte nicht geladen werden", "test", id, "fehler", err)
+			slog.Error("Test konnte nicht geladen werden", "test", id, "error", err)
 		}
 		r.deleteLive(id)
 		return
@@ -149,10 +162,10 @@ func (r *Runner) process(id int64) {
 	}
 
 	if err := r.store.StartTest(ctx, id, db.Now()); err != nil {
-		slog.Error("Test konnte nicht gestartet werden", "test", id, "fehler", err)
+		slog.Error("Test konnte nicht gestartet werden", "test", id, "error", err)
 	}
 	r.updateLive(id, func(l *LiveStatus) { l.Status = model.StatusRunning })
-	slog.Info("Starte iperf3-Test", "test", id, "server", sv.Name, "richtung", t.Direction, "protokoll", t.Protocol)
+	slog.Info("Starte iperf3-Test", "test", id, "server", sv.Name, "direction", t.Direction, "protocol", t.Protocol)
 
 	res, errMsg, raw := r.execute(t, sv)
 	r.finish(ctx, id, t, res, errMsg, raw)
@@ -166,7 +179,7 @@ func (r *Runner) finish(ctx context.Context, id int64, t *model.Test, res model.
 	if errMsg != "" {
 		status = model.StatusFailed
 		errPtr = &errMsg
-		slog.Warn("iperf3-Test fehlgeschlagen", "test", id, "fehler", errMsg)
+		slog.Warn("iperf3-Test fehlgeschlagen", "test", id, "error", errMsg)
 	} else {
 		slog.Info("iperf3-Test abgeschlossen", "test", id)
 	}
@@ -174,7 +187,7 @@ func (r *Runner) finish(ctx context.Context, id int64, t *model.Test, res model.
 		rawPtr = &raw
 	}
 	if err := r.store.FinishTest(ctx, id, status, db.Now(), res, errPtr, rawPtr); err != nil && !errors.Is(err, store.ErrNotFound) {
-		slog.Error("Testergebnis konnte nicht gespeichert werden", "test", id, "fehler", err)
+		slog.Error("Testergebnis konnte nicht gespeichert werden", "test", id, "error", err)
 	}
 
 	r.updateLive(id, func(l *LiveStatus) {

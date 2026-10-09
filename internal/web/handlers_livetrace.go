@@ -57,8 +57,8 @@ func (s *sseStream) write(chunk string) {
 
 // handleLiveTrace streamt eine Routenverfolgung Hop für Hop:
 // start → hop … → interpolation_complete → complete, im Fehlerfall error.
-// Das Token kommt als Query-Parameter, da EventSource keine Header setzen
-// kann. Auch Anmeldefehler werden als error-Event gemeldet, weil EventSource
+// Angemeldet wird über das Sitzungs-Cookie (EventSource sendet es mit) oder
+// ein Bearer-Token (API-Clients). Auch Anmeldefehler werden als error-Event gemeldet, weil EventSource
 // den HTTP-Status nicht auswerten kann. Schließt der Client die Verbindung,
 // wird die Verfolgung abgebrochen und nicht gespeichert.
 func (s *Server) handleLiveTrace(w http.ResponseWriter, r *http.Request) {
@@ -69,9 +69,9 @@ func (s *Server) handleLiveTrace(w http.ResponseWriter, r *http.Request) {
 		stream.send(map[string]string{"type": "error", "message": i18n.Translate(msg, lang)})
 	}
 
-	if _, err := s.userForToken(r.Context(), r.URL.Query().Get("token")); err != nil {
-		if !errors.Is(err, errUnauthorized) && !errors.Is(err, errInactive) {
-			slog.Error("Live-Trace: Anmeldung nicht prüfbar", "fehler", err)
+	if _, err := s.userForRequest(r, false); err != nil {
+		if !errors.Is(err, errUnauthorized) && !errors.Is(err, errInactive) && !errors.Is(err, errMustChangePass) {
+			slog.Error("Live-Trace: Anmeldung nicht prüfbar", "error", err)
 			err = errors.New("Interner Serverfehler")
 		}
 		fail(err.Error())
@@ -106,7 +106,7 @@ func (s *Server) handleLiveTrace(w http.ResponseWriter, r *http.Request) {
 	})
 
 	if ctx.Err() != nil {
-		slog.Info("Live-Trace vom Client abgebrochen", "ziel", destination)
+		slog.Info("Live-Trace vom Client abgebrochen", "destination", destination)
 		return
 	}
 	if len(tr.Hops) == 0 && tr.ErrorMessage != nil {
@@ -117,7 +117,7 @@ func (s *Server) handleLiveTrace(w http.ResponseWriter, r *http.Request) {
 
 	// Speichern vor "complete": Die Oberfläche lädt danach die Historie neu.
 	if err := s.store.CreateTrace(context.WithoutCancel(ctx), tr); err != nil {
-		slog.Error("Live-Trace konnte nicht gespeichert werden", "ziel", destination, "fehler", err)
+		slog.Error("Live-Trace konnte nicht gespeichert werden", "destination", destination, "error", err)
 		fail("Trace konnte nicht gespeichert werden")
 		return
 	}

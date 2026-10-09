@@ -1,11 +1,20 @@
 # iperf3-Tracker – example configuration
 # On first start without a config.yaml, a configuration with a random
-# secret_key is created automatically. This file is for reference only.
+# secret_key and listen "0.0.0.0:8000" is created automatically. This file is
+# for reference only.
 #
-# Individual values can be overridden with environment variables:
-#   LISTEN_ADDR, DB_PATH, SECRET_KEY, SCHEDULER_ENABLED, IPERF3_PATH, IPERF3_AUTO_INSTALL, GEOIP_PATH, LOG_LEVEL
+# Every key can be overridden with an environment variable
+# IPERF3_<SECTION>_<KEY>, e.g. IPERF3_WEB_LISTEN, IPERF3_STORAGE_PATH,
+# IPERF3_AUTH_SECRET_KEY, IPERF3_SCHEDULER_ENABLED, IPERF3_IPERF_PATH,
+# IPERF3_IPERF_AUTO_INSTALL, IPERF3_GEOIP_PATH, IPERF3_MAP_TILE_URL,
+# IPERF3_LOG_LEVEL, IPERF3_LOG_FORMAT.
+# Deprecated aliases (still accepted, logged as warning): LISTEN_ADDR, DB_PATH,
+# SECRET_KEY, SCHEDULER_ENABLED, IPERF3_PATH, IPERF3_AUTO_INSTALL, GEOIP_PATH,
+# LOG_LEVEL.
 
 web:
+  # Without this key the service only listens locally on 127.0.0.1:8000.
+  # 0.0.0.0 makes it reachable from the network.
   listen: "0.0.0.0:8000"
 
 storage:
@@ -13,7 +22,7 @@ storage:
   path: "data/iperf3-tracker.db"
 
 auth:
-  # Key used to sign login tokens. Empty = random on every start
+  # Key used to sign login sessions. Empty = random on every start
   # (logins then become invalid after a restart).
   secret_key: ""
 
@@ -31,6 +40,18 @@ geoip:
   # GeoLite2-City database for the locations on the map (relative to this file).
   path: "geoip/GeoLite2-City.mmdb"
 
+map:
+  # Background of the peering map. Empty = embedded offline world map
+  # (Natural Earth, public domain) – no requests to external servers.
+  # Optional own tile server with {z}/{x}/{y} placeholders, e.g.
+  #   tile_url: "https://tiles.example.org/{z}/{x}/{y}.png"
+  # The server is then added to the Content-Security-Policy (img-src).
+  tile_url: ""
+  # Attribution for the tiles (HTML allowed); empty = OpenStreetMap notice.
+  tile_attribution: ""
+
 log:
   # debug | info | warn | error
   level: "info"
+  # text | json
+  format: "text"

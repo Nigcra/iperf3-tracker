@@ -16,8 +16,12 @@ services:
       - iperf-data:/data
     environment:
       - TZ=Europe/Berlin
-      - SCHEDULER_ENABLED=true
-      - LOG_LEVEL=info
+      # IPERF3_<SECTION>_<KEY> overrides config.yaml (old names such as
+      # LOG_LEVEL still work but log a deprecation warning).
+      - IPERF3_WEB_LISTEN=0.0.0.0:8000
+      - IPERF3_SCHEDULER_ENABLED=true
+      - IPERF3_LOG_LEVEL=info
+      - IPERF3_LOG_FORMAT=text
     restart: unless-stopped
 
 volumes:

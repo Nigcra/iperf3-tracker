@@ -27,10 +27,14 @@ COPY --from=build /out/iperf3-tracker /app/iperf3-tracker
 COPY geoip/GeoLite2-City.mmdb /app/geoip/GeoLite2-City.mmdb
 
 # Configuration and database live in the /data volume; config.yaml is created
-# with a random token key on first start.
-ENV LISTEN_ADDR=0.0.0.0:8000 \
-    DB_PATH=/data/iperf3-tracker.db \
-    GEOIP_PATH=/app/geoip/GeoLite2-City.mmdb \
+# with a random token key on first start. The initial admin password is
+# printed once to the container log (docker logs iperf3-tracker) and must be
+# changed at the first sign-in.
+# Environment variables follow IPERF3_<SECTION>_<KEY>. The container listens
+# on all interfaces (the built-in fallback without config is 127.0.0.1:8000).
+ENV IPERF3_WEB_LISTEN=0.0.0.0:8000 \
+    IPERF3_STORAGE_PATH=/data/iperf3-tracker.db \
+    IPERF3_GEOIP_PATH=/app/geoip/GeoLite2-City.mmdb \
     TZ=Europe/Berlin
 VOLUME /data
 EXPOSE 8000

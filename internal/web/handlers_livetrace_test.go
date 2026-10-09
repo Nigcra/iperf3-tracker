@@ -48,7 +48,14 @@ type sseEvent struct {
 // readSSE liest alle data-Events, bis der Server die Verbindung schließt.
 func readSSE(t *testing.T, srv *httptest.Server, destination, token string) []sseEvent {
 	t.Helper()
-	resp, err := http.Get(srv.URL + "/api/live-trace/stream/" + url.PathEscape(destination) + "?token=" + url.QueryEscape(token))
+	req, err := http.NewRequest("GET", srv.URL+"/api/live-trace/stream/"+url.PathEscape(destination), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}

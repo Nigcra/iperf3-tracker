@@ -162,7 +162,7 @@ func (s *Server) handleInstallIperf(w http.ResponseWriter, r *http.Request, u *m
 	case err != nil:
 		writeInternal(w, r, err)
 	default:
-		slog.Info("iperf3-Installation angefordert", "benutzer", u.Username)
+		slog.Info("iperf3-Installation angefordert", "user", u.Username)
 		writeJSON(w, r, http.StatusAccepted, s.runner.Status())
 	}
 }

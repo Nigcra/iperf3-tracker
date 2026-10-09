@@ -10,7 +10,8 @@ CREATE TABLE IF NOT EXISTS users (
     is_active       BOOLEAN NOT NULL DEFAULT 1,
     is_admin        BOOLEAN NOT NULL DEFAULT 0,
     created_at      TEXT    NOT NULL,
-    last_login      TEXT
+    last_login      TEXT,
+    must_change_password BOOLEAN NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS servers (

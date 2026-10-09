@@ -4,6 +4,7 @@ go 1.24.13
 
 require (
 	github.com/golang-jwt/jwt/v5 v5.3.1
+	github.com/kardianos/service v1.3.0
 	golang.org/x/crypto v0.36.0
 	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.34.5

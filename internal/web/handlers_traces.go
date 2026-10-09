@@ -74,10 +74,10 @@ func (s *Server) handleStartTestTrace(w http.ResponseWriter, r *http.Request, _ 
 		tr := s.tracer.Run(context.Background(), sv.Host, trace.DefaultOptions(), nil)
 		tr.TestID = &id
 		if err := s.store.CreateTrace(context.Background(), tr); err != nil {
-			slog.Error("Trace konnte nicht gespeichert werden", "test", id, "fehler", err)
+			slog.Error("Trace konnte nicht gespeichert werden", "test", id, "error", err)
 			return
 		}
-		slog.Info("Trace abgeschlossen", "test", id, "hops", tr.TotalHops, "vollständig", tr.Completed)
+		slog.Info("Trace abgeschlossen", "test", id, "hops", tr.TotalHops, "completed", tr.Completed)
 	}()
 	writeJSON(w, r, http.StatusAccepted, map[string]any{"message": "Trace gestartet", "test_id": id})
 }
